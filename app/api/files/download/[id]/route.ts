@@ -63,11 +63,8 @@ export async function GET(
         .eq('id', user.id)
         .single();
 
-      console.log('User dept:', userDept);
-      console.log('File dept_id:', file.department_id);
 
       if (!userDept?.department) {
-        console.log('User has no department');
         return NextResponse.json({ error: 'Forbidden: no_user_dept' }, { status: 403 });
       }
 
@@ -78,20 +75,15 @@ export async function GET(
         .eq('id', file.department_id)
         .single();
 
-      console.log('File dept:', fileDept);
 
       // 3. 사용자 부서와 파일 부서 비교
       if (!fileDept) {
-        console.log('File has no department');
         return NextResponse.json({ error: 'Forbidden: no_file_dept' }, { status: 403 });
       }
 
       if (fileDept.name !== userDept.department) {
-        console.log(`Dept mismatch: file='${fileDept.name}' vs user='${userDept.department}'`);
         return NextResponse.json({ error: 'Forbidden: dept_mismatch' }, { status: 403 });
       }
-
-      console.log('Access granted');
     }
 
     // Supabase Storage에서 파일 다운로드

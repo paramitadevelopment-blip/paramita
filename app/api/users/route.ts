@@ -391,7 +391,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from('users')
       .delete()
-      .eq('id', id);
+      .eq('id', deleteUserId);
 
     if (error) throw error;
 

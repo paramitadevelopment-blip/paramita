@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore, getCsrfToken } from '@/app/store/authStore';
 import { useDashboard } from '@/app/hooks/useDashboard';
 import { usePreviewFile } from '@/app/hooks/useFileDownload';
+import { useModals } from '@/app/hooks/useModals';
 import { useAlert } from '@/app/components/Alert/Alert';
 import Spinner from '@/app/components/Spinner/Spinner';
 import ExcelPreviewModal from '@/app/dashboard/download/components/ExcelPreviewModal';
@@ -99,17 +100,20 @@ function DashboardPage() {
   const [fileSortBy, setFileSortBy] = useState('uploaded_at');
   const [fileSortOrder, setFileSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // 파일 미리보기 모달
-  const [previewFile, setPreviewFile] = useState<File | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // 사용자 정보 모달
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-
-  // 다운로드 기록 모달
-  const [selectedDownloadRecord, setSelectedDownloadRecord] = useState<any>(null);
-  const [isDownloadRecordModalOpen, setIsDownloadRecordModalOpen] = useState(false);
+  const {
+    previewFile,
+    isModalOpen,
+    closePreviewModal,
+    openPreviewModal,
+    selectedUser,
+    isUserModalOpen,
+    closeUserModal,
+    openUserModal,
+    selectedDownloadRecord,
+    isDownloadRecordModalOpen,
+    closeDownloadRecordModal,
+    openDownloadRecordModal,
+  } = useModals();
 
   const handleUsersSort = useCallback((field: string) => {
     if (usersSortBy === field) {
@@ -148,17 +152,12 @@ function DashboardPage() {
   }, [fileSortBy]);
 
 
-  // 메모이제이션: 요약 카드 데이터
-  const summaryCards = useMemo(() => {
-    if (!dashboardData) return null;
-    const { summary } = dashboardData;
-    return [
-      { label: '총 사용자', value: summary.totalUsers, color: '#db1a62' },
-      { label: '총 소속', value: summary.totalDepartments, color: '#4CAF50' },
-      { label: '오늘 추가된 사용자', value: summary.todayUsers, color: '#2196F3' },
-      { label: '업로드 파일', value: summary.uploadedFiles, color: '#FF9800' },
-    ];
-  }, [dashboardData]);
+  const summaryCards = dashboardData ? [
+    { label: '총 사용자', value: dashboardData.summary.totalUsers, color: '#db1a62' },
+    { label: '총 소속', value: dashboardData.summary.totalDepartments, color: '#4CAF50' },
+    { label: '오늘 추가된 사용자', value: dashboardData.summary.todayUsers, color: '#2196F3' },
+    { label: '업로드 파일', value: dashboardData.summary.uploadedFiles, color: '#FF9800' },
+  ] : null;
 
   return (
     <>
@@ -171,8 +170,8 @@ function DashboardPage() {
         <div className={styles.contentWrapper}>
           {/* 1️⃣ 상단 요약 카드 */}
           <div className={styles.summaryCards}>
-          {summaryCards?.map((card, idx) => (
-            <div key={idx} className={styles.summaryCard}>
+          {summaryCards?.map((card) => (
+            <div key={card.label} className={styles.summaryCard}>
               <div className={styles.cardLabel}>{card.label}</div>
               <div className={styles.cardValue} style={{ color: card.color }}>
                 {card.value}
@@ -192,8 +191,7 @@ function DashboardPage() {
               { fileId, fileName },
               {
                 onSuccess: (file) => {
-                  setPreviewFile(file);
-                  setIsModalOpen(true);
+                  openPreviewModal(file);
                 },
                 onError: () => {
                   showAlert({ type: 'error', title: '오류', message: '파일을 열 수 없습니다.' });
@@ -202,8 +200,7 @@ function DashboardPage() {
             );
           }}
           onRecordClick={(record) => {
-            setSelectedDownloadRecord(record);
-            setIsDownloadRecordModalOpen(true);
+            openDownloadRecordModal(record);
           }}
         />
 
@@ -223,8 +220,7 @@ function DashboardPage() {
             sortOrder={usersSortOrder}
             onSort={handleUsersSort}
             onUserClick={(user) => {
-              setSelectedUser(user);
-              setIsUserModalOpen(true);
+              openUserModal(user);
             }}
           />
 
@@ -238,8 +234,7 @@ function DashboardPage() {
                 { fileId, fileName },
                 {
                   onSuccess: (file) => {
-                    setPreviewFile(file);
-                    setIsModalOpen(true);
+                    openPreviewModal(file);
                   },
                   onError: () => {
                     showAlert({ type: 'error', title: '오류', message: '파일을 열 수 없습니다.' });
@@ -254,10 +249,7 @@ function DashboardPage() {
       {isModalOpen && previewFile && (
         <ExcelPreviewModal
           file={previewFile}
-          onClose={() => {
-            setIsModalOpen(false);
-            setPreviewFile(null);
-          }}
+          onClose={closePreviewModal}
         />
       )}
 
@@ -291,7 +283,7 @@ function DashboardPage() {
               <div className={styles.userModalValue}>{new Date(selectedUser.created_at).toLocaleDateString('ko-KR').slice(0, -1)} {new Date(selectedUser.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
             </div>
 
-            <button className={styles.userModalCloseBtn} onClick={() => { setIsUserModalOpen(false); setSelectedUser(null); }}>
+            <button className={styles.userModalCloseBtn} onClick={closeUserModal}>
               닫기
             </button>
           </div>
@@ -333,7 +325,7 @@ function DashboardPage() {
               <div className={styles.userModalValue}>{new Date(selectedDownloadRecord.downloaded_at).toLocaleDateString('ko-KR').slice(0, -1)} {new Date(selectedDownloadRecord.downloaded_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
             </div>
 
-            <button className={styles.userModalCloseBtn} onClick={() => { setIsDownloadRecordModalOpen(false); setSelectedDownloadRecord(null); }}>
+            <button className={styles.userModalCloseBtn} onClick={closeDownloadRecordModal}>
               닫기
             </button>
           </div>

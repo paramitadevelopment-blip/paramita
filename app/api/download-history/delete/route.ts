@@ -29,6 +29,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No records provided' }, { status: 400 });
     }
 
+    if (!recordIds.every((id) => typeof id === 'number' && id > 0)) {
+      return NextResponse.json({ error: 'Invalid record IDs' }, { status: 400 });
+    }
+
     const { error } = await supabase
       .from('download_records')
       .delete()
