@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useModals() {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

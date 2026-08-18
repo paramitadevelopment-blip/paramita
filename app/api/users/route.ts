@@ -81,7 +81,6 @@ export async function GET(request: NextRequest) {
     const data = adminData ? [adminData, ...(otherData || [])] : otherData;
 
     if (error) {
-      console.error('Database query error:', error);
       throw error;
     }
 
@@ -90,7 +89,6 @@ export async function GET(request: NextRequest) {
       pagination: { total: count, page, limit, pages: Math.ceil((count || 0) / limit) },
     });
   } catch (error) {
-    console.error('Users fetch error:', error);
     return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
   }
 }
@@ -176,16 +174,13 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       if (error.code === '23505') {
-        console.warn('Duplicate username attempt:', { username });
         return NextResponse.json({ error: '요청을 처리할 수 없습니다.' }, { status: 400 });
       }
-      console.error('Database insert error:', error);
       throw error;
     }
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
-    console.error('User creation error:', error);
     return NextResponse.json({ error: '요청을 처리할 수 없습니다.' }, { status: 500 });
   }
 }
@@ -289,14 +284,10 @@ export async function PUT(request: NextRequest) {
         changed_by: user.username,
       });
 
-      if (logError) {
-        console.error('Department change log insert error:', logError);
-      }
     }
 
     return NextResponse.json({ data });
   } catch (error) {
-    console.error('User update error:', error);
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
   }
 }
@@ -397,7 +388,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('User delete error:', error);
     return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
   }
 }

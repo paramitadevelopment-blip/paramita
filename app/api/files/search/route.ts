@@ -28,21 +28,16 @@ export async function GET(request: NextRequest) {
       .limit(1000);
 
     if (error) {
-      console.error('Search query error:', error);
       return NextResponse.json({ error: 'Search failed' }, { status: 500 });
     }
-
-    console.log(`Search: query="${query}", total files=${allFiles?.length || 0}`);
 
     // file_content 배열의 각 객체에서 검색어를 포함하는 파일만 필터링
     const results = (allFiles || []).filter((file) => {
       if (!file.file_content) {
-        console.log(`File ${file.id} has no file_content`);
         return false;
       }
 
       if (!Array.isArray(file.file_content)) {
-        console.log(`File ${file.id} file_content is not array:`, typeof file.file_content);
         return false;
       }
 
@@ -57,20 +52,14 @@ export async function GET(request: NextRequest) {
         });
       });
 
-      if (matched) {
-        console.log(`Match found in file: ${file.name}`);
-      }
       return matched;
     });
-
-    console.log(`Search results: ${results.length} files matched`);
 
     // 응답에서 file_content 제거 (크기 줄이기)
     const response = results.map(({ file_content, ...rest }) => rest);
 
     return NextResponse.json({ files: response });
   } catch (error) {
-    console.error('File search error:', error);
     return NextResponse.json({ error: 'Failed to search files' }, { status: 500 });
   }
 }

@@ -108,7 +108,6 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      console.error('Storage upload error:', { uploadError, fileName: originalName, userId: user.id });
       return NextResponse.json({ error: '파일 업로드에 실패했습니다.' }, { status: 500 });
     }
 
@@ -120,7 +119,6 @@ export async function POST(request: NextRequest) {
       const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
       fileContent = jsonData;
     } catch (parseError) {
-      console.warn('File parsing warning (search will not work for this file):', { parseError, fileName: originalName });
       // 파싱 실패해도 업로드는 진행 (file_content는 빈 배열)
     }
 
@@ -141,7 +139,6 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (dbError) {
-      console.error('Database insert error:', { dbError, fileName: originalName, userId: user.id });
       // 메타데이터가 없으면 추적 불가능한 고아 파일이 되므로 롤백한다.
       await supabase.storage.from(STORAGE_BUCKET).remove([filePath]);
       return NextResponse.json({ error: '파일 업로드에 실패했습니다.' }, { status: 500 });
@@ -154,7 +151,6 @@ export async function POST(request: NextRequest) {
       uploadedAt: timestamp,
     });
   } catch (error) {
-    console.error('File upload error:', error);
     return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
   }
 }
