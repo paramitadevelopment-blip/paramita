@@ -7,6 +7,8 @@ import { useDepartments } from '@/app/hooks/useDepartments';
 import { useDownloadFile, useDeleteFiles, usePreviewFile } from '@/app/hooks/useFileDownload';
 import { useAllFiles } from '@/app/hooks/useFileUpload';
 import { useDistributedFiles, type DistributedFile } from '@/app/hooks/useDistributedFiles';
+import { useFileModals } from '@/app/hooks/useFileModals';
+import { useFileSelection } from '@/app/hooks/useFileSelection';
 import { useAlert } from '@/app/components/Alert/Alert';
 import Spinner from '@/app/components/Spinner/Spinner';
 import Pagination from '@/app/components/Pagination/Pagination';
@@ -57,19 +59,19 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
   const [sortBy, setSortBy] = useState('uploaded_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedDepartment, setSelectedDepartment] = useState('');
-  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
-  const [previewFile, setPreviewFile] = useState<File | null>(null);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteModalData, setDeleteModalData] = useState<{
-    fileIds: string[];
-    fileNames: string[];
-    hasOriginal: boolean;
-    originalFileIds: string[];
-  } | null>(null);
-  const [selectedDistributedFileIds, setSelectedDistributedFileIds] = useState<Set<string>>(new Set());
-  const [deleteReason, setDeleteReason] = useState('');
-  const [downloadLogsModalOpen, setDownloadLogsModalOpen] = useState(false);
-  const [selectedFileForLogs, setSelectedFileForLogs] = useState<{ id: string; name: string } | null>(null);
+
+  const { selectedFileIds, setSelectedFileIds, handleSelectAll, handleSelectFile, clearSelection } = useFileSelection();
+  const {
+    previewFile, setPreviewFile, closePreview,
+    deleteModalOpen, setDeleteModalOpen, deleteModalData, setDeleteModalData,
+    selectedDistributedFileIds, setSelectedDistributedFileIds, deleteReason, setDeleteReason,
+    closeDeleteModal,
+    downloadLogsModalOpen, setDownloadLogsModalOpen, selectedFileForLogs, setSelectedFileForLogs,
+    closeDownloadLogsModal,
+    allDeleteModalOpen, setAllDeleteModalOpen, allDeleteCode, setAllDeleteCode,
+    allDeleteVerification, setAllDeleteVerification, allDeleteWithDistributed, setAllDeleteWithDistributed,
+    allDeleteReason, setAllDeleteReason, closeAllDeleteModal,
+  } = useFileModals();
 
   // 배포 파일은 현재 페이지에 없을 수 있으므로 서버에서 원본 id로 조회한다.
   const { data: distributedData, isLoading: isLoadingDistributed } = useDistributedFiles(
@@ -128,25 +130,25 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
   const handleSearchChange = (value: string) => {
     setSearch(value);
     setPage(1);
-    setSelectedFileIds(new Set());
+    clearSelection();
   };
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-    setSelectedFileIds(new Set());
+    clearSelection();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSort = useCallback((column: string) => {
     if (sortBy === column) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortBy(column);
       setSortOrder('asc');
     }
     setPage(1);
-    setSelectedFileIds(new Set());
-  }, [sortBy, sortOrder]);
+    clearSelection();
+  }, [sortBy, clearSelection]);
 
   // 필터링되지 않은 모든 파일 (배포 파일 찾기용)
   const allFilesWithFormattedDate = useMemo(() => {
@@ -177,23 +179,6 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
     return files;
   }, [allFilesWithFormattedDate, showOriginal]);
 
-  const handleSelectAll = useCallback(() => {
-    if (selectedFileIds.size === filesWithFormattedDate.length) {
-      setSelectedFileIds(new Set());
-    } else {
-      setSelectedFileIds(new Set(filesWithFormattedDate.map((f: any) => f.id)));
-    }
-  }, [filesWithFormattedDate, selectedFileIds.size]);
-
-  const handleSelectFile = useCallback((fileId: string) => {
-    const newSelected = new Set(selectedFileIds);
-    if (newSelected.has(fileId)) {
-      newSelected.delete(fileId);
-    } else {
-      newSelected.add(fileId);
-    }
-    setSelectedFileIds(newSelected);
-  }, [selectedFileIds]);
 
   const handlePreview = useCallback((fileId: string, fileName: string) => {
     previewMutation.mutate(
@@ -289,11 +274,8 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['files'] });
           queryClient.invalidateQueries({ queryKey: ['deletionHistory'] });
-          setDeleteModalOpen(false);
-          setDeleteModalData(null);
-          setSelectedFileIds(new Set());
-          setSelectedDistributedFileIds(new Set());
-          setDeleteReason('');
+          closeDeleteModal();
+          clearSelection();
           showAlert({ type: 'success', title: '완료', message: '파일이 삭제되었습니다.' });
         },
         onError: (error: any) => {
@@ -308,12 +290,6 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
   }, [deleteModalData, selectedDistributedFileIds, deleteReason, deleteFilesMutation, queryClient, showAlert]);
 
   const getAllFilesMutation = useAllFiles(showOriginal);
-
-  const [allDeleteModalOpen, setAllDeleteModalOpen] = useState(false);
-  const [allDeleteCode, setAllDeleteCode] = useState('');
-  const [allDeleteVerification, setAllDeleteVerification] = useState('');
-  const [allDeleteWithDistributed, setAllDeleteWithDistributed] = useState(true);
-  const [allDeleteReason, setAllDeleteReason] = useState('');
 
   const handleAllDelete = useCallback(async () => {
     if (pagination.total === 0) {
@@ -357,10 +333,9 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['files'] });
             queryClient.invalidateQueries({ queryKey: ['deletionHistory'] });
-            setSelectedFileIds(new Set());
+            clearSelection();
             setPage(1);
-            setAllDeleteModalOpen(false);
-            setAllDeleteReason('');
+            closeAllDeleteModal();
             showAlert({ type: 'success', title: '완료', message: `${allFileIds.length}개의 파일이 삭제되었습니다.` });
           },
           onError: (error: any) => {
@@ -433,6 +408,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
             onClick={() => {
               setSelectedDepartment('');
               setPage(1);
+              clearSelection();
             }}
           >
             전체
@@ -445,6 +421,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
                 onClick={() => {
                   setSelectedDepartment(dept.name);
                   setPage(1);
+                  clearSelection();
                 }}
               >
                 {dept.name}
@@ -483,7 +460,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
             sortBy={sortBy}
             sortOrder={sortOrder}
             userRole={user?.role}
-            onSelectAll={handleSelectAll}
+            onSelectAll={() => handleSelectAll(filesWithFormattedDate)}
             onSelectFile={handleSelectFile}
             onSort={handleSort}
             onPreview={handlePreview}
@@ -502,7 +479,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
           </div>
         </>
       )}
-      {previewFile && <ExcelPreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
+      {previewFile && <ExcelPreviewModal file={previewFile} onClose={closePreview} />}
 
       <AllDeleteModal
         isOpen={allDeleteModalOpen}
@@ -512,7 +489,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         verificationInput={allDeleteVerification}
         withDistributed={allDeleteWithDistributed}
         reason={allDeleteReason}
-        onClose={() => setAllDeleteModalOpen(false)}
+        onClose={closeAllDeleteModal}
         onVerificationChange={setAllDeleteVerification}
         onWithDistributedChange={setAllDeleteWithDistributed}
         onReasonChange={setAllDeleteReason}
@@ -527,7 +504,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         isLoadingDistributed={isLoadingDistributed}
         selectedDistributedFileIds={selectedDistributedFileIds}
         reason={deleteReason}
-        onClose={() => setDeleteModalOpen(false)}
+        onClose={closeDeleteModal}
         onSelectAllDistributed={() =>
           setSelectedDistributedFileIds(new Set(distributedFiles.map((f) => f.id)))
         }
@@ -549,7 +526,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         isOpen={downloadLogsModalOpen}
         fileId={selectedFileForLogs?.id || null}
         fileName={selectedFileForLogs?.name || ''}
-        onClose={() => setDownloadLogsModalOpen(false)}
+        onClose={closeDownloadLogsModal}
       />
     </>
   );

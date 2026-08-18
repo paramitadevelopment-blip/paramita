@@ -100,6 +100,7 @@ export function useUpdateUser() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['checkUsername'] });
+      queryClient.invalidateQueries({ queryKey: ['checkEmployeeId'] });
     },
   });
 }
@@ -123,6 +124,7 @@ export function useDeleteUser() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['checkUsername'] });
+      queryClient.invalidateQueries({ queryKey: ['checkEmployeeId'] });
     },
   });
 }
@@ -147,6 +149,7 @@ export function useDeleteUsers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['checkUsername'] });
+      queryClient.invalidateQueries({ queryKey: ['checkEmployeeId'] });
     },
   });
 }

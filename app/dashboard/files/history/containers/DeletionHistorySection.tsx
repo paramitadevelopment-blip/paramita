@@ -8,6 +8,7 @@ import {
   DeletionEvent,
   DeletedFile,
 } from '@/app/hooks/useDeletionHistory';
+import { useDeletionModals } from '@/app/hooks/useDeletionModals';
 import ExcelPreviewModal from '@/app/dashboard/download/components/ExcelPreviewModal';
 import SearchBar from '@/app/components/SearchBar/SearchBar';
 import { useAlert } from '@/app/components/Alert/Alert';
@@ -40,11 +41,19 @@ const DeletionHistorySection = memo(function DeletionHistorySectionComponent() {
   const [limit, setLimit] = useState(10);
   const [sortBy, setSortBy] = useState('deleted_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [selectedEvent, setSelectedEvent] = useState<DeletionEvent | null>(null);
-  const [reasonEvent, setReasonEvent] = useState<DeletionEvent | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const {
+    selectedEvent,
+    handleCloseModal,
+    reasonEvent,
+    handleCloseReason,
+    previewFile,
+    handleClosePreview,
+    handleEventClick,
+    handleViewReason,
+    openPreview,
+  } = useDeletionModals();
 
   const { data, isLoading, error } = useDeletionHistory(page, limit, searchQuery);
   const { mutate: restore, isPending: isRestoring } = useRestoreFiles();
@@ -99,10 +108,6 @@ const DeletionHistorySection = memo(function DeletionHistorySectionComponent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const handleEventClick = useCallback((event: DeletionEvent) => {
-    setSelectedEvent(event);
-  }, []);
-
   const handleRestore = useCallback(
     (event: DeletionEvent) => {
       // 이미 복구된 파일은 기록으로만 남으므로 복구 대상에서 뺀다.
@@ -146,36 +151,20 @@ const DeletionHistorySection = memo(function DeletionHistorySectionComponent() {
     [restore, showAlert]
   );
 
-  const handleCloseModal = useCallback(() => {
-    setSelectedEvent(null);
-  }, []);
-
   const handleFileClick = useCallback(
     (file: DeletedFile) => {
       preview(
         { fileId: file.id, fileName: file.name },
         {
-          onSuccess: (loaded) => setPreviewFile(loaded),
+          onSuccess: (loaded) => openPreview(loaded),
           onError: (err: Error) => {
             showAlert({ type: 'error', title: '오류', message: err.message });
           },
         }
       );
     },
-    [preview, showAlert]
+    [preview, showAlert, openPreview]
   );
-
-  const handleClosePreview = useCallback(() => {
-    setPreviewFile(null);
-  }, []);
-
-  const handleViewReason = useCallback((event: DeletionEvent) => {
-    setReasonEvent(event);
-  }, []);
-
-  const handleCloseReason = useCallback(() => {
-    setReasonEvent(null);
-  }, []);
 
   const modalGroups = useMemo(() => {
     const files = selectedEvent?.files || [];

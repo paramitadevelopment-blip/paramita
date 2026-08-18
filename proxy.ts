@@ -73,6 +73,8 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // 모든 라우트 보호 (정적 자산 제외)
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    // public/ 아래 이미지·폰트도 제외한다. next/image가 원본을 가져올 때는
+    // 브라우저 쿠키가 실리지 않아, 막아두면 로그인 전 로고가 깨진다.
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|gif|svg|webp|avif|ico|woff2?)$).*)',
   ],
 };
