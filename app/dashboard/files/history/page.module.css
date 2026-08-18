@@ -1,0 +1,604 @@
+.container {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 120px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+}
+
+.logoutBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logoutBtn:hover {
+  background: #a01a49;
+}
+
+.logoutIcon {
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.contentWrapper {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 40px 20px;
+  background: white;
+  overflow: visible;
+}
+
+.searchSection {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 50px;
+  margin-bottom: 40px;
+}
+
+.totalCount {
+  display: flex;
+  align-items: center;
+  height: 47px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  padding: 0;
+}
+
+.totalCount span {
+  font-size: 24px;
+  font-weight: 700;
+  color: #db1a62;
+  margin: 0 4px;
+}
+
+.controlsSection {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.select {
+  padding: 10px 40px 10px 16px;
+  height: 47px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #333;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23db1a62' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+}
+
+.select:hover {
+  border-color: #db1a62;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.bulkDeleteBtn {
+  padding: 12px 20px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bulkDeleteBtn:hover:not(:disabled) {
+  background: #c0392b;
+}
+
+.bulkDeleteBtn:disabled {
+  background: #e0e0e0;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.allDeleteBtn {
+  padding: 12px 20px;
+  background: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.allDeleteBtn:hover:not(:disabled) {
+  background: #a01a49;
+}
+
+.allDeleteBtn:disabled {
+  background: #e0e0e0;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.emptyState {
+  padding: 60px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 18px;
+}
+
+.tableContainer {
+  background: #fafafa;
+  border-radius: 0;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0;
+}
+
+.table th {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.table thead tr th:first-child {
+  text-align: left;
+  width: 60px;
+}
+
+.table thead tr th:last-child {
+  width: 240px;
+  text-align: center;
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sortIcon {
+  display: flex;
+  align-items: center;
+  font-size: 30px;
+  color: #db1a62;
+}
+
+.table tbody {
+  background: white;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table td {
+  padding: 16px 12px;
+  font-size: 18px;
+  color: #333;
+  text-align: center;
+}
+
+.table tbody tr:first-child td:first-child {
+  text-align: left;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #db1a62;
+}
+
+/* 복구된 행은 복구 버튼이 빠지므로, 가운데 정렬하면 사유보기 위치가 행마다 어긋난다. */
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  height: 40px;
+  background: #db1a62;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.iconBtn:hover {
+  background: #a01a49;
+  color: white;
+}
+
+.iconBtn.delete {
+  background: #e74c3c;
+}
+
+.iconBtn.delete:hover {
+  background: #c62828;
+}
+
+/* 사유보기(중립) / 복구(긍정)를 색으로 구분한다. */
+.reasonBtn,
+.restoreBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  height: 40px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.reasonBtn {
+  background: #4a5568;
+}
+
+.reasonBtn:hover {
+  background: #2d3748;
+}
+
+.restoreBtn {
+  background: #27ae60;
+}
+
+.restoreBtn:hover:not(:disabled) {
+  background: #1e8449;
+}
+
+.restoreBtn:disabled {
+  background: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.btnIcon {
+  display: flex;
+  align-items: center;
+  font-size: 20px;
+}
+
+.numCol {
+  width: 60px;
+  text-align: center;
+  font-weight: 600;
+  color: #666;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.paginationWrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+@media (max-width: 1024px) {
+  .searchSection {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .controlsSection {
+    flex-wrap: wrap;
+  }
+}
+
+.departmentsFilter {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.departmentBtn {
+  padding: 8px 28px;
+  border: 1px solid #e0e0e0;
+  border-radius: 100px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.excelModalContent {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw;
+  max-height: 80vh;
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.excelModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.excelModalHeader h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeBtn:hover {
+  color: #333;
+}
+
+.excelModalBody {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.excelTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.excelTable thead {
+  background: #f5f5f5;
+  position: sticky;
+  top: 0;
+}
+
+.excelTable th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #e0e0e0;
+  white-space: nowrap;
+}
+
+.excelTable td {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.excelTable tbody tr:hover {
+  background: #fafafa;
+}
+
+.loadingCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  font-size: 16px;
+  color: #666;
+}
+
+.errorCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  font-size: 16px;
+  color: #db1a62;
+}
+
+.departmentBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.departmentBtn.active {
+  background: #db1a62;
+  color: white;
+  border-color: #db1a62;
+}
+
+.userModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.userModalContent {
+  background-color: white;
+  border-radius: 8px;
+  padding: 32px;
+  min-width: 400px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.userModalTitle {
+  margin: 0 0 24px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #000;
+}
+
+.userModalField {
+  margin-bottom: 16px;
+}
+
+.userModalLabel {
+  display: block;
+  font-size: 18px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.userModalValue {
+  font-size: 18px;
+  color: #000;
+  font-weight: 500;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.userModalCloseBtn {
+  width: 100%;
+  padding: 12px;
+  background-color: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.userModalCloseBtn:hover {
+  background-color: #c2154e;
+}
+
+@media (max-width: 768px) {
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .table {
+    font-size: 14px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 10px;
+    font-size: 14px;
+  }
+
+  .totalCount,
+  .totalCount span {
+    font-size: 18px;
+  }
+
+  .select {
+    font-size: 14px;
+    padding: 8px 35px 8px 12px;
+    height: 40px;
+  }
+
+  .bulkDeleteBtn,
+  .allDeleteBtn {
+    font-size: 14px;
+    padding: 10px 16px;
+  }
+
+  .downloadBtn {
+    font-size: 16px;
+    padding: 8px 12px;
+    height: 36px;
+  }
+}

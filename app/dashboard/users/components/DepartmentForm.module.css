@@ -1,0 +1,97 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formGroup label {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.required {
+  color: #ff4444;
+}
+
+.hint {
+  display: inline;
+  font-size: 14px;
+  font-weight: 400;
+  color: #999;
+  margin-left: 6px;
+}
+
+.highlight {
+  color: #db1a62;
+  font-weight: 600;
+}
+
+.input {
+  padding: 12px 16px;
+  font-size: 18px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.input:focus {
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.formActions {
+  display: flex;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.submitBtn,
+.cancelBtn {
+  flex: 1;
+  padding: 12px 24px;
+  font-size: 18px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.submitBtn {
+  background: #db1a62;
+  color: white;
+}
+
+.submitBtn:hover:not(:disabled) {
+  background: #a01a49;
+  transform: translateY(-2px);
+}
+
+.submitBtn:disabled {
+  background: #e0e0e0;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.cancelBtn {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.cancelBtn:disabled {
+  cursor: not-allowed;
+  color: #999;
+}

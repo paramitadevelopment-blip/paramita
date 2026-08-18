@@ -1,0 +1,177 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 760px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.header h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  color: #db1a62;
+}
+
+.body {
+  padding: 24px;
+  overflow: auto;
+  flex: 1;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 17px;
+}
+
+.table thead {
+  background: #f5f5f5;
+  position: sticky;
+  top: 0;
+}
+
+.table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #e0e0e0;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.sortable:hover {
+  background: #ececec;
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sortIcon {
+  display: flex;
+  align-items: center;
+  font-size: 26px;
+  color: #db1a62;
+}
+
+.numCol {
+  width: 60px;
+  text-align: center;
+  font-weight: 600;
+  color: #666;
+}
+
+.from {
+  color: #666;
+}
+
+.arrow {
+  color: #999;
+  padding: 0 6px;
+}
+
+.to {
+  font-weight: 600;
+  color: #000;
+}
+
+.reason {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.reasonDeleted {
+  background: #fdecf2;
+  color: #db1a62;
+}
+
+.reasonManual {
+  background: #eef1f5;
+  color: #4a5568;
+}
+
+.empty {
+  text-align: center;
+  color: #999;
+  padding: 32px 0;
+}
+
+.footer {
+  padding: 0 24px 24px 24px;
+  flex-shrink: 0;
+}
+
+.footerBtn {
+  width: 100%;
+  padding: 12px;
+  background-color: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.footerBtn:hover {
+  background-color: #c2154e;
+}

@@ -1,0 +1,191 @@
+.tableWrapper {
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+}
+
+.table th {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.table thead tr th:first-child {
+  text-align: left;
+}
+
+.table thead tr th:last-child {
+  width: 200px;
+}
+
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+  position: relative;
+  overflow: visible;
+}
+
+.sortableHeader:hover {
+  background: #f5f5f5;
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sortIcon {
+  display: flex;
+  align-items: center;
+  font-size: 30px;
+  color: #db1a62;
+}
+
+.table tbody {
+  background: white;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table td {
+  padding: 16px 12px;
+  font-size: 18px;
+  color: #333;
+  text-align: center;
+}
+
+
+.checkboxTh {
+  width: 60px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkboxTd {
+  width: 60px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #db1a62;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge.admin {
+  background: #ffe0ec;
+  color: #db1a62;
+}
+
+.badge.user {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  width: 340px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  height: 40px;
+  background: #db1a62;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.iconBtn:hover {
+  background: #a01a49;
+  color: white;
+}
+
+.iconBtn.delete {
+  background: #e74c3c;
+}
+
+.iconBtn.delete:hover {
+  background: #c62828;
+}
+
+/* 조회 전용 동작이라 수정/삭제와 색으로 구분한다. */
+.iconBtn.history {
+  background: #4a5568;
+}
+
+.iconBtn.history:hover {
+  background: #2d3748;
+}
+
+.loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+.empty {
+  padding: 60px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.emptyIcon {
+  font-size: 64px;
+  color: #ccc;
+}
+
+.empty p {
+  font-size: 24px;
+  color: #999;
+  margin: 0;
+}

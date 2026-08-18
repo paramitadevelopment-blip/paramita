@@ -1,0 +1,137 @@
+.sidebar {
+  width: 250px;
+  height: 100vh;
+  background: #fff;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0;
+  top: 0;
+  overflow-y: auto;
+}
+
+.logo {
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.nav {
+  flex: 1;
+  padding: 20px 0;
+}
+
+.nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav li {
+  margin: 0;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  color: #333;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border-left: 3px solid transparent;
+}
+
+.navLink .icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.navLink.active {
+  background: #ffe0ec;
+  color: #db1a62;
+  border-left-color: #db1a62;
+}
+
+.footer {
+  padding: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.userInfo {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.userInfo p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  line-height: 1.8;
+  padding: 8px 0;
+}
+
+.userId {
+  font-size: 18px;
+  color: #333;
+  font-weight: 600;
+}
+
+.userRole {
+  font-size: 18px;
+  color: #333;
+  font-weight: 600;
+}
+
+.icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.userId .icon {
+  color: #db1a62;
+}
+
+.userRole .icon {
+  color: #4CAF50;
+}
+
+.logoutBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f5f5f5;
+  color: #333;
+  border: none;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.logoutBtn .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.logoutBtn:hover {
+  background: #e0e0e0;
+  color: #db1a62;
+}

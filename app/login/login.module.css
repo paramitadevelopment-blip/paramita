@@ -1,0 +1,122 @@
+.loginWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100%;
+  background: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.loginContainer {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 550px;
+  padding: 60px;
+  background: #fff;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.titleWrap {
+  text-align: center;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.titleWrap h1 {
+  font-size: 44px;
+  font-weight: 700;
+  color: #db1a62;
+  margin-bottom: 12px;
+  letter-spacing: -1px;
+}
+
+.titleWrap p {
+  font-size: 16px;
+  color: #999;
+  font-weight: 400;
+}
+ 
+.formWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.formGroup label {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.formGroup input {
+  padding: 16px 18px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 18px;
+  transition: all 0.3s ease;
+  background: #fff;
+  font-family: inherit;
+}
+
+.formGroup input:focus {
+  outline: none;
+  border-color: #db1a62;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.formGroup input::placeholder {
+  color: #ccc;
+  font-size: 18px;
+}
+
+.checkboxGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.checkboxGroup input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #db1a62;
+}
+
+.checkboxGroup label {
+  font-size: 18px;
+  color: #666;
+  cursor: pointer;
+  margin: 0;
+  font-weight: 400;
+}
+
+.loginBtn {
+  padding: 18px;
+  background: #db1a62;
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 0;
+}
+
+
+

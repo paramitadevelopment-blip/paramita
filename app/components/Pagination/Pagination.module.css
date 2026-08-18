@@ -1,0 +1,78 @@
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 35px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: white;
+  border: 1px solid #db1a62;
+  border-radius: 6px;
+  font-size: 20px;
+  cursor: pointer;
+  color: #db1a62;
+  transition: all 0.2s ease;
+}
+
+.btn.arrow {
+  font-size: 18px;
+  border: none;
+  background: transparent;
+}
+
+.btn.arrow:hover:not(:disabled) {
+  background: transparent;
+  color: #db1a62;
+}
+
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+  border-color: #ccc;
+  color: #ccc;
+}
+
+.pageNumbers {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.pageBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+
+.pageBtn.active {
+  background: #db1a62;
+  color: white;
+  border: none;
+  font-weight: 600;
+}
+
+.pageBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

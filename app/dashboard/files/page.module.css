@@ -1,0 +1,570 @@
+.container {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 120px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+}
+
+.contentWrapper {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 40px 20px;
+  background: white;
+  overflow: visible;
+}
+
+.dragDropZone {
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  padding: 60px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.dragDropZone:hover {
+  border-color: #db1a62;
+  background: #fafafa;
+}
+
+.uploadIcon {
+  font-size: 48px;
+  color: #db1a62;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.dragDropZone p {
+  font-size: 18px;
+  color: #666;
+  margin: 0;
+}
+
+.dragDropHint {
+  font-size: 12px;
+  color: #999;
+  margin: 8px 0 0 0;
+}
+
+.selectFileBtn {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  background: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.selectFileBtn:hover {
+  background: #a01a49;
+}
+
+.uploadedFilesSection {
+  margin-bottom: 20px;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.sectionHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sectionHeader h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.clearAllBtn {
+  padding: 8px 16px;
+  background: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clearAllBtn:hover {
+  background: #a01a49;
+}
+
+.fileCount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #4caf50;
+  color: white;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.uploadedFileItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #fafafa;
+}
+
+.fileIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #4caf50;
+  flex-shrink: 0;
+}
+
+.fileItemContent {
+  flex: 1;
+}
+
+.fileName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.fileInfo {
+  font-size: 12px;
+  color: #999;
+}
+
+.deleteBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: white;
+  border-radius: 4px;
+  color: #db1a62;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.deleteBtn:hover {
+  background: #db1a62;
+  color: white;
+}
+
+.distributeBtn {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.distributeBtn:hover:not(:disabled) {
+  background: #45a049;
+}
+
+.distributeBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  background: white;
+  border-radius: 8px;
+  padding: 40px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modalTitleBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.modalTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #333;
+  margin: 0;
+}
+
+.fileProgress {
+  font-size: 18px;
+  color: #db1a62;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.departmentsList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.departmentItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.departmentName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.progressBar {
+  width: 100%;
+  height: 12px;
+  background: #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #45a049);
+  transition: width 0.05s ease;
+  border-radius: 6px;
+}
+
+.progressPercent {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-align: right;
+}
+
+.resultContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 파일별 결과 넘기기 */
+.filePager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.filePagerInfo {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.filePagerName {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filePagerCount {
+  flex-shrink: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #db1a62;
+  font-variant-numeric: tabular-nums;
+}
+
+.filePagerBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 28px;
+  color: #333;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.filePagerBtn:hover:not(:disabled) {
+  background: #f5f5f5;
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.filePagerBtn:disabled {
+  color: #ccc;
+  cursor: default;
+}
+
+.originalDataInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  border-left: 4px solid #db1a62;
+}
+
+.resultLabel {
+  font-size: 18px;
+  font-weight: 600;
+  color: #666;
+}
+
+.resultCount {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+}
+
+.departmentResults {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resultItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.resultDeptName {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.resultCountWrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkMark {
+  font-size: 16px;
+  color: #4caf50;
+  font-weight: bold;
+}
+
+.resultActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.cancelBtn {
+  padding: 10px 24px;
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancelBtn:hover {
+  background: #efefef;
+  color: #333;
+}
+
+.deployBtn {
+  padding: 10px 24px;
+  background: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.deployBtn:hover {
+  background: #a01a49;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 20px;
+}
+
+.loadingContainer p {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f0f0f0;
+  border-top: 4px solid #db1a62;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.logsContainer {
+  margin-top: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: #fafafa;
+}
+
+.logEntry {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.logEntry:last-child {
+  border-bottom: none;
+}
+
+.timestamp {
+  color: #999;
+  min-width: 60px;
+  font-weight: 600;
+}
+
+.message {
+  flex: 1;
+  color: #666;
+}
+
+.log_info {
+  background: #e3f2fd;
+}
+
+.log_info .message {
+  color: #1976d2;
+}
+
+.log_success {
+  background: #e8f5e9;
+}
+
+.log_success .message {
+  color: #388e3c;
+}
+
+.log_error {
+  background: #ffebee;
+}
+
+.log_error .message {
+  color: #c62828;
+}
+
+.log_warning {
+  background: #fff3e0;
+}
+
+.log_warning .message {
+  color: #f57c00;
+}
+
+@media (max-width: 768px) {
+  .contentWrapper {
+    padding: 20px;
+  }
+
+  .modalContent {
+    padding: 24px;
+  }
+
+  .modalTitle {
+    font-size: 18px;
+  }
+}
