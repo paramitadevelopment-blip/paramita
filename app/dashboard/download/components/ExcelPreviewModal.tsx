@@ -3,6 +3,7 @@
 import { memo, useState, useEffect } from 'react';
 import { MdClose } from 'react-icons/md';
 import * as XLSX from 'xlsx';
+import { formatCellValue } from '@/lib/excelCell';
 import styles from '../page.module.css';
 
 interface PreviewData {
@@ -51,7 +52,8 @@ const ExcelPreviewModal = memo(function ExcelPreviewModal({
       try {
         const buffer = await file.arrayBuffer();
         const uint8Array = new Uint8Array(buffer);
-        const workbook = XLSX.read(uint8Array, { type: 'array' });
+        // cellDates를 주지 않으면 날짜 셀이 46245 같은 일련번호로 보인다.
+        const workbook = XLSX.read(uint8Array, { type: 'array', cellDates: true });
 
         const sheetMap: Record<string, PreviewData> = {};
 
@@ -157,7 +159,9 @@ const ExcelPreviewModal = memo(function ExcelPreviewModal({
                   {data.rows.map((row, rowIdx) => (
                     <tr key={rowIdx}>
                       {data.headers.map((_, colIdx) => (
-                        <td key={colIdx}>{row[colIdx] ?? '-'}</td>
+                        // Date를 그대로 넘기면 React가 "Objects are not valid as a
+                        // React child"로 터진다. cellDates로 읽으므로 반드시 거친다.
+                        <td key={colIdx}>{(formatCellValue(row[colIdx]) as React.ReactNode) ?? '-'}</td>
                       ))}
                     </tr>
                   ))}

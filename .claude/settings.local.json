@@ -67,7 +67,10 @@
       "Bash(git push *)",
       "PowerShell(ls C:\\\\Users\\\\user\\\\Desktop\\\\NextJs\\\\db-flow\\\\public\\\\logo -File | ForEach-Object {$_.FullName})",
       "PowerShell($url = \"https://d8j0ntlcm91z4.cloudfront.net/user_3I4B5CgZBC7GXZEx23FwlzfWekD/hf_20260818_043213_79ed5466-fe80-4ff0-993e-4102546b11d2.png\"; $output = \"C:\\\\Users\\\\user\\\\Desktop\\\\NextJs\\\\db-flow\\\\public\\\\favicon.png\"; Invoke-WebRequest -Uri $url -OutFile $output; Write-Host \"완료: $output\")",
-      "PowerShell(@\\(Get-Content 'C:\\\\Users\\\\user\\\\Desktop\\\\NextJs\\\\db-flow\\\\app\\\\dashboard\\\\files\\\\history\\\\containers\\\\DeletionHistorySection.tsx'\\).Length)"
+      "PowerShell(@\\(Get-Content 'C:\\\\Users\\\\user\\\\Desktop\\\\NextJs\\\\db-flow\\\\app\\\\dashboard\\\\files\\\\history\\\\containers\\\\DeletionHistorySection.tsx'\\).Length)",
+      "PowerShell(npx tsx \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-user-Desktop-NextJs-db-flow\\\\ab9c331e-28f5-4635-b8bc-caa72a859fa4\\\\scratchpad\\\\dedupe-check.ts\")",
+      "PowerShell(npx tsx \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-user-Desktop-NextJs-db-flow\\\\ab9c331e-28f5-4635-b8bc-caa72a859fa4\\\\scratchpad\\\\product-check.ts\")",
+      "PowerShell(npx tsx \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-user-Desktop-NextJs-db-flow\\\\ab9c331e-28f5-4635-b8bc-caa72a859fa4\\\\scratchpad\\\\deploy-sim.ts\")"
     ]
   },
   "enabledMcpjsonServers": [

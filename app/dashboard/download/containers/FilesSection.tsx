@@ -98,10 +98,9 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         department: selectedDepartment,
       });
 
-      // 배포 파일 페이지만 showOriginal 파라미터 전달 (기본값: 배포 파일만 조회)
-      if (!showOriginal) {
-        params.append('showOriginal', 'false');
-      }
+      // 원본/배포 구분은 서버에서 걸러야 한다. 여기서 안 보내면 서버가 전체를 세고
+      // 전체 기준으로 잘라 보내므로, 페이지 건수와 페이지 수가 둘 다 어긋난다.
+      params.append('showOriginal', showOriginal.toString());
 
       const response = await fetch(`/api/files/list?${params}`, {
         credentials: 'include',
@@ -121,8 +120,10 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
 
       return response.json();
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    // 다른 관리자가 배포·삭제하면 바로 바뀌는 목록이다. 이 창에서 한 변경은
+    // invalidateQueries가 잡아주지만, 남이 한 변경은 이 신선도만큼 늦게 보인다.
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 
   const pagination = data?.pagination || { page: 1, limit: 10, total: 0, totalPages: 1 };
@@ -150,8 +151,8 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
     clearSelection();
   }, [sortBy, clearSelection]);
 
-  // 필터링되지 않은 모든 파일 (배포 파일 찾기용)
-  const allFilesWithFormattedDate = useMemo(() => {
+  // 서버가 이미 원본/배포를 걸러서 보내므로 여기서는 표시용 날짜만 붙인다.
+  const filesWithFormattedDate = useMemo(() => {
     if (!data?.data) return [];
     return data.data.map((file: UploadedFile) => {
       const date = new Date(file.uploaded_at);
@@ -166,19 +167,6 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
       };
     });
   }, [data?.data]);
-
-  // 테이블 표시용 필터링된 파일
-  const filesWithFormattedDate = useMemo(() => {
-    let files = allFilesWithFormattedDate;
-
-    // showOriginal이 true면 원본 파일만, false면 배포 파일만 표시
-    if (showOriginal) {
-      files = files.filter((f: UploadedFile) => f.is_original);
-    }
-
-    return files;
-  }, [allFilesWithFormattedDate, showOriginal]);
-
 
   const handlePreview = useCallback((fileId: string, fileName: string) => {
     previewMutation.mutate(

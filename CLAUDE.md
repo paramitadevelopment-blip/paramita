@@ -57,3 +57,4 @@ vercel-composition-patterns: 컴포넌트 설계 시 boolean prop 피하기, com
  전역이 아니어도 되는 상태를 Zustand에 넣지 않았는가
  Vercel 베스트 프랙티스 가이드라인을 준수했는가 (워터폴, 번들, 렌더링 최적화)
  컴포넌트 구조가 composition patterns를 따르는가 (boolean prop 최소화, 명확한 인터페이스)
+ style은 인라인에 쓰지않는다.

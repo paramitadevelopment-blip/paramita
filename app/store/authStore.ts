@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { queryClient } from '@/app/providers';
 
 export interface User {
   id: number;
@@ -44,6 +45,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     set({ user: null, csrfToken: '' });
     localStorage.removeItem('user');
+
+    // 캐시에는 앞 사용자가 볼 수 있었던 응답이 그대로 남아 있다. 안 비우면
+    // 같은 탭에서 다른 계정으로 로그인했을 때 그 데이터가 그대로 보인다.
+    queryClient.clear();
   },
 
   initializeFromStorage: () => {

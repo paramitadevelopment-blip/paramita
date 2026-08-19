@@ -109,7 +109,8 @@ export async function GET(
     try {
       const buffer = await fileData.arrayBuffer();
       const uint8Array = new Uint8Array(buffer);
-      const workbook = XLSX.read(uint8Array, { type: 'array' });
+      // cellDates가 없으면 날짜가 46245 같은 일련번호로 내려간다.
+      const workbook = XLSX.read(uint8Array, { type: 'array', cellDates: true });
 
       // 원본 파일인 경우 시트 2개를 그대로 유지
       if (file.is_original && workbook.SheetNames.length >= 2) {
@@ -127,7 +128,7 @@ export async function GET(
             ...rows.map((row) => [...row, assignedAt]),
           ];
 
-          const sheet2 = XLSX.utils.aoa_to_sheet(dataWithAssignedAt);
+          const sheet2 = XLSX.utils.aoa_to_sheet(dataWithAssignedAt, { cellDates: true, dateNF: 'yyyy-mm-dd' });
           workbook.Sheets[sheet2Name] = sheet2;
         }
 
@@ -146,7 +147,7 @@ export async function GET(
             numberedData.push([idx + 1, ...row, assignedAt]);
           });
 
-          const sheet = XLSX.utils.aoa_to_sheet(numberedData);
+          const sheet = XLSX.utils.aoa_to_sheet(numberedData, { cellDates: true, dateNF: 'yyyy-mm-dd' });
           workbook.Sheets[sheetName] = sheet;
         }
 

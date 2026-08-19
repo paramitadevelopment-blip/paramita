@@ -2,14 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { createClient } from '@supabase/supabase-js';
-import { classifyRow, isExcludedColumn, dedupeByOrderNumber } from '@/lib/insurance';
+import {
+  assignRow,
+  getInsurerType,
+  getInsurerTypeFromRows,
+  ASSIGN_DEPARTMENTS,
+  SELECTABLE_REGIONS,
+  REGION_CHOICES,
+  type SelectableRegion,
+  isExcludedColumn,
+  dedupeByOrderNumber,
+  dedupeByCustomerKey,
+  findRequiredColumns,
+  getMissingColumnLabels,
+} from '@/lib/insurance';
+import { formatCellValue } from '@/lib/excelCell';
 import * as XLSX from 'xlsx';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const CATEGORIES = ['70세이상', '한울부원', '굿모닝제너럴', '경기', '수도권', '이외지역'];
+const CATEGORIES = [...ASSIGN_DEPARTMENTS];
 
 function emptyCounts(): Record<string, number> {
   return CATEGORIES.reduce((acc, c) => ({ ...acc, [c]: 0 }), {});
@@ -41,6 +55,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    // 상담메모 규칙 (업로드 화면 체크박스). 없으면 끈 것으로 본다.
+    const memoRuleOn = formData.get('memoRule') === 'true';
+    // 규칙이 보는 "오늘". 요청 안에서 한 번만 재야 파일마다 기준이 갈리지 않는다.
+    const classifiedAt = new Date();
+
     // 부서 조회 (분류명 → 부서ID 변환용)
     const { data: departments } = await supabase
       .from('departments')
@@ -70,7 +89,8 @@ export async function POST(request: NextRequest) {
       const file = uploadedFiles[fileIdx];
       const buffer = buffers[fileIdx];
 
-      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+      // cellDates를 주지 않으면 날짜 셀이 46245 같은 일련번호로 들어온다.
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const rawData = XLSX.utils.sheet_to_json(worksheet) as Record<string, any>[];
@@ -85,40 +105,37 @@ export async function POST(request: NextRequest) {
       // 헤더에서 필수 컬럼 찾기 (파일마다 개별 판정)
       const headers = Object.keys(rawData[0] || {});
 
-      let addressCol: string | null = null;
-      let juminCol: string | null = null;
-      let orderCol: string | null = null;
+      const cols = findRequiredColumns(headers);
+      const missingColumns = getMissingColumnLabels(cols);
 
-      for (const header of headers) {
-        const h = header.toLowerCase().trim();
-        if (!addressCol && (h.includes('주소') || h === 'address')) {
-          addressCol = header;
-        }
-        if (!juminCol && (h.includes('생년월일') || h === 'jumin' || h === 'birthday')) {
-          juminCol = header;
-        }
-        if (!orderCol && (h.includes('주문번호') || h === 'ordernumber' || h === 'order_no')) {
-          orderCol = header;
-        }
-      }
-
-      // 주문번호가 없으면 중복 제거를 못 한다.
+      // 컬럼이 하나라도 없으면 중복 제거나 분류를 제대로 못 한다.
       // 조용히 건너뛰면 중복이 그대로 배포되므로 여기서 막는다.
-      if (!addressCol || !juminCol || !orderCol) {
+      if (missingColumns.length > 0) {
         return NextResponse.json(
           {
-            error: `${file.name}: 필수 컬럼을 찾을 수 없습니다.`,
+            error: `${file.name}: 필수 컬럼을 찾을 수 없습니다. (${missingColumns.join(', ')})`,
             details: {
               fileName: file.name,
-              addressFound: !!addressCol,
-              juminFound: !!juminCol,
-              orderFound: !!orderCol,
+              missingColumns,
               availableColumns: headers,
             },
           },
           { status: 400 }
         );
       }
+
+      const { addressCol, juminCol, orderCol, nameCol, phoneCol, productCol } = cols as {
+        [K in keyof typeof cols]: string;
+      };
+      // 상담메모는 없는 파일도 있다. 위 캐스팅에 섞으면 없는 걸 있다고 속이게 된다.
+      const { memoCol } = cols;
+      // 규칙이 꺼졌거나 상담메모 열이 없으면 undefined — assignRow가 규칙을 건너뛴다.
+      // 엑셀 날짜 칸은 Date로 들어오므로 formatCellValue를 거친다. 그대로 넘기면
+      // 1899년 타임존 오차로 하루 밀린다.
+      const memoRuleFor = (row: Record<string, any>) =>
+        memoRuleOn && memoCol
+          ? { memo: formatCellValue(row[memoCol] ?? ''), now: classifiedAt }
+          : undefined;
 
       const counts = emptyCounts();
       const rowsByCategory: Record<string, Record<string, any>[]> = CATEGORIES.reduce(
@@ -127,25 +144,70 @@ export async function POST(request: NextRequest) {
       );
       const errorRows: Array<{ row: number; reason: string }> = [];
 
-      // 주문번호 기준 중복 제거를 분류보다 먼저 한다.
+      // 중복 제거를 분류보다 먼저 한다.
       // 원본 행 번호를 함께 들고 다녀야 오류 보고가 실제 파일 위치를 가리킨다.
       const indexedRows = rawData.map((row, i) => ({ row, sourceRow: i + 2 }));
-      const { items: dedupedRows, removedCount: dupRemovedCount } = dedupeByOrderNumber(
+
+      // 1) 주문번호 기준
+      const { items: dedupedByOrder, removed: removedByOrder } = dedupeByOrderNumber(
         indexedRows,
         (entry) => entry.row[orderCol]
       );
 
+      // 2) 고객 기준 (전화 + 이름 + 보험사)
+      const { items: dedupedRows, removed: removedByCustomer } = dedupeByCustomerKey(
+        dedupedByOrder,
+        (entry) => entry.row[nameCol],
+        (entry) => entry.row[phoneCol],
+        (entry) => entry.row[productCol]
+      );
+
+      const duplicateRows = [...removedByOrder, ...removedByCustomer];
+      const dupRemovedCount = duplicateRows.length;
+
+      // 보험사 판정 — 배정 규칙이 갈리므로 분류보다 먼저 정한다.
+      const insurerType = getInsurerTypeFromRows(
+        dedupedRows.map(({ row }) => [String(row[productCol] ?? '')]),
+        0
+      );
+
+      if (!insurerType) {
+        return NextResponse.json(
+          {
+            error: `${file.name}: 상품명에서 보험사(동양/흥국)를 가릴 수 없습니다. 한 파일에 두 보험사가 섞여 있는지 확인해주세요.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // 사람이 부서를 골라야 하는 건은 지역별로 세어둔다.
+      // 배정이 안 끝난 상태라 counts에는 넣지 않는다.
+      const pendingByRegion: Record<string, number> = {};
+      const pendingRowsByRegion: Record<string, Record<string, any>[]> = {};
+      // 행을 가리키는 키. 화면은 지역별로 묶어 보여주고 배포는 파일 행 순서로 도는데,
+      // 위치 번호로 주고받으면 이 둘이 어긋나 엉뚱한 사람이 다른 부서로 간다.
+      const pendingKeysByRegion: Record<string, string[]> = {};
+      for (const region of SELECTABLE_REGIONS) {
+        pendingByRegion[region] = 0;
+        pendingRowsByRegion[region] = [];
+        pendingKeysByRegion[region] = [];
+      }
+
       for (const { row, sourceRow } of dedupedRows) {
         try {
-          const category = classifyRow(row, addressCol, juminCol);
+          const assigned = assignRow(insurerType, row[juminCol], row[addressCol], memoRuleFor(row));
 
-          if (category === 'error') {
-            errorRows.push({ row: sourceRow, reason: '생년월일 형식 오류' });
-          } else if (counts.hasOwnProperty(category)) {
-            counts[category]++;
-            rowsByCategory[category].push(row);
+          if (assigned.kind === 'error') {
+            errorRows.push({ row: sourceRow, reason: assigned.reason });
+          } else if (assigned.kind === 'select') {
+            pendingByRegion[assigned.region]++;
+            pendingRowsByRegion[assigned.region].push(row);
+            pendingKeysByRegion[assigned.region].push(String(row[orderCol] ?? ''));
+          } else if (counts.hasOwnProperty(assigned.dept)) {
+            counts[assigned.dept]++;
+            rowsByCategory[assigned.dept].push(row);
           } else {
-            errorRows.push({ row: sourceRow, reason: `알 수 없는 분류: ${category}` });
+            errorRows.push({ row: sourceRow, reason: `알 수 없는 분류: ${assigned.dept}` });
           }
         } catch (e) {
           errorRows.push({ row: sourceRow, reason: String(e) });
@@ -164,8 +226,45 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 미리보기는 JSON으로 나가므로 Date를 문자열로 바꿔둔다.
+      // 안 바꾸면 UTC ISO 문자열이 되어 하루 어긋나 보인다.
       const toRowArrays = (rows: Record<string, any>[]) =>
-        rows.map((row) => previewHeaders.map((key) => row[key] ?? ''));
+        rows.map((row) => previewHeaders.map((key) => formatCellValue(row[key] ?? '')));
+
+      // 분류 결과 시트 / 중복 시트 생성 (미리보기용)
+      // 어느 단계에서 빠졌는지까지 들고 있어야 배포 결과와 사유가 어긋나지 않는다.
+      const duplicateReasonByRow = new Map<number, string>([
+        ...removedByOrder.map((entry) => [entry.sourceRow, '주문번호 중복'] as const),
+        ...removedByCustomer.map(
+          (entry) => [entry.sourceRow, '고객 중복 (tel2+고객명+상품명)'] as const
+        ),
+      ]);
+
+      const processedRows: any[][] = [];
+      const processedDuplicateRows: any[][] = [];
+      let seq = 1;
+
+      for (let i = 0; i < rawData.length; i++) {
+        const row = rawData[i];
+        const sourceRow = i + 2; // 헤더는 1행, 데이터는 2행부터
+        const keptRow = previewHeaders.map((key) => formatCellValue(row[key] ?? ''));
+
+        const duplicateReason = duplicateReasonByRow.get(sourceRow);
+        if (duplicateReason) {
+          processedDuplicateRows.push([duplicateReason, ...keptRow]);
+          continue;
+        }
+
+        const assigned = assignRow(insurerType, row[juminCol], row[addressCol], memoRuleFor(row));
+        // 아직 안 고른 지역은 부서명 대신 "선택: 서울"처럼 남겨 눈에 띄게 한다.
+        const label =
+          assigned.kind === 'error'
+            ? '오류'
+            : assigned.kind === 'select'
+              ? `선택: ${assigned.region}`
+              : assigned.dept;
+        processedRows.push([seq++, label, ...keptRow]);
+      }
 
       // 분류 건수 / 행 데이터를 부서ID 기준으로 변환
       const classificationByDeptId: Record<number, number> = {};
@@ -177,8 +276,20 @@ export async function POST(request: NextRequest) {
         rowsByDeptId[deptId] = toRowArrays(rowsByCategory[category]);
       }
 
+      // 미리보기용: 지역별 대기 건의 행 데이터
+      const pendingRowsByRegionArrays: Record<string, any[][]> = {};
+      for (const region of SELECTABLE_REGIONS) {
+        pendingRowsByRegionArrays[region] = toRowArrays(pendingRowsByRegion[region]);
+      }
+
       perFile.push({
         fileName: file.name,
+        insurerType,
+        // 사람이 부서를 골라야 하는 지역과 건수
+        pendingByRegion,
+        pendingRowsByRegion: pendingRowsByRegionArrays,
+        pendingKeysByRegion,
+        // 원본 데이터는 중복 제거 전 (업로드 당시 그대로)
         totalRows: rawData.length,
         dupRemovedCount,
         classification: counts,
@@ -186,12 +297,19 @@ export async function POST(request: NextRequest) {
         errors: errorRows,
         errorCount: errorRows.length,
         previewHeaders,
+        // 미리보기마다 열 구성이 다르다. 헤더를 행 배열 안에 끼워 넣으면
+        // 받는 쪽이 thead를 또 그려서 설명 행이 두 줄로 보인다.
+        processedHeaders: ['번호', '배정소속', ...previewHeaders],
+        duplicateHeaders: ['중복사유', ...previewHeaders],
         rowsByDeptId,
-        // 원본도 중복이 제거된 상태로 내려간다.
-        originalRows: toRowArrays(dedupedRows.map((entry) => entry.row)),
+        // 미리보기는 원본 그대로 (중복 포함)
+        originalRows: toRowArrays(rawData),
+        // 분류 결과 / 중복 시트
+        processedRows,
+        duplicateRows: processedDuplicateRows,
       });
 
-      // 합산
+      // 합산 (원본 기준)
       for (const category of CATEGORIES) {
         mergedCounts[category] += counts[category];
       }
@@ -211,6 +329,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      // 지역별 고를 수 있는 부서. UI가 목록을 따로 들고 있으면 규칙이 갈라진다.
+      regionChoices: REGION_CHOICES,
       fileCount: uploadedFiles.length,
       files: perFile,
       totalRows: mergedTotalRows,

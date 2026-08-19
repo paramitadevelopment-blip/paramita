@@ -45,7 +45,14 @@ export function useDeployFiles() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: { files: string[]; classificationResults: Record<number, number> }) => {
+    mutationFn: async (params: {
+      files: string[];
+      classificationResults: Record<number, number>;
+      /** 파일 순서와 1:1로 맞춘 행별 부서 선택 (주문번호: 부서명) */
+      rowAssignments: Array<Record<string, string>>;
+      /** 상담메모 규칙. 분류할 때 켰으면 배포도 같은 값이어야 결과가 안 갈린다 */
+      memoRule: boolean;
+    }) => {
       const response = await fetch('/api/files/deploy', {
         method: 'POST',
         credentials: 'include',

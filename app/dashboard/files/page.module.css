@@ -189,6 +189,56 @@
   color: white;
 }
 
+.memoRuleOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+/* 분류가 시작되면 값을 못 바꾼다. 바꿔도 이미 돌아간 분류에는 안 먹는다. */
+.memoRuleOption:has(.memoRuleCheckbox:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.memoRuleOption:hover {
+  border-color: #db1a62;
+}
+
+.memoRuleCheckbox {
+  width: 20px;
+  height: 20px;
+  /* 제목이 20px이라 첫 줄 가운데에 맞춘다 */
+  margin: 3px 0 0 0;
+  flex-shrink: 0;
+  accent-color: #db1a62;
+  cursor: pointer;
+}
+
+.memoRuleText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.memoRuleLabel {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+}
+
+.memoRuleHint {
+  font-size: 18px;
+  color: #888;
+  line-height: 1.5;
+}
+
 .distributeBtn {
   display: block;
   width: 100%;
@@ -229,9 +279,9 @@
   background: white;
   border-radius: 8px;
   padding: 40px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
+  max-width: 1800px;
+  width: 99%;
+  max-height: 90vh;
   overflow-y: auto;
 }
 
@@ -300,6 +350,24 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.resultGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.resultGridLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resultGridRight {
+  display: flex;
+  flex-direction: column;
 }
 
 /* 파일별 결과 넘기기 */
@@ -553,6 +621,37 @@
 
 .log_warning .message {
   color: #f57c00;
+}
+
+.regionSelect {
+  width: 100%;
+  padding: 12px 24px 12px 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 16px;
+  height: 44px;
+  line-height: 20px;
+  appearance: none;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  color: #333;
+  box-sizing: border-box;
+}
+
+.regionSelect:focus {
+  outline: none;
+  border-color: #db1a62;
+}
+
+/* 아직 안 고른 칸. 고른 칸과 똑같이 보이면 다 골랐다고 착각하고 배포하게 된다. */
+.regionSelect:invalid {
+  color: #999;
+  border-color: #db1a62;
+}
+
+.regionSelect option {
+  color: #333;
 }
 
 @media (max-width: 768px) {

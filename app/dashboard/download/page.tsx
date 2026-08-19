@@ -12,7 +12,7 @@ export default function DownloadPage() {
         </div>
 
         <div className={styles.contentWrapper}>
-          <FilesSection showDepartmentFilter={false} />
+          <FilesSection showDepartmentFilter={true} />
         </div>
       </div>
     </>

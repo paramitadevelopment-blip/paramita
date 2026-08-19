@@ -9,6 +9,7 @@ import FileUploadZone from './components/FileUploadZone';
 import SelectedFilesList from './components/SelectedFilesList';
 import ClassificationProgressModal from './components/ClassificationProgressModal';
 import ClassificationResultModal from './components/ClassificationResultModal';
+import MemoRuleOption from './components/MemoRuleOption';
 import styles from './page.module.css';
 
 interface Department {
@@ -30,7 +31,8 @@ function isValidExcel(file: File) {
 }
 
 function isValidFileName(fileName: string) {
-  return /^\d{8}/.test(fileName);
+  // YYYYMMDD 뒤에 동양생명, 흥국생명, 한화생명 중 하나 포함
+  return /^\d{8}_(동양생명|흥국생명|한화생명)/.test(fileName);
 }
 
 function wait(ms: number) {
@@ -47,6 +49,9 @@ function FilesPage() {
   const [isClassificationComplete, setIsClassificationComplete] = useState(false);
   const [classificationResults, setClassificationResults] = useState<Record<number, number>>({});
   const [totalFiles, setTotalFiles] = useState(0);
+  // 상담메모 규칙. 기본으로 켜둔다. 켜면 해당 건은 주소·나이 규칙을 건너뛰므로,
+  // 끄고 돌리려면 분류 전에 체크를 풀어야 한다.
+  const [memoRule, setMemoRule] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const user = useAuthStore((state) => state.user);
@@ -61,7 +66,7 @@ function FilesPage() {
           return;
         }
         if (!isValidFileName(file.name)) {
-          showAlert({ type: 'error', title: '오류', message: '파일명은 반드시 YYYYMMDD 형식의 날짜로 시작해야 합니다. (예: 20260815_파일명.xlsx)' });
+          showAlert({ type: 'error', title: '오류', message: '파일명은 YYYYMMDD_회사명 형식이어야 합니다. (예: 20260815_동양생명.xlsx, 20260815_흥국생명.xlsx, 20260815_한화생명.xlsx)' });
           return;
         }
         setSelectedFiles((prev) => [...prev, file]);
@@ -78,7 +83,7 @@ function FilesPage() {
           return;
         }
         if (!isValidFileName(file.name)) {
-          showAlert({ type: 'error', title: '오류', message: '파일명은 반드시 YYYYMMDD 형식의 날짜로 시작해야 합니다. (예: 20260815_파일명.xlsx)' });
+          showAlert({ type: 'error', title: '오류', message: '파일명은 YYYYMMDD_회사명 형식이어야 합니다. (예: 20260815_동양생명.xlsx, 20260815_흥국생명.xlsx, 20260815_한화생명.xlsx)' });
           return;
         }
         setSelectedFiles((prev) => [...prev, file]);
@@ -206,6 +211,12 @@ function FilesPage() {
           fileInputRef={fileInputRef}
         />
 
+        <MemoRuleOption
+          checked={memoRule}
+          disabled={isDistributing || isClassificationComplete}
+          onChange={setMemoRule}
+        />
+
         {selectedFiles.length > 0 && !isDistributing && !isClassificationComplete && (
           <SelectedFilesList
             files={selectedFiles}
@@ -230,6 +241,7 @@ function FilesPage() {
             departments={departments}
             classificationResults={classificationResults}
             files={selectedFiles}
+            memoRule={memoRule}
             onClose={resetClassificationState}
             queryClient={queryClient}
           />
