@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useState, useEffect } from 'react';
-import { MdClose } from 'react-icons/md';
+import { memo, useState, useEffect, useMemo } from 'react';
+import { MdClose, MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import * as XLSX from 'xlsx';
 import { formatCellValue } from '@/lib/excelCell';
 import styles from '../page.module.css';
@@ -29,11 +29,56 @@ const ExcelPreviewModal = memo(function ExcelPreviewModal({
 }: ExcelPreviewModalProps) {
   const [allSheets, setAllSheets] = useState<Record<string, PreviewData>>({});
   const [selectedSheet, setSelectedSheet] = useState<string>('');
+  // 열 번호로 정렬한다. null이면 원본 순서 그대로다.
+  const [sort, setSort] = useState<{ col: number; order: 'asc' | 'desc' } | null>(null);
   const [parsing, setParsing] = useState(!!file);
   const [error, setError] = useState<string | null>(null);
 
   // providedData가 있으면 파싱 없이 그대로 사용
   const data = providedData ?? allSheets[selectedSheet];
+
+  /**
+   * 정렬된 행. 원본 배열은 건드리지 않는다 — 미리보기에서 정렬했다고
+   * 실제 배포 순서까지 바뀌면 안 된다.
+   *
+   * 값이 비어 있는 행은 오름/내림 어느 쪽이든 뒤로 보낸다. 빈 칸이 맨 위로
+   * 올라오면 정작 봐야 할 것이 가려진다.
+   */
+  const sortedRows = useMemo(() => {
+    if (!data) return [];
+
+    // 원래 몇 번째 행이었는지를 함께 들고 다닌다. 정렬하면 순서가 바뀌는데
+    // 화면 위치를 key로 쓰면 React가 다른 행의 DOM을 재사용한다.
+    const indexed = data.rows.map((row, sourceIndex) => ({ row, sourceIndex }));
+    if (!sort) return indexed;
+
+    const dir = sort.order === 'asc' ? 1 : -1;
+    return indexed.sort((x, y) => {
+      const a = x.row;
+      const b = y.row;
+      const av = formatCellValue(a[sort.col]);
+      const bv = formatCellValue(b[sort.col]);
+      const aEmpty = av === null || av === undefined || av === '';
+      const bEmpty = bv === null || bv === undefined || bv === '';
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+
+      const aNum = Number(av);
+      const bNum = Number(bv);
+      if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) return (aNum - bNum) * dir;
+
+      return String(av).localeCompare(String(bv), 'ko-KR') * dir;
+    });
+  }, [data, sort]);
+
+  const toggleSort = (col: number) => {
+    setSort((prev) =>
+      prev && prev.col === col
+        ? { col, order: prev.order === 'asc' ? 'desc' : 'asc' }
+        : { col, order: 'asc' }
+    );
+  };
   const loading = providedData ? false : parsing;
 
   // 배정날짜는 모든 행이 동일하므로 한 번만 계산한다.
@@ -122,7 +167,11 @@ const ExcelPreviewModal = memo(function ExcelPreviewModal({
             {Object.keys(allSheets).map((sheetName) => (
               <button
                 key={sheetName}
-                onClick={() => setSelectedSheet(sheetName)}
+                onClick={() => {
+                  setSelectedSheet(sheetName);
+                  // 시트마다 열 구성이 달라 같은 열 번호가 다른 값을 가리킨다.
+                  setSort(null);
+                }}
                 style={{
                   padding: '6px 12px',
                   border: 'none',
@@ -151,13 +200,23 @@ const ExcelPreviewModal = memo(function ExcelPreviewModal({
                 <thead>
                   <tr>
                     {data.headers.map((header, idx) => (
-                      <th key={idx}>{header}</th>
+                      <th
+                        key={idx}
+                        className={styles.excelSortableTh}
+                        onClick={() => toggleSort(idx)}
+                      >
+                        <span className={styles.excelThInner}>
+                          {header}
+                          {sort?.col === idx &&
+                            (sort.order === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />)}
+                        </span>
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {data.rows.map((row, rowIdx) => (
-                    <tr key={rowIdx}>
+                  {sortedRows.map(({ row, sourceIndex }) => (
+                    <tr key={sourceIndex}>
                       {data.headers.map((_, colIdx) => (
                         // Date를 그대로 넘기면 React가 "Objects are not valid as a
                         // React child"로 터진다. cellDates로 읽으므로 반드시 거친다.

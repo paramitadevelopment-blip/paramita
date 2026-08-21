@@ -62,6 +62,8 @@
   font-weight: 500;
   line-height: 1.7;
   opacity: 0.9;
+  /* 오류 목록처럼 여러 줄짜리 메시지가 한 줄로 뭉치지 않게 한다. */
+  white-space: pre-wrap;
 }
 
 .closeBtn {

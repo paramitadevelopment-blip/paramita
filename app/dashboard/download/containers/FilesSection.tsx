@@ -5,11 +5,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore, getCsrfToken } from '@/app/store/authStore';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { useDownloadFile, useDeleteFiles, usePreviewFile } from '@/app/hooks/useFileDownload';
+import { useRedownloadRequest } from '@/app/hooks/useRedownloadRequest';
 import { useAllFiles } from '@/app/hooks/useFileUpload';
 import { useDistributedFiles, type DistributedFile } from '@/app/hooks/useDistributedFiles';
 import { useFileModals } from '@/app/hooks/useFileModals';
 import { useFileSelection } from '@/app/hooks/useFileSelection';
+import { invalidateDashboard } from '@/app/hooks/useDashboardCache';
 import { useAlert } from '@/app/components/Alert/Alert';
+import { toDepartmentGroups, getSubDepartments } from '@/lib/departments';
 import Spinner from '@/app/components/Spinner/Spinner';
 import Pagination from '@/app/components/Pagination/Pagination';
 import EmptyState from '@/app/components/EmptyState/EmptyState';
@@ -19,6 +22,8 @@ import DownloadLogsModal from '../components/DownloadLogsModal';
 import AllDeleteModal from '../components/AllDeleteModal';
 import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import FileTable from '../components/FileTable';
+import RedownloadRequestModal from '../components/RedownloadRequestModal';
+import RedownloadHistoryModal from '../components/RedownloadHistoryModal';
 import styles from '../page.module.css';
 
 interface UploadedFile {
@@ -43,6 +48,9 @@ interface FilesSectionProps {
 // 조회 결과가 없을 때 쓰는 고정 참조. 렌더마다 새 배열을 만들지 않기 위함이다.
 const EMPTY_DISTRIBUTED: DistributedFile[] = [];
 
+// 서버와 DB CHECK가 쓰는 한도와 같은 값. 여기서 막는 건 UX용이고 실제 방어는 API에 있다.
+const REASON_MAX_LENGTH = 500;
+
 const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter = true, showOriginal = false }: FilesSectionProps) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -50,15 +58,25 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
   const { showAlert } = useAlert();
   const downloadMutation = useDownloadFile();
   const previewMutation = usePreviewFile();
+  const redownloadRequestMutation = useRedownloadRequest();
   const deleteFilesMutation = useDeleteFiles();
-  const { data: departmentsData } = useDepartments();
+  // 소속 필터는 관리자에게만 보인다. 일반 사용자까지 부서 목록을 받아올 이유가 없다.
+  const { data: departmentsData } = useDepartments(user?.role === 'admin' && showDepartmentFilter);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(10);
   const [sortBy, setSortBy] = useState('uploaded_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  // 조직 단위 선택('파라인슈')과 그 안의 분류 선택('파라인슈1')은 별개다.
   const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedSubDepartment, setSelectedSubDepartment] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<'available' | 'downloaded' | 'pending_request' | 'rejected' | ''>('');
+  const [historyFile, setHistoryFile] = useState<{ id: string; name: string } | null>(null);
+  const [redownloadModalOpen, setRedownloadModalOpen] = useState(false);
+  const [redownloadReason, setRedownloadReason] = useState('');
+  const [redownloadFileId, setRedownloadFileId] = useState<string | null>(null);
+  const [redownloadFileName, setRedownloadFileName] = useState<string>('');
 
   const { selectedFileIds, setSelectedFileIds, handleSelectAll, handleSelectFile, clearSelection } = useFileSelection();
   const {
@@ -87,7 +105,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
   }, [distributedFiles]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['files', page, search, limit, sortBy, sortOrder, selectedDepartment, showOriginal],
+    queryKey: ['files', page, search, limit, sortBy, sortOrder, selectedDepartment, selectedSubDepartment, selectedStatus, showOriginal],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -95,7 +113,10 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         search,
         sortBy,
         sortOrder,
-        department: selectedDepartment,
+        // 하위 분류를 콕 집었으면 그것만, 아니면 조직 전체를 본다.
+        department: selectedSubDepartment,
+        departmentGroup: selectedSubDepartment ? '' : selectedDepartment,
+        status: selectedStatus,
       });
 
       // 원본/배포 구분은 서버에서 걸러야 한다. 여기서 안 보내면 서버가 전체를 세고
@@ -140,6 +161,32 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // 소속 필터는 조직 단위로 보여준다. 파라인슈1·파라인슈2는 '파라인슈' 한 줄이 된다.
+  const departmentGroups = useMemo(
+    () => toDepartmentGroups(departmentsData),
+    [departmentsData]
+  );
+
+  // 고른 조직이 쪼개져 있을 때만 값이 있다. 아니면 하위 줄 자체를 안 그린다.
+  const subDepartments = useMemo(
+    () => getSubDepartments(departmentsData, selectedDepartment),
+    [departmentsData, selectedDepartment]
+  );
+
+  const handleDepartmentChange = useCallback((group: string) => {
+    setSelectedDepartment(group);
+    // 조직을 바꾸면 이전 조직의 하위 선택은 의미가 없다.
+    setSelectedSubDepartment('');
+    setPage(1);
+    clearSelection();
+  }, [clearSelection]);
+
+  const handleSubDepartmentChange = useCallback((sub: string) => {
+    setSelectedSubDepartment(sub);
+    setPage(1);
+    clearSelection();
+  }, [clearSelection]);
+
   const handleSort = useCallback((column: string) => {
     if (sortBy === column) {
       setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -151,7 +198,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
     clearSelection();
   }, [sortBy, clearSelection]);
 
-  // 서버가 이미 원본/배포를 걸러서 보내므로 여기서는 표시용 날짜만 붙인다.
+  // 서버가 원본/배포·상태 필터·정렬을 모두 처리해서 보내므로 여기서는 표시용 날짜만 붙인다.
   const filesWithFormattedDate = useMemo(() => {
     if (!data?.data) return [];
     return data.data.map((file: UploadedFile) => {
@@ -186,12 +233,55 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
     downloadMutation.mutate(
       { fileId, fileName },
       {
-        onError: () => {
-          showAlert({ type: 'error', title: '오류', message: '파일 다운로드에 실패했습니다.' });
+        onError: (error: any) => {
+          if (error?.code === 'DOWNLOAD_LIMIT_REACHED') {
+            // 한도 소진인지 동시 요청 충돌인지는 서버 메시지가 구분해서 알려준다.
+            showAlert({ type: 'error', title: '다운로드 한계 도달', message: error.message });
+          } else {
+            showAlert({ type: 'error', title: '오류', message: '파일 다운로드에 실패했습니다.' });
+          }
         },
       }
     );
   }, [downloadMutation, showAlert]);
+
+  const handleRedownloadRequest = useCallback((fileId: string, fileName: string) => {
+    setRedownloadFileId(fileId);
+    setRedownloadFileName(fileName);
+    setRedownloadReason('');
+    setRedownloadModalOpen(true);
+  }, []);
+
+  const handleRedownloadConfirm = useCallback(() => {
+    if (!redownloadFileId) return;
+
+    redownloadRequestMutation.mutate(
+      { fileId: redownloadFileId, reason: redownloadReason },
+      {
+        onSuccess: () => {
+          showAlert({ type: 'success', title: '완료', message: '재다운로드 요청이 완료되었습니다.' });
+          setRedownloadModalOpen(false);
+          setRedownloadReason('');
+          setRedownloadFileId(null);
+        },
+        onError: (error: any) => {
+          showAlert({ type: 'error', title: '오류', message: error?.message || '요청에 실패했습니다.' });
+        },
+      }
+    );
+  }, [redownloadFileId, redownloadReason, redownloadRequestMutation, showAlert]);
+
+  const handleViewHistory = useCallback((fileId: string, fileName: string) => {
+    setHistoryFile({ id: fileId, name: fileName });
+  }, []);
+
+  const closeHistoryModal = useCallback(() => {
+    setHistoryFile(null);
+  }, []);
+
+  const closeRedownloadModal = useCallback(() => {
+    setRedownloadModalOpen(false);
+  }, []);
 
   const handleViewDownloadLogs = (fileId: string, fileName: string) => {
     setSelectedFileForLogs({ id: fileId, name: fileName });
@@ -262,6 +352,9 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['files'] });
           queryClient.invalidateQueries({ queryKey: ['deletionHistory'] });
+          // 지운 배포본이 삭제 모달 목록에 그대로 남지 않게 한다.
+          queryClient.invalidateQueries({ queryKey: ['distributedFiles'], exact: false });
+          invalidateDashboard(queryClient);
           closeDeleteModal();
           clearSelection();
           showAlert({ type: 'success', title: '완료', message: '파일이 삭제되었습니다.' });
@@ -321,6 +414,8 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['files'] });
             queryClient.invalidateQueries({ queryKey: ['deletionHistory'] });
+            queryClient.invalidateQueries({ queryKey: ['distributedFiles'], exact: false });
+            invalidateDashboard(queryClient);
             clearSelection();
             setPage(1);
             closeAllDeleteModal();
@@ -372,6 +467,9 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
           <option value="name">파일명순</option>
           <option value="size">크기순</option>
           <option value="uploaded_at">업로드 날짜순</option>
+          {user?.role !== 'admin' && !showOriginal && (
+            <option value="myDownloadStatus">다운로드 상태순</option>
+          )}
         </select>
 
         <select
@@ -389,38 +487,101 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         </select>
       </div>
 
+      {user?.role !== 'admin' && !showOriginal && (
+      <div className={styles.departmentsFilter}>
+        <button
+          className={`${styles.departmentBtn} ${selectedStatus === '' ? styles.active : ''}`}
+          onClick={() => {
+            setSelectedStatus('');
+            setPage(1);
+          }}
+        >
+          전체
+        </button>
+        <button
+          className={`${styles.departmentBtn} ${selectedStatus === 'available' ? styles.active : ''}`}
+          onClick={() => {
+            setSelectedStatus('available');
+            setPage(1);
+          }}
+        >
+          다운로드 가능
+        </button>
+        <button
+          className={`${styles.departmentBtn} ${selectedStatus === 'downloaded' ? styles.active : ''}`}
+          onClick={() => {
+            setSelectedStatus('downloaded');
+            setPage(1);
+          }}
+        >
+          재다운로드 요청 필요
+        </button>
+        <button
+          className={`${styles.departmentBtn} ${selectedStatus === 'rejected' ? styles.active : ''}`}
+          onClick={() => {
+            setSelectedStatus('rejected');
+            setPage(1);
+          }}
+        >
+          거부됨
+        </button>
+        <button
+          className={`${styles.departmentBtn} ${selectedStatus === 'pending_request' ? styles.active : ''}`}
+          onClick={() => {
+            setSelectedStatus('pending_request');
+            setPage(1);
+          }}
+        >
+          요청 대기 중
+        </button>
+      </div>
+      )}
+
       {user?.role === 'admin' && showDepartmentFilter && (
-        <div className={styles.departmentsFilter}>
-          <button
-            className={`${styles.departmentBtn} ${selectedDepartment === '' ? styles.active : ''}`}
-            onClick={() => {
-              setSelectedDepartment('');
-              setPage(1);
-              clearSelection();
-            }}
-          >
-            전체
-          </button>
-          {departmentsData && Array.isArray(departmentsData) ? (
-            departmentsData.filter((dept) => dept.name !== '관리자').map((dept) => (
+        <>
+          <div className={styles.departmentsFilter}>
+            <button
+              className={`${styles.departmentBtn} ${selectedDepartment === '' ? styles.active : ''}`}
+              onClick={() => handleDepartmentChange('')}
+            >
+              전체
+            </button>
+            {departmentGroups.map((group) => (
               <button
-                key={dept.id}
-                className={`${styles.departmentBtn} ${selectedDepartment === dept.name ? styles.active : ''}`}
-                onClick={() => {
-                  setSelectedDepartment(dept.name);
-                  setPage(1);
-                  clearSelection();
-                }}
+                key={group}
+                className={`${styles.departmentBtn} ${selectedDepartment === group ? styles.active : ''}`}
+                onClick={() => handleDepartmentChange(group)}
               >
-                {dept.name}
+                {group}
               </button>
-            ))
-          ) : null}
-        </div>
+            ))}
+          </div>
+
+          {/* 한 조직이 여러 분류로 쪼개진 경우에만(파라인슈 = 1 + 2) 하위 줄이 나온다. */}
+          {subDepartments.length > 0 && (
+            <div className={styles.subDepartmentsFilter}>
+              <button
+                className={`${styles.departmentBtn} ${selectedSubDepartment === '' ? styles.active : ''}`}
+                onClick={() => handleSubDepartmentChange('')}
+              >
+                전체
+              </button>
+              {subDepartments.map((sub) => (
+                <button
+                  key={sub}
+                  className={`${styles.departmentBtn} ${selectedSubDepartment === sub ? styles.active : ''}`}
+                  onClick={() => handleSubDepartmentChange(sub)}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {user?.role === 'admin' && (
-        <div style={{ marginBottom: '20px', display: 'flex', gap: '12px' }}>
+        <div className={styles.adminActions}>
           <button
             className={styles.bulkDeleteBtn}
             onClick={handleBulkDelete}
@@ -453,6 +614,8 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
             onSort={handleSort}
             onPreview={handlePreview}
             onDownload={handleDownload}
+            onRedownloadRequest={handleRedownloadRequest}
+            onViewHistory={handleViewHistory}
             onViewLogs={handleViewDownloadLogs}
             onDelete={handleDeleteFile}
           />
@@ -516,6 +679,19 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         fileName={selectedFileForLogs?.name || ''}
         onClose={closeDownloadLogsModal}
       />
+
+      <RedownloadRequestModal
+        isOpen={redownloadModalOpen}
+        fileName={redownloadFileName}
+        reason={redownloadReason}
+        maxLength={REASON_MAX_LENGTH}
+        isSubmitting={redownloadRequestMutation.isPending}
+        onReasonChange={setRedownloadReason}
+        onClose={closeRedownloadModal}
+        onConfirm={handleRedownloadConfirm}
+      />
+
+      <RedownloadHistoryModal file={historyFile} onClose={closeHistoryModal} />
     </>
   );
 });

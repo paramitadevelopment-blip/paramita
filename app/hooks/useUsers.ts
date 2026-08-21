@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
+import { invalidateDashboard } from './useDashboardCache';
 
 interface User {
   id: number;
@@ -69,9 +70,11 @@ export function useCreateUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      invalidateDashboard(queryClient);
     },
     onError: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      invalidateDashboard(queryClient);
     },
   });
 }
@@ -99,6 +102,7 @@ export function useUpdateUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      invalidateDashboard(queryClient);
       queryClient.invalidateQueries({ queryKey: ['checkUsername'] });
       queryClient.invalidateQueries({ queryKey: ['checkEmployeeId'] });
     },
@@ -123,6 +127,7 @@ export function useDeleteUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      invalidateDashboard(queryClient);
       queryClient.invalidateQueries({ queryKey: ['checkUsername'] });
       queryClient.invalidateQueries({ queryKey: ['checkEmployeeId'] });
     },
@@ -148,6 +153,7 @@ export function useDeleteUsers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      invalidateDashboard(queryClient);
       queryClient.invalidateQueries({ queryKey: ['checkUsername'] });
       queryClient.invalidateQueries({ queryKey: ['checkEmployeeId'] });
     },

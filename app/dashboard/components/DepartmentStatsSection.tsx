@@ -26,7 +26,7 @@ function DepartmentStatsSection({
 }: DepartmentStatsSectionProps) {
   const sortedDepts = useMemo(() => {
     if (!stats) return [];
-    const sorted = [...stats].filter((dept) => dept.name !== '관리자');
+    const sorted = [...stats];
     sorted.sort((a, b) => {
       let aVal: any = a[sortBy as keyof DepartmentStat];
       let bVal: any = b[sortBy as keyof DepartmentStat];

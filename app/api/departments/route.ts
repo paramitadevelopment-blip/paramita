@@ -14,9 +14,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // 소속 목록은 조직 전체 구조다. 이걸 쓰는 화면(소속 필터·사용자 관리)이 전부
+    // 관리자 전용이므로 API도 같은 기준으로 막는다.
+    if (user.role !== 'admin') {
+      return NextResponse.json({ error: 'Only admin can view departments' }, { status: 403 });
+    }
+
     const { data, error } = await supabase
       .from('departments')
-      .select('*')
+      .select('id, name, group_name, is_admin, created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -61,9 +67,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Department name can only contain letters, numbers, spaces, and hyphens' }, { status: 400 });
     }
 
+    // 새로 만드는 소속은 자기 자신이 그룹이다. 여러 분류를 한 조직으로 묶는 건
+    // 배정 규칙이 그 조직을 쪼갤 때만 생기는 일이라, 그때 group_name을 손대면 된다.
     const { data, error } = await supabase
       .from('departments')
-      .insert([{ name: name.trim() }])
+      .insert([{ name: name.trim(), group_name: name.trim() }])
       .select();
 
     if (error) throw error;
@@ -113,7 +121,7 @@ export async function DELETE(request: NextRequest) {
     // 삭제할 소속 정보 조회
     const { data: deptToDelete, error: deptError } = await supabase
       .from('departments')
-      .select('name')
+      .select('name, group_name, is_admin')
       .eq('id', id)
       .single();
 
@@ -121,14 +129,36 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Department not found' }, { status: 404 });
     }
 
+    // 관리자 소속은 업로드한 원본이 들어가는 자리다. 지우면 그 순간부터
+    // 모든 업로드가 실패한다. 목록에서 숨기는 것만으로는 API를 막지 못한다.
+    if (deptToDelete.is_admin) {
+      return NextResponse.json(
+        { error: '관리자 소속은 삭제할 수 없습니다. 업로드한 원본 파일이 이 소속에 들어갑니다.' },
+        { status: 400 }
+      );
+    }
+
     // checkOnly면 소속을 옮겨야 하는 대상 수만 반환한다.
     // 파일도 소속을 참조하므로 사용자가 없어도 대상이 될 수 있다.
     if (checkOnly) {
+      // 사용자 소속은 조직 단위('파라인슈')다. 분류명('파라인슈1')으로 세면 늘 0이 나온다.
+      // 같은 조직에 다른 분류가 남으면 사용자는 갈 곳이 있으니 영향이 없고,
+      // 마지막 하나를 지울 때만 옮겨야 한다. 아래 RPC도 같은 규칙을 쓴다.
+      const { count: siblingCount } = await supabase
+        .from('departments')
+        .select('*', { count: 'exact', head: true })
+        .eq('group_name', deptToDelete.group_name)
+        .neq('id', deptId);
+
+      const isLastOfGroup = (siblingCount || 0) === 0;
+
       const [{ count: userCount }, { count: fileCount }] = await Promise.all([
-        supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true })
-          .eq('department', deptToDelete.name),
+        isLastOfGroup
+          ? supabase
+              .from('users')
+              .select('*', { count: 'exact', head: true })
+              .eq('department', deptToDelete.group_name)
+          : Promise.resolve({ count: 0 }),
         supabase
           .from('files')
           .select('*', { count: 'exact', head: true })

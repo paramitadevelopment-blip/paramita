@@ -38,7 +38,8 @@ async function loginAPI(username: string, password: string): Promise<LoginRespon
 export default function LoginPage() {
   const { showAlert } = useAlert();
   const router = useRouter();
-  const { setUser, setCsrfToken } = useAuthStore();
+  const setUser = useAuthStore((state) => state.setUser);
+  const setCsrfToken = useAuthStore((state) => state.setCsrfToken);
   const [formData, setFormData] = useState({ userId: '', password: '', rememberMe: false });
 
   // 서버/클라이언트 초기 렌더 결과를 동일하게 유지하기 위해

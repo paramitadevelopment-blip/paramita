@@ -5,7 +5,12 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { formatCellValue } from '@/lib/excelCell';
 import * as XLSX from 'xlsx';
-import { getInsurerTypeFromRows, findRequiredColumns } from '@/lib/insurance';
+import {
+  getInsurerTypeFromRows,
+  findRequiredColumns,
+  isValidUploadFileName,
+  UPLOAD_FILE_NAME_HINT,
+} from '@/lib/insurance';
 
 const MAX_FILE_SIZE = 300 * 1024 * 1024; // 300MB
 const STORAGE_BUCKET = 'files';
@@ -75,9 +80,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid file name' }, { status: 400 });
     }
 
-    // 파일명이 YYYYMMDD 형식으로 시작하는지 검증
-    if (!/^\d{8}/.test(originalName)) {
-      return NextResponse.json({ error: '파일명은 반드시 YYYYMMDD 형식의 날짜로 시작해야 합니다. (예: 20260815_파일명.xlsx)' }, { status: 400 });
+    // 파일명 규칙. 화면과 같은 함수를 써야 한다 — 서버가 느슨하면 화면이 거부한
+    // 파일이 API로 들어와, 보험사를 못 가려 배포에서 막힐 파일이 이미 저장된 뒤가 된다.
+    if (!isValidUploadFileName(originalName)) {
+      return NextResponse.json({ error: UPLOAD_FILE_NAME_HINT }, { status: 400 });
     }
 
     const ext = originalName.toLowerCase().split('.').pop() || '';
@@ -152,6 +158,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '파일 업로드에 실패했습니다.' }, { status: 500 });
     }
 
+    // 원본이 들어갈 자리는 is_admin 표시로 찾는다.
+    // id를 박으면 DB를 다시 만들 때, 이름으로 찾으면 소속명을 바꿀 때 깨진다.
+    const { data: adminDept } = await supabase
+      .from('departments')
+      .select('id')
+      .eq('is_admin', true)
+      .single();
+
+    if (!adminDept) {
+      await supabase.storage.from(STORAGE_BUCKET).remove([finalFilePath]);
+      return NextResponse.json(
+        { error: '원본을 담을 관리자 소속이 지정돼 있지 않아 업로드할 수 없습니다.' },
+        { status: 500 }
+      );
+    }
+
     // 파일 메타데이터를 데이터베이스에 저장 (원본으로 표시, 소속: 관리자)
     const { error: dbError } = await supabase.from('files').insert([
       {
@@ -163,7 +185,7 @@ export async function POST(request: NextRequest) {
         uploaded_by: user.id,
         uploaded_at: timestamp,
         is_original: true,
-        department_id: 15,
+        department_id: adminDept.id,
         file_content: fileContent,
         insurer_type: insurerType,
       },

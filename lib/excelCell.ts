@@ -52,3 +52,81 @@ export function formatCellValue(value: unknown): unknown {
 export function formatCellRow(row: unknown[]): unknown[] {
   return row.map(formatCellValue);
 }
+
+/**
+ * 날짜 칸에 잡아주는 자리.
+ * 서식 자체는 'yyyy-mm-dd'(10자)지만, 그 길이에 딱 맞추면 엑셀에서 여전히
+ * ########으로 나온다. 화면 배율·글꼴·서식 아이콘이 자리를 더 먹기 때문이다.
+ * 넉넉히 잡아 확실히 보이게 한다.
+ */
+const DATE_DISPLAY_WIDTH = 22;
+/**
+ * 열 너비 상한. 무한정 늘리면 가로로만 길어지지만, 너무 낮으면 상품명처럼
+ * 긴 값이 잘려 무슨 상품인지 알아볼 수 없다.
+ */
+const MAX_WIDTH = 80;
+/**
+ * 계산한 폭에 곱하는 여유.
+ * wch는 기본 글꼴의 '0' 한 글자를 1로 세는 단위인데, 한글은 그보다 넓다.
+ * 반각 기준으로만 세어 딱 맞추면 '동양생명(PM)_1통합' 같은 값이 잘려 나온다.
+ */
+const WIDTH_HEADROOM = 1.4;
+const MIN_WIDTH = 8;
+/**
+ * 열별로 따로 잡아주는 최소 너비.
+ *
+ * 비워 두는 게 기본이다. 내용보다 넓게 잡으면 그 열이 자리를 차지해
+ * 뒤에 오는 열(비고 등)이 화면 밖으로 밀린다.
+ */
+const MIN_WIDTH_BY_HEADER: Record<string, number> = {};
+/** 한글·한자는 반각 기준으로 두 자리를 차지한다. */
+const WIDE_CHAR = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹯＀-｠￠-￦]/;
+
+function displayWidth(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  if (value instanceof Date) return DATE_DISPLAY_WIDTH;
+
+  const text = String(value);
+  let width = 0;
+  for (const ch of text) width += WIDE_CHAR.test(ch) ? 2 : 1;
+  return width;
+}
+
+/**
+ * 열 너비를 내용에 맞춰 계산한다.
+ *
+ * 너비를 안 주면 엑셀 기본값(8자 남짓)으로 저장된다. '2026-08-16' 같은 날짜는
+ * 열에 안 들어가면 값 대신 ########으로 표시된다 — 데이터는 멀쩡한데 받는 쪽에서는
+ * 깨진 파일로 보인다. 헤더까지 포함해 가장 긴 값에 맞춘다.
+ *
+ * @param rows 헤더를 포함한 전체 행
+ */
+export function fitColumnWidths(rows: unknown[][]): Array<{ wch: number }> {
+  // 열 개수를 먼저 정하고 0으로 채운다. 값이 있을 때만 채우면 전부 빈 열이
+  // 배열의 구멍으로 남아, 그 뒤 열들의 너비가 한 칸씩 밀린다.
+  let columnCount = 0;
+  for (const row of rows) {
+    if (Array.isArray(row) && row.length > columnCount) columnCount = row.length;
+  }
+
+  const widths = new Array<number>(columnCount).fill(0);
+
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue;
+    row.forEach((cell, i) => {
+      const w = displayWidth(cell);
+      if (w > widths[i]) widths[i] = w;
+    });
+  }
+
+  // 헤더 이름으로 지정한 최소 너비가 있으면 그걸 밑바닥으로 쓴다.
+  const headerRow = Array.isArray(rows[0]) ? rows[0] : [];
+
+  // 여유를 곱하고 3칸을 더 준다. 딱 맞게 주면 서식·필터 화살표에 가려 또 잘린다.
+  return widths.map((w, i) => {
+    const header = String(headerRow[i] ?? '').trim();
+    const floor = MIN_WIDTH_BY_HEADER[header] ?? MIN_WIDTH;
+    const fitted = Math.ceil(w * WIDTH_HEADROOM) + 3;
+    return { wch: Math.min(Math.max(fitted, floor), MAX_WIDTH) };
+  });
+}

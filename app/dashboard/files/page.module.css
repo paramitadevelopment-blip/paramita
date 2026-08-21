@@ -667,3 +667,150 @@
     font-size: 18px;
   }
 }
+
+/* ── 배정 소속 선택 방식 탭 ─────────────────────────────── */
+
+.pickModeTabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.pickModeTab {
+  padding: 10px 22px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pickModeTab:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.pickModeTabActive {
+  background: #db1a62;
+  border-color: #db1a62;
+  color: white;
+}
+
+.pickModeTabActive:hover {
+  color: white;
+}
+
+/* 선택 대기 표의 정렬 가능한 헤더. 다른 화면 표와 같은 모양을 쓴다. */
+.pendingSortableTh {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pendingSortableTh:hover {
+  color: #db1a62;
+}
+
+.pendingThInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  /* 정렬을 켜고 끌 때 아이콘이 붙었다 떨어지며 헤더 폭이 흔들리지 않게
+     아이콘 자리를 미리 비워 둔다. */
+  padding-right: 20px;
+  position: relative;
+}
+
+.pendingThInner svg {
+  position: absolute;
+  right: 0;
+  font-size: 20px;
+}
+
+/* ── 소속별 결과: 규칙 배정 / 선택 반영을 나란히 ──────────── */
+
+/* 위아래로 두면 두 숫자를 번갈아 보려고 스크롤해야 한다. */
+.deptResultPair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.deptResultColumn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.deptResultTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: #555;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.deptResultHint {
+  font-size: 14px;
+  font-weight: 500;
+  color: #999;
+}
+
+/* 좁아지면 두 열이 겹쳐 읽히므로 한 줄로 편다. */
+@media (max-width: 1100px) {
+  .deptResultPair {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 규칙 배정분에서 얼마나 늘었는지. 총합만 보면 내가 뭘 바꿨는지 안 보인다. */
+.pickedDelta {
+  font-size: 16px;
+  font-weight: 700;
+  color: #db1a62;
+  margin-left: 6px;
+}
+
+/* 선택 대기 표의 데이터 칸.
+   내용이 길어도 폭을 넘기지 않게 잘라낸다. 안 자르면 tel1처럼 긴 열이
+   표를 밀어내 정작 골라야 할 '배정 소속'이 화면 밖으로 나간다.
+   잘린 값은 마우스를 올리면 전체가 보인다(title). */
+.pendingDataCell {
+  padding: 10px 12px;
+  color: #666;
+  font-size: 16px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 배정 소속은 드롭다운이 들어가므로 폭을 반드시 확보한다. */
+.pendingDeptTh {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 16px;
+  white-space: nowrap;
+  width: 320px;
+  min-width: 320px;
+}
+
+/* tel1은 tel2와 같은 번호다. 앞자리(010)만 보이면 충분하니 좁게 눌러
+   '배정 소속'이 밀리지 않게 한다. 전체 값은 마우스를 올리면 보인다. */
+.pendingNarrowCol {
+  max-width: 62px;
+  width: 62px;
+  white-space: nowrap;
+}

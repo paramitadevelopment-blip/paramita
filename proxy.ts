@@ -8,7 +8,15 @@ const publicApiRoutes = ['/api/auth/login'];
 // 여기 없는 /dashboard 하위 경로는 전부 admin 전용으로 간주한다.
 const userAllowedRoutes = ['/dashboard/download'];
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key');
+// 다른 곳(lib/jwt, lib/csrf, 로그인)은 시크릿이 없으면 전부 throw한다.
+// 여기만 기본값으로 넘어가면, 설정이 빠진 배포에서 누구나 알 수 있는 키로 서명한
+// 토큰이 이 관문을 통과한다. 관문이 가장 먼저 막아야 할 상황이므로 같은 기준을 쓴다.
+const secret = new TextEncoder().encode(
+  process.env.JWT_SECRET ||
+    (() => {
+      throw new Error('JWT_SECRET environment variable is not set');
+    })()
+);
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
+import { invalidateDashboard } from './useDashboardCache';
 
 export interface DeletedFile {
   id: string;
@@ -108,6 +109,7 @@ export function useRestoreFiles() {
       // 히스토리와 파일 목록 모두 새로고침
       queryClient.invalidateQueries({ queryKey: ['deletionHistory'] });
       queryClient.invalidateQueries({ queryKey: ['files'] });
+      invalidateDashboard(queryClient);
     },
   });
 }

@@ -45,7 +45,7 @@ const DownloadLogsModal = memo(function DownloadLogsModal({ fileId, fileName, is
                     const dateStr = date.toLocaleDateString('ko-KR').slice(0, -1);
                     const timeStr = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                     return (
-                      <tr key={idx}>
+                      <tr key={log.id}>
                         <td style={{ width: '60px', textAlign: 'center', fontWeight: 600, color: '#666' }}>{idx + 1}</td>
                         <td>{log.downloaded_by}</td>
                         <td>{log.user_name || '-'}</td>

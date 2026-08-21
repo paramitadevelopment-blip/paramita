@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
 
 interface DownloadLog {
+  id: number;
   downloaded_by: string;
   user_name: string | null;
   user_employee_id: string | null;

@@ -11,6 +11,7 @@ import ClassificationProgressModal from './components/ClassificationProgressModa
 import ClassificationResultModal from './components/ClassificationResultModal';
 import MemoRuleOption from './components/MemoRuleOption';
 import styles from './page.module.css';
+import { isValidUploadFileName, UPLOAD_FILE_NAME_HINT } from '@/lib/insurance';
 
 interface Department {
   id: number;
@@ -28,11 +29,6 @@ const EMPTY_DEPARTMENTS: Department[] = [];
 function isValidExcel(file: File) {
   const fileName = file.name.toLowerCase();
   return fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
-}
-
-function isValidFileName(fileName: string) {
-  // YYYYMMDD 뒤에 동양생명, 흥국생명, 한화생명 중 하나 포함
-  return /^\d{8}_(동양생명|흥국생명|한화생명)/.test(fileName);
 }
 
 function wait(ms: number) {
@@ -58,34 +54,21 @@ function FilesPage() {
   const { data: departmentsData = [] } = useDepartments();
   const departments = departmentsData;
 
-  const handleFileSelect = useCallback(
+  // 클릭으로 고르든 끌어다 놓든 같은 검사를 거쳐야 한다.
+  // 두 벌로 두면 한쪽만 고쳐져 동작이 갈린다.
+  const addFiles = useCallback(
     (files: File[]) => {
       files.forEach((file) => {
         if (!isValidExcel(file)) {
           showAlert({ type: 'error', title: '오류', message: '엑셀 파일만 업로드 가능합니다.' });
           return;
         }
-        if (!isValidFileName(file.name)) {
-          showAlert({ type: 'error', title: '오류', message: '파일명은 YYYYMMDD_회사명 형식이어야 합니다. (예: 20260815_동양생명.xlsx, 20260815_흥국생명.xlsx, 20260815_한화생명.xlsx)' });
+        // 규칙은 서버와 같은 함수를 쓴다. 여기서만 막으면 API로는 그대로 들어간다.
+        if (!isValidUploadFileName(file.name)) {
+          showAlert({ type: 'error', title: '오류', message: UPLOAD_FILE_NAME_HINT });
           return;
         }
-        setSelectedFiles((prev) => [...prev, file]);
-      });
-    },
-    [showAlert]
-  );
-
-  const handleDrop = useCallback(
-    (files: File[]) => {
-      files.forEach((file) => {
-        if (!isValidExcel(file)) {
-          showAlert({ type: 'error', title: '오류', message: '엑셀 파일만 업로드 가능합니다.' });
-          return;
-        }
-        if (!isValidFileName(file.name)) {
-          showAlert({ type: 'error', title: '오류', message: '파일명은 YYYYMMDD_회사명 형식이어야 합니다. (예: 20260815_동양생명.xlsx, 20260815_흥국생명.xlsx, 20260815_한화생명.xlsx)' });
-          return;
-        }
+        // 같은 파일을 여러 번 담는 건 허용한다 (같은 원본을 여러 번 배포하는 경우가 있다).
         setSelectedFiles((prev) => [...prev, file]);
       });
     },
@@ -206,8 +189,8 @@ function FilesPage() {
 
       <div className={styles.contentWrapper}>
         <FileUploadZone
-          onFileSelect={handleFileSelect}
-          onDrop={handleDrop}
+          onFileSelect={addFiles}
+          onDrop={addFiles}
           fileInputRef={fileInputRef}
         />
 

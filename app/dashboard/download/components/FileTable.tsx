@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { MdArrowDropUp, MdArrowDropDown, MdFileDownload, MdDelete } from 'react-icons/md';
+import { MdArrowDropUp, MdArrowDropDown, MdFileDownload, MdDelete, MdHelpOutline, MdAccessTime, MdCancel, MdHistory } from 'react-icons/md';
 import styles from '../page.module.css';
 
 interface FileRow {
@@ -12,6 +12,10 @@ interface FileRow {
   download_count: number;
   departments: { name: string } | null;
   formattedDate: string;
+  myDownloadStatus?: 'available' | 'downloaded' | 'pending_request' | 'rejected';
+  myLastRejectReason?: string | null;
+  myRequestCount?: number;
+  myRejectCount?: number;
 }
 
 interface FileTableProps {
@@ -25,6 +29,8 @@ interface FileTableProps {
   onSort: (column: string) => void;
   onPreview: (fileId: string, fileName: string) => void;
   onDownload: (fileId: string, fileName: string) => void;
+  onRedownloadRequest?: (fileId: string, fileName: string) => void;
+  onViewHistory?: (fileId: string, fileName: string) => void;
   onViewLogs: (fileId: string, fileName: string) => void;
   onDelete: (fileId: string, fileName: string) => void;
 }
@@ -40,6 +46,8 @@ const FileTable = memo(function FileTable({
   onSort,
   onPreview,
   onDownload,
+  onRedownloadRequest,
+  onViewHistory,
   onViewLogs,
   onDelete,
 }: FileTableProps) {
@@ -48,7 +56,7 @@ const FileTable = memo(function FileTable({
       <table className={styles.table}>
         <thead>
           <tr>
-            <th style={{ width: '40px' }}>
+            <th className={styles.colCheckbox}>
               <input
                 type="checkbox"
                 checked={selectedFileIds.size === files.length && files.length > 0}
@@ -56,7 +64,7 @@ const FileTable = memo(function FileTable({
                 className={styles.checkbox}
               />
             </th>
-            <th style={{ cursor: 'pointer' }} onClick={() => onSort('name')}>
+            <th className={styles.sortable} onClick={() => onSort('name')}>
               <div className={styles.headerContent}>
                 <span>파일명</span>
                 {sortBy === 'name' && (
@@ -66,7 +74,7 @@ const FileTable = memo(function FileTable({
                 )}
               </div>
             </th>
-            <th style={{ cursor: 'pointer' }} onClick={() => onSort('size')}>
+            <th className={styles.sortable} onClick={() => onSort('size')}>
               <div className={styles.headerContent}>
                 <span>크기</span>
                 {sortBy === 'size' && (
@@ -76,7 +84,7 @@ const FileTable = memo(function FileTable({
                 )}
               </div>
             </th>
-            <th style={{ cursor: 'pointer' }} onClick={() => onSort('department_id')}>
+            <th className={styles.sortable} onClick={() => onSort('department_id')}>
               <div className={styles.headerContent}>
                 <span>소속</span>
                 {sortBy === 'department_id' && (
@@ -87,7 +95,7 @@ const FileTable = memo(function FileTable({
               </div>
             </th>
             {userRole === 'admin' && (
-              <th style={{ cursor: 'pointer' }} onClick={() => onSort('download_count')}>
+              <th className={styles.sortable} onClick={() => onSort('download_count')}>
                 <div className={styles.headerContent}>
                   <span>다운로드수</span>
                   {sortBy === 'download_count' && (
@@ -98,7 +106,7 @@ const FileTable = memo(function FileTable({
                 </div>
               </th>
             )}
-            <th style={{ cursor: 'pointer' }} onClick={() => onSort('uploaded_at')}>
+            <th className={styles.sortable} onClick={() => onSort('uploaded_at')}>
               <div className={styles.headerContent}>
                 <span>업로드 날짜</span>
                 {sortBy === 'uploaded_at' && (
@@ -108,13 +116,34 @@ const FileTable = memo(function FileTable({
                 )}
               </div>
             </th>
-            <th style={{ width: '240px', textAlign: 'center' }}>작업</th>
+            {userRole !== 'admin' && (
+              <th className={`${styles.sortable} ${styles.colRejectCount}`} onClick={() => onSort('myRejectCount')}>
+                <div className={styles.headerContent}>
+                  <span>거부 횟수</span>
+                  {sortBy === 'myRejectCount' && (
+                    <span className={styles.sortIcon}>
+                      {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                    </span>
+                  )}
+                </div>
+              </th>
+            )}
+            <th className={`${styles.sortable} ${styles.colActions}`} onClick={() => onSort('myDownloadStatus')}>
+              <div className={styles.headerContent}>
+                <span>작업</span>
+                {sortBy === 'myDownloadStatus' && (
+                  <span className={styles.sortIcon}>
+                    {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                  </span>
+                )}
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody>
           {files.map((file) => (
             <tr key={file.id}>
-              <td style={{ width: '40px' }}>
+              <td className={styles.colCheckbox}>
                 <input
                   type="checkbox"
                   checked={selectedFileIds.has(file.id)}
@@ -123,11 +152,7 @@ const FileTable = memo(function FileTable({
                 />
               </td>
               <td
-                style={{
-                  cursor: userRole === 'admin' ? 'pointer' : 'default',
-                  color: userRole === 'admin' ? '#db1a62' : 'inherit',
-                  textDecoration: userRole === 'admin' ? 'underline' : 'none',
-                }}
+                className={userRole === 'admin' ? styles.fileNameCell : undefined}
                 onClick={() => {
                   if (userRole === 'admin') onPreview(file.id, file.name);
                 }}
@@ -138,23 +163,82 @@ const FileTable = memo(function FileTable({
               <td>{file.departments?.name || '-'}</td>
               {userRole === 'admin' && (
                 <td
-                  style={{ cursor: 'pointer', color: '#db1a62' }}
+                  className={styles.downloadCountCell}
                   onClick={() => onViewLogs(file.id, file.name)}
                 >
                   {file.download_count}
                 </td>
               )}
               <td>{file.formattedDate}</td>
-              <td style={{ textAlign: 'center' }}>
-                <div className={styles.actions}>
-                  <button
-                    className={styles.iconBtn}
-                    onClick={() => onDownload(file.id, file.name)}
-                    title="다운로드"
+              {userRole !== 'admin' && (
+                <td>
+                  <span
+                    className={`${styles.rejectCount} ${(file.myRejectCount ?? 0) > 0 ? styles.rejectCountWarn : ''}`}
                   >
-                    <MdFileDownload />
-                    <span>다운로드</span>
-                  </button>
+                    {file.myRejectCount ?? 0}회
+                  </span>
+                </td>
+              )}
+              <td className={styles.colActions}>
+                <div className={styles.actions}>
+                  {userRole === 'admin' ? (
+                    <button
+                      className={styles.iconBtn}
+                      onClick={() => onDownload(file.id, file.name)}
+                      title="다운로드"
+                    >
+                      <MdFileDownload />
+                      <span>다운로드</span>
+                    </button>
+                  ) : file.myDownloadStatus === 'available' ? (
+                    <button
+                      className={`${styles.iconBtn} ${styles.statusBtn}`}
+                      onClick={() => onDownload(file.id, file.name)}
+                      title="다운로드"
+                    >
+                      <MdFileDownload />
+                      <span>다운로드</span>
+                    </button>
+                  ) : file.myDownloadStatus === 'downloaded' ? (
+                    <button
+                      className={`${styles.iconBtn} ${styles.statusBtn} ${styles.redownloadRequest}`}
+                      onClick={() => onRedownloadRequest?.(file.id, file.name)}
+                      title="재다운로드 요청"
+                    >
+                      <MdHelpOutline />
+                      <span>재다운로드 요청</span>
+                    </button>
+                  ) : file.myDownloadStatus === 'rejected' ? (
+                    <button
+                      className={`${styles.iconBtn} ${styles.statusBtn} ${styles.rejected}`}
+                      onClick={() => onRedownloadRequest?.(file.id, file.name)}
+                      title={file.myLastRejectReason ? `거부 사유: ${file.myLastRejectReason}` : '거부됨'}
+                    >
+                      <MdCancel />
+                      <span>거부됨 · 재요청</span>
+                    </button>
+                  ) : (
+                    <button
+                      className={`${styles.iconBtn} ${styles.statusBtn} ${styles.pendingRequest}`}
+                      disabled
+                      title="요청됨"
+                    >
+                      <MdAccessTime />
+                      <span>요청됨</span>
+                    </button>
+                  )}
+                  {userRole !== 'admin' && (file.myRequestCount ?? 0) > 0 && (
+                    <button
+                      className={styles.historyBtn}
+                      onClick={() => onViewHistory?.(file.id, file.name)}
+                      title={`요청 ${file.myRequestCount}회 · 거부 ${file.myRejectCount ?? 0}회`}
+                    >
+                      <MdHistory />
+                      {(file.myRejectCount ?? 0) > 0 && (
+                        <span className={styles.rejectBadge}>{file.myRejectCount}</span>
+                      )}
+                    </button>
+                  )}
                   {userRole === 'admin' && (
                     <button
                       className={`${styles.iconBtn} ${styles.delete}`}

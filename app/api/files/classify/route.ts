@@ -15,6 +15,9 @@ import {
   dedupeByCustomerKey,
   findRequiredColumns,
   getMissingColumnLabels,
+  pendingRowKey,
+  isOrderNumberMissing,
+  ORDER_NUMBER_MISSING_REASON,
 } from '@/lib/insurance';
 import { formatCellValue } from '@/lib/excelCell';
 import * as XLSX from 'xlsx';
@@ -24,6 +27,11 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const CATEGORIES = [...ASSIGN_DEPARTMENTS];
+
+/** 업로드 라우트와 같은 한도. 여기가 느슨하면 업로드 전에 서버가 먼저 주저앉는다. */
+const MAX_FILE_SIZE = 300 * 1024 * 1024;
+/** 한 번에 처리할 파일 수. 없으면 수백 개를 한 요청에 밀어넣을 수 있다. */
+const MAX_FILES = 30;
 
 function emptyCounts(): Record<string, number> {
   return CATEGORIES.reduce((acc, c) => ({ ...acc, [c]: 0 }), {});
@@ -55,6 +63,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    if (uploadedFiles.length > MAX_FILES) {
+      return NextResponse.json(
+        { error: `한 번에 ${MAX_FILES}개까지 분류할 수 있습니다. (선택: ${uploadedFiles.length}개)` },
+        { status: 400 }
+      );
+    }
+
+    const tooBig = uploadedFiles.find((f) => f.size > MAX_FILE_SIZE);
+    if (tooBig) {
+      return NextResponse.json(
+        { error: `${tooBig.name}: 파일 크기는 ${MAX_FILE_SIZE / (1024 * 1024)}MB를 넘을 수 없습니다.` },
+        { status: 400 }
+      );
+    }
+
     // 상담메모 규칙 (업로드 화면 체크박스). 없으면 끈 것으로 본다.
     const memoRuleOn = formData.get('memoRule') === 'true';
     // 규칙이 보는 "오늘". 요청 안에서 한 번만 재야 파일마다 기준이 갈리지 않는다.
@@ -71,11 +94,6 @@ export async function POST(request: NextRequest) {
       deptMap[dept.name] = dept.id;
     }
 
-    // 병렬: 모든 파일의 arrayBuffer 읽기
-    const buffers = await Promise.all(
-      uploadedFiles.map((file) => file.arrayBuffer())
-    );
-
     // 파일별 결과
     const perFile: any[] = [];
 
@@ -87,7 +105,8 @@ export async function POST(request: NextRequest) {
 
     for (let fileIdx = 0; fileIdx < uploadedFiles.length; fileIdx++) {
       const file = uploadedFiles[fileIdx];
-      const buffer = buffers[fileIdx];
+      // 한 개씩 읽는다. 미리 전부 읽어두면 고른 파일 크기의 합이 그대로 메모리에 올라간다.
+      const buffer = await file.arrayBuffer();
 
       // cellDates를 주지 않으면 날짜 셀이 46245 같은 일련번호로 들어온다.
       const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
@@ -187,14 +206,26 @@ export async function POST(request: NextRequest) {
       // 행을 가리키는 키. 화면은 지역별로 묶어 보여주고 배포는 파일 행 순서로 도는데,
       // 위치 번호로 주고받으면 이 둘이 어긋나 엉뚱한 사람이 다른 부서로 간다.
       const pendingKeysByRegion: Record<string, string[]> = {};
+      // 자동 배분이 생년월일 순으로 나누므로 그 값도 함께 보낸다.
+      // 화면은 어느 열이 생년월일인지 모르기 때문에 여기서 뽑아 줘야 한다.
+      const pendingJuminByRegion: Record<string, string[]> = {};
       for (const region of SELECTABLE_REGIONS) {
         pendingByRegion[region] = 0;
         pendingRowsByRegion[region] = [];
         pendingKeysByRegion[region] = [];
+        pendingJuminByRegion[region] = [];
       }
 
-      for (const { row, sourceRow } of dedupedRows) {
+      for (let dedupedIndex = 0; dedupedIndex < dedupedRows.length; dedupedIndex++) {
+        const { row, sourceRow } = dedupedRows[dedupedIndex];
         try {
+          // 주문번호가 없으면 배정 전에 막는다. 이 건을 가리킬 방법이 없어
+          // 내보낸 뒤에는 어느 행이었는지 되짚을 수 없다.
+          if (isOrderNumberMissing(row[orderCol])) {
+            errorRows.push({ row: sourceRow, reason: ORDER_NUMBER_MISSING_REASON });
+            continue;
+          }
+
           const assigned = assignRow(insurerType, row[juminCol], row[addressCol], memoRuleFor(row));
 
           if (assigned.kind === 'error') {
@@ -202,7 +233,8 @@ export async function POST(request: NextRequest) {
           } else if (assigned.kind === 'select') {
             pendingByRegion[assigned.region]++;
             pendingRowsByRegion[assigned.region].push(row);
-            pendingKeysByRegion[assigned.region].push(String(row[orderCol] ?? ''));
+            pendingKeysByRegion[assigned.region].push(pendingRowKey(row[orderCol], dedupedIndex));
+            pendingJuminByRegion[assigned.region].push(String(row[juminCol] ?? ''));
           } else if (counts.hasOwnProperty(assigned.dept)) {
             counts[assigned.dept]++;
             rowsByCategory[assigned.dept].push(row);
@@ -256,14 +288,21 @@ export async function POST(request: NextRequest) {
         }
 
         const assigned = assignRow(insurerType, row[juminCol], row[addressCol], memoRuleFor(row));
-        // 아직 안 고른 지역은 부서명 대신 "선택: 서울"처럼 남겨 눈에 띄게 한다.
+        // 아직 안 고른 건은 '미정'이다. 여기 지역명을 넣으면 '선택: 인천'처럼
+        // 소속 칸에 소속이 아닌 값이 들어가 무엇이 배정된 건지 헷갈린다.
+        // 어느 지역인지는 아래 선택 화면에서 지역별로 묶어 보여준다.
         const label =
           assigned.kind === 'error'
             ? '오류'
             : assigned.kind === 'select'
-              ? `선택: ${assigned.region}`
+              ? '미정'
               : assigned.dept;
-        processedRows.push([seq++, label, ...keptRow]);
+        // 배정방식은 "누가 정하는가"다. 아직 안 골랐어도 이 건은 사람이 고를 것이
+        // 확정돼 있으므로 배포 전후로 값이 같다. 여기에 '미정'을 넣으면
+        // 바로 옆 배정소속과 같은 말을 두 번 하게 된다.
+        const assignedBy =
+          assigned.kind === 'error' ? '' : assigned.kind === 'select' ? '직접분류' : '자동분류';
+        processedRows.push([seq++, label, assignedBy, ...keptRow]);
       }
 
       // 분류 건수 / 행 데이터를 부서ID 기준으로 변환
@@ -289,6 +328,7 @@ export async function POST(request: NextRequest) {
         pendingByRegion,
         pendingRowsByRegion: pendingRowsByRegionArrays,
         pendingKeysByRegion,
+        pendingJuminByRegion,
         // 원본 데이터는 중복 제거 전 (업로드 당시 그대로)
         totalRows: rawData.length,
         dupRemovedCount,
@@ -299,7 +339,7 @@ export async function POST(request: NextRequest) {
         previewHeaders,
         // 미리보기마다 열 구성이 다르다. 헤더를 행 배열 안에 끼워 넣으면
         // 받는 쪽이 thead를 또 그려서 설명 행이 두 줄로 보인다.
-        processedHeaders: ['번호', '배정소속', ...previewHeaders],
+        processedHeaders: ['번호', '배정소속', '배정방식', ...previewHeaders],
         duplicateHeaders: ['중복사유', ...previewHeaders],
         rowsByDeptId,
         // 미리보기는 원본 그대로 (중복 포함)

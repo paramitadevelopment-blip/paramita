@@ -13,6 +13,8 @@ export interface ClassifiedFile {
   pendingRowsByRegion: Record<SelectableRegion, any[][]>;
   /** 지역별 대기 건의 주문번호. pendingRowsByRegion과 같은 순서 */
   pendingKeysByRegion: Record<SelectableRegion, string[]>;
+  /** 자동 배분이 생년월일 순으로 나누기 위해 쓰는 값. 키와 같은 순서다. */
+  pendingJuminByRegion: Record<SelectableRegion, string[]>;
   /** 중복 제거 전 원본 행 수 */
   totalRows: number;
   /** 중복으로 제외된 행 수 (주문번호 기준 + 고객 기준) */
