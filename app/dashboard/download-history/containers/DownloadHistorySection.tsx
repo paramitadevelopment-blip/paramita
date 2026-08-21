@@ -7,6 +7,7 @@ import { useDepartments } from '@/app/hooks/useDepartments';
 import { useDownloadHistoryDelete } from '@/app/hooks/useDownloadHistoryDelete';
 import { usePreviewFile } from '@/app/hooks/useFileDownload';
 import { useAlert } from '@/app/components/Alert/Alert';
+import { toDepartmentGroups } from '@/lib/departments';
 import Spinner from '@/app/components/Spinner/Spinner';
 import SearchBar from '@/app/components/SearchBar';
 import Pagination from '@/app/components/Pagination/Pagination';
@@ -24,6 +25,10 @@ interface DownloadRecord {
   user_employee_id: string;
   user_department: string;
   downloaded_at: string;
+  ip_address: string | null;
+  device_type: string;
+  os_name: string | null;
+  browser_name: string | null;
 }
 
 interface DownloadHistoryResponse {
@@ -56,9 +61,12 @@ const DownloadHistorySection = memo(function DownloadHistorySectionComponent() {
   const [selectedDownloadRecord, setSelectedDownloadRecord] = useState<DownloadRecord | null>(null);
   const [isDownloadRecordModalOpen, setIsDownloadRecordModalOpen] = useState(false);
 
-  const departments = useMemo(() => {
-    return (departmentsData || []).filter((dept: any) => dept.name !== '관리자');
-  }, [departmentsData]);
+  // 이 필터가 거르는 값은 기록에 남은 user_department, 즉 사용자 소속이다.
+  // 사용자 소속은 조직 단위라 배정 분류(파라인슈1)로는 아무것도 걸리지 않는다.
+  const departmentGroups = useMemo(
+    () => toDepartmentGroups(departmentsData),
+    [departmentsData]
+  );
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['downloadHistory', page, search, limit, sortBy, sortOrder, selectedDepartment],
@@ -293,16 +301,16 @@ const DownloadHistorySection = memo(function DownloadHistorySectionComponent() {
         >
           전체
         </button>
-        {departments.map((dept: any) => (
+        {departmentGroups.map((group) => (
           <button
-            key={dept.id}
-            className={`${styles.departmentBtn} ${selectedDepartment === dept.name ? styles.active : ''}`}
+            key={group}
+            className={`${styles.departmentBtn} ${selectedDepartment === group ? styles.active : ''}`}
             onClick={() => {
-              setSelectedDepartment(dept.name);
+              setSelectedDepartment(group);
               setPage(1);
             }}
           >
-            {dept.name}
+            {group}
           </button>
         ))}
       </div>

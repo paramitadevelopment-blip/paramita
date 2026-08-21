@@ -11,6 +11,8 @@ import styles from './DepartmentModal.module.css';
 interface Department {
   id: number;
   name: string;
+  /** 업로드한 원본이 들어가는 자리. 목록에서 뺀다. */
+  is_admin?: boolean;
   created_at: string;
 }
 
@@ -96,7 +98,7 @@ const DepartmentModal = memo(function DepartmentModal({
     [deleteDepMutation, showAlert, onDelete]
   );
 
-  const filteredDepartments = departments?.filter((dept) => dept.name !== '관리자') || [];
+  const filteredDepartments = departments?.filter((dept) => !dept.is_admin) || [];
   const totalPages = filteredDepartments ? Math.ceil(filteredDepartments.length / itemsPerPage) : 1;
   const startIndex = (page - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;

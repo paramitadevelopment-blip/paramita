@@ -12,6 +12,7 @@ import UserTable from '../components/UserTable';
 import UserModal from '../components/UserModal';
 import Pagination from '@/app/components/Pagination/Pagination';
 import { UserForm, UserRow } from '../types';
+import { toDepartmentGroups } from '@/lib/departments';
 import styles from '../page.module.css';
 import { MdAdd } from 'react-icons/md';
 
@@ -38,6 +39,8 @@ const UsersSection = memo(function UsersSectionComponent({
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [internalIsModalOpen, setInternalIsModalOpen] = useState(false);
   const isModalOpen = externalIsUserModalOpen ?? internalIsModalOpen;
+
+  const departmentGroups = useMemo(() => toDepartmentGroups(departments), [departments]);
 
   const handleOpenModal = () => {
     externalOnOpenUserModal?.() ?? setInternalIsModalOpen(true);
@@ -358,21 +361,21 @@ const UsersSection = memo(function UsersSectionComponent({
         >
           전체
         </button>
-        {departments && Array.isArray(departments) ? (
-          departments.filter((dept) => dept.name !== '관리자').map((dept) => (
-            <button
-              key={dept.id}
-              className={`${styles.departmentBtn} ${selectedDepartment === dept.name ? styles.active : ''}`}
-              onClick={() => {
-                setSelectedDepartment(dept.name);
-                setPage(1);
-                setSelectedUserIds(new Set());
-              }}
-            >
-              {dept.name}
-            </button>
-          ))
-        ) : null}
+        {/* 사용자 소속은 조직 단위로 저장된다('파라인슈'). 배정 분류인 파라인슈1로
+            거르면 해당하는 사용자가 아예 없으므로 그룹으로 접어서 보여준다. */}
+        {departmentGroups.map((group) => (
+          <button
+            key={group}
+            className={`${styles.departmentBtn} ${selectedDepartment === group ? styles.active : ''}`}
+            onClick={() => {
+              setSelectedDepartment(group);
+              setPage(1);
+              setSelectedUserIds(new Set());
+            }}
+          >
+            {group}
+          </button>
+        ))}
       </div>
 
       <div style={{ marginBottom: '20px', display: 'flex', gap: '12px' }}>

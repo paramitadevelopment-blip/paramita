@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { hasHistoryAccess } from '@/lib/historyAccess';
+import { parsePagination } from '@/lib/pagination';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -25,13 +26,14 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    // page=abc면 NaN이 되어 range(NaN, NaN)으로 나가고, limit이 커지면 한 번에 다 퍼간다.
+    const { page, limit, offset } = parsePagination(
+      searchParams.get('page'),
+      searchParams.get('limit')
+    );
     const search = searchParams.get('search') || '';
     // 통합 검색 화면은 일괄 삭제 묶음 전체가 아니라 검색어와 맞는 파일만 필요하다.
     const matchedOnly = searchParams.get('matchedOnly') === 'true';
-
-    const offset = (page - 1) * limit;
 
     // 검색어가 있으면 deleted_files에서 일치하는 이벤트를 찾는다
     let eventIdsToShow: number[] | null = null;

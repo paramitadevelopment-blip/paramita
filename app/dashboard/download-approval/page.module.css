@@ -1,0 +1,804 @@
+.container {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 120px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+}
+
+.contentWrapper {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 40px 20px;
+  background: white;
+  overflow: visible;
+}
+
+.searchSection {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 50px;
+  margin-bottom: 40px;
+}
+
+.totalCount {
+  display: flex;
+  align-items: center;
+  height: 47px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  padding: 0;
+}
+
+.totalCount span {
+  font-size: 24px;
+  font-weight: 700;
+  color: #db1a62;
+  margin: 0 4px;
+}
+
+.controlsSection {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.select {
+  padding: 10px 40px 10px 16px;
+  height: 47px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #333;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23db1a62' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+}
+
+.select:hover {
+  border-color: #db1a62;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.bulkDeleteBtn {
+  padding: 12px 20px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bulkDeleteBtn:hover:not(:disabled) {
+  background: #c0392b;
+}
+
+.bulkDeleteBtn:disabled {
+  background: #e0e0e0;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.allDeleteBtn {
+  padding: 12px 20px;
+  background: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.allDeleteBtn:hover:not(:disabled) {
+  background: #a01a49;
+}
+
+.allDeleteBtn:disabled {
+  background: #e0e0e0;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.emptyState {
+  padding: 60px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 18px;
+}
+
+.tableContainer {
+  background: #fafafa;
+  border-radius: 0;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0;
+}
+
+.table th {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.table thead tr th:last-child {
+  width: 240px;
+  text-align: center;
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sortIcon {
+  display: flex;
+  align-items: center;
+  font-size: 30px;
+  color: #db1a62;
+}
+
+.table tbody {
+  background: white;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table td {
+  padding: 16px 12px;
+  font-size: 18px;
+  color: #333;
+  text-align: center;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #db1a62;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  height: 40px;
+  background: #db1a62;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.iconBtn:hover {
+  background: #a01a49;
+  color: white;
+}
+
+.iconBtn.delete {
+  background: #e74c3c;
+}
+
+.iconBtn.delete:hover {
+  background: #c62828;
+}
+
+.paginationWrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+@media (max-width: 1024px) {
+  .searchSection {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .controlsSection {
+    flex-wrap: wrap;
+  }
+}
+
+.departmentsFilter {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filterGroup {
+  margin-top: 32px;
+  margin-bottom: 48px;
+}
+
+.filterGroup .departmentsFilter {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.filterLabel {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+/* 사유는 길이 제한이 없어 셀에 그대로 두면 표가 망가진다. 모달로 뺀다. */
+.reasonBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #db1a62;
+  border-radius: 6px;
+  background: white;
+  color: #db1a62;
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reasonBtn:hover {
+  background: #db1a62;
+  color: white;
+}
+
+/* 정렬 가능한 헤더 셀. 폭은 컬럼별 클래스로 준다. */
+.sortable {
+  cursor: pointer;
+}
+
+.colRequester {
+  width: 180px;
+}
+
+.colRejectCount {
+  width: 120px;
+}
+
+.colActions {
+  width: 160px;
+  text-align: center;
+}
+
+.eventTime {
+  font-size: 18px;
+  color: #333;
+  white-space: nowrap;
+}
+
+/* 처리 시각. 목록 기본 정렬이 이 값 기준이라 요청 시각과 같이 보여준다. */
+.eventTimeSub {
+  margin-top: 4px;
+  font-size: 18px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.rejectCount {
+  font-size: 18px;
+  font-weight: 600;
+  color: #999;
+}
+
+.rejectCountWarn {
+  color: #c62828;
+}
+
+.rejectReasonText {
+  color: #c62828;
+  background: #fff5f5;
+}
+
+.rejectTextarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 18px;
+  font-family: inherit;
+  line-height: 1.6;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.rejectTextarea:focus {
+  outline: none;
+  border-color: #db1a62;
+}
+
+.charCount {
+  margin-top: 8px;
+  text-align: right;
+  font-size: 16px;
+  color: #999;
+}
+
+.rejectModalActions {
+  display: flex;
+  gap: 12px;
+}
+
+.rejectCancelBtn,
+.rejectConfirmBtn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rejectCancelBtn {
+  border: 1px solid #ddd;
+  background: #f5f5f5;
+  color: #666;
+}
+
+.rejectCancelBtn:hover {
+  background: #efefef;
+  color: #333;
+}
+
+.rejectConfirmBtn {
+  border: none;
+  background: #c62828;
+  color: white;
+}
+
+.rejectConfirmBtn:hover:not(:disabled) {
+  background: #8e1c1c;
+}
+
+.rejectConfirmBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reasonText {
+  font-size: 18px;
+  line-height: 1.7;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.table td.fileNameCell {
+  cursor: pointer;
+  color: #db1a62;
+  text-decoration: underline;
+}
+
+.requesterName {
+  font-size: 22px;
+  color: #333;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.departmentBtn {
+  padding: 8px 28px;
+  border: 1px solid #e0e0e0;
+  border-radius: 100px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.excelModalContent {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw;
+  max-height: 80vh;
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.excelModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.excelModalHeader h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeBtn:hover {
+  color: #333;
+}
+
+.excelModalBody {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.excelTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.excelTable thead {
+  background: #f5f5f5;
+  position: sticky;
+  top: 0;
+}
+
+.excelTable th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #e0e0e0;
+  white-space: nowrap;
+}
+
+.excelTable td {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.excelTable tbody tr:hover {
+  background: #fafafa;
+}
+
+.loadingCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  font-size: 16px;
+  color: #666;
+}
+
+.errorCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  font-size: 16px;
+  color: #db1a62;
+}
+
+.departmentBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.departmentBtn.active {
+  background: #db1a62;
+  color: white;
+  border-color: #db1a62;
+}
+
+.userModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* 헤더·푸터는 고정하고 본문만 스크롤한다. 이력이 길어지면 모달이 화면 밖으로 자라기 때문. */
+.userModalContent {
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  border-radius: 8px;
+  min-width: 400px;
+  max-width: 680px;
+  width: 90%;
+  max-height: 88vh;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.userModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 24px 32px;
+  border-bottom: 1px solid #eee;
+}
+
+.userModalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+
+.userModalFooter {
+  flex-shrink: 0;
+  padding: 20px 32px;
+  border-top: 1px solid #eee;
+}
+
+.userModalCloseX {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  font-size: 30px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+}
+
+.userModalCloseX:hover {
+  color: #333;
+}
+
+.userModalTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #000;
+}
+
+.userModalField {
+  margin-bottom: 16px;
+}
+
+.userModalLabel {
+  display: block;
+  font-size: 18px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.userModalValue {
+  font-size: 18px;
+  color: #000;
+  font-weight: 500;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.userModalCloseBtn {
+  width: 100%;
+  padding: 12px;
+  background-color: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.userModalCloseBtn:hover {
+  background-color: #c2154e;
+}
+
+@media (max-width: 768px) {
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .table {
+    font-size: 14px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 10px;
+    font-size: 14px;
+  }
+
+  .totalCount,
+  .totalCount span {
+    font-size: 18px;
+  }
+
+  .select {
+    font-size: 14px;
+    padding: 8px 35px 8px 12px;
+    height: 40px;
+  }
+
+  .bulkDeleteBtn,
+  .allDeleteBtn {
+    font-size: 14px;
+    padding: 10px 16px;
+  }
+
+  .downloadBtn {
+    font-size: 16px;
+    padding: 8px 12px;
+    height: 36px;
+  }
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusPending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.statusApproved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.statusRejected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.actionButtons .iconBtn {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.iconBtn svg,
+.reasonBtn svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.iconBtn.approve {
+  background: #2e7d32;
+  color: white;
+}
+
+.iconBtn.approve:hover:not(:disabled) {
+  background: #1b5e20;
+}
+
+.iconBtn.reject {
+  background: #c62828;
+  color: white;
+}
+
+.iconBtn.reject:hover:not(:disabled) {
+  background: #8e1c1c;
+}
+
+.iconBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

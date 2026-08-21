@@ -23,11 +23,9 @@ export async function GET(request: NextRequest) {
       .from('users')
       .select('*', { count: 'exact', head: true });
 
-    // 2. 총 소속 수 (관리자 제외)
-    const { count: totalDepartments } = await supabase
-      .from('departments')
-      .select('*', { count: 'exact', head: true })
-      .neq('name', '관리자');
+    // 2. 총 소속 수는 아래 소속별 통계를 접고 나서 그 개수로 센다.
+    //    여기서 행을 그대로 세면 파라인슈1·파라인슈2가 둘로 잡혀
+    //    바로 아래 표(파라인슈 한 줄)와 숫자가 어긋난다.
 
     // 3. 오늘 추가된 사용자 수
     const today = new Date();
@@ -50,35 +48,69 @@ export async function GET(request: NextRequest) {
     // 참고: 파일 테이블이 없으므로 임시로 0으로 반환 (나중에 파일 테이블 추가 시 수정)
     const { data: departments } = await supabase
       .from('departments')
-      .select('id, name')
-      .neq('name', '관리자')
-      .order('name', { ascending: true });
+      .select('id, name, group_name')
+      .eq('is_admin', false)
+      .order('group_name', { ascending: true });
+
+    // 사용자 소속은 조직 단위('파라인슈')로 저장된다. 배정 분류('파라인슈1')별로 세면
+    // 어느 쪽도 사람이 잡히지 않아 0명짜리 줄만 늘어난다. 조직 단위로 접어서 센다.
+    const groups: { id: number; name: string }[] = [];
+    for (const dept of departments || []) {
+      if (!groups.some((g) => g.name === dept.group_name)) {
+        groups.push({ id: dept.id, name: dept.group_name });
+      }
+    }
+
+    // 소속 이름 → 그 조직에 속한 부서 id들. 파라인슈처럼 쪼개진 조직은 id가 여럿이라
+    // 파일 수를 셀 때 하나만 보면 나머지 분류의 파일이 빠진다.
+    const deptIdsByGroup: Record<string, number[]> = {};
+    for (const dept of departments || []) {
+      (deptIdsByGroup[dept.group_name] ??= []).push(dept.id);
+    }
 
     const departmentStats = await Promise.all(
-      (departments || []).map(async (dept) => {
-        const { count: userCount } = await supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true })
-          .eq('department', dept.name);
+      groups.map(async (group) => {
+        const deptIds = deptIdsByGroup[group.name] || [];
+
+        const [{ count: userCount }, { count: fileCount }] = await Promise.all([
+          supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('department', group.name),
+          // 배포본만 센다. 원본은 아직 어느 소속의 것도 아니다.
+          supabase
+            .from('files')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_original', false)
+            .in('department_id', deptIds),
+        ]);
 
         return {
-          id: dept.id,
-          name: dept.name,
+          id: group.id,
+          name: group.name,
           userCount: userCount || 0,
-          fileCount: 0, // TODO: 파일 테이블 추가 후 구현
+          fileCount: fileCount || 0,
         };
       })
     );
 
+    // 관리자가 올린 원본 파일 수. 배포본은 여기서 파생된 사본이라 따로 세지 않는다.
+    const { count: uploadedFiles } = await supabase
+      .from('files')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_original', true);
+
     return NextResponse.json({
       summary: {
         totalUsers: totalUsers || 0,
-        totalDepartments: totalDepartments || 0,
+        totalDepartments: departmentStats.length,
         todayUsers: todayUsers || 0,
-        uploadedFiles: 0, // TODO: 파일 테이블 추가 후 구현
+        uploadedFiles: uploadedFiles || 0,
       },
       recentUsers: recentUsers || [],
-      recentFiles: [], // TODO: 파일 테이블 추가 후 구현
+      // 최근 업로드 목록은 화면이 /api/files/list로 따로 받아 쓴다. 여기서 또 내리면
+      // 같은 값을 두 곳에서 관리하게 되므로 비워 둔다.
+      recentFiles: [],
       departmentStats: departmentStats || [],
     });
   } catch (error) {

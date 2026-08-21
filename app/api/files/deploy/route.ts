@@ -12,14 +12,28 @@ import {
   findRequiredColumns,
   getMissingColumnLabels,
   getInsurerTypeFromRows,
+  pendingRowKey,
+  isOrderNumberMissing,
+  ORDER_NUMBER_MISSING_REASON,
+  ASSIGNED_BY_COLUMN,
+  ASSIGNED_BY_RULE,
+  ASSIGNED_BY_PERSON,
+  ROW_NO_COLUMN,
+  ASSIGNED_DEPT_COLUMN,
+  ASSIGNED_AT_COLUMN,
+  DUPLICATE_REASON_COLUMN,
+  formatAssignedAt,
 } from '@/lib/insurance';
-import { formatCellValue } from '@/lib/excelCell';
+import { formatCellValue, fitColumnWidths } from '@/lib/excelCell';
 import * as XLSX from 'xlsx';
 import { v4 as uuidv4 } from 'uuid';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+/** 분류 라우트와 같은 한도. 한쪽만 열어두면 그쪽으로 서버가 주저앉는다. */
+const MAX_FILES = 30;
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,6 +68,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 });
     }
 
+    if (files.length > MAX_FILES) {
+      return NextResponse.json(
+        { error: `한 번에 ${MAX_FILES}개까지 배포할 수 있습니다. (요청: ${files.length}개)` },
+        { status: 400 }
+      );
+    }
+
     if (!classificationResults || typeof classificationResults !== 'object') {
       return NextResponse.json({ error: 'No classification results provided' }, { status: 400 });
     }
@@ -62,7 +83,7 @@ export async function POST(request: NextRequest) {
     const { data: departments, error: deptError } = await supabase
       .from('departments')
       .select('id, name')
-      .neq('name', '관리자');
+      .eq('is_admin', false);
 
     if (deptError || !departments || departments.length === 0) {
       console.error('Failed to fetch departments:', deptError);
@@ -73,6 +94,16 @@ export async function POST(request: NextRequest) {
     const fileRecords = [];
     const STORAGE_BUCKET = 'files';
 
+    // 스토리지에 올린 경로. 도중에 실패하면 여기 있는 것들을 다시 지운다.
+    // DB 기록 없이 남으면 화면에서 찾을 수도 지울 수도 없는데, 그 안에는
+    // 고객 개인정보가 들어 있다.
+    const uploadedPaths: string[] = [];
+    const cleanupUploads = async () => {
+      if (uploadedPaths.length === 0) return;
+      const { error } = await supabase.storage.from(STORAGE_BUCKET).remove(uploadedPaths);
+      if (error) console.error('Failed to clean up deployed files:', error);
+    };
+
     // 상담메모 규칙의 "오늘". 파일마다 다시 재면 처리 도중 11시를 넘길 때 갈린다.
     const deployedAt = new Date();
 
@@ -81,7 +112,9 @@ export async function POST(request: NextRequest) {
       files.map((fileId) =>
         supabase
           .from('files')
-          .select('*')
+          // file_content는 엑셀 전체 사본이라 파일당 수백 kB다. 여기서는 안 쓰므로 빼야
+          // 파일을 여러 개 배포할 때 쓰지도 않을 데이터가 통째로 메모리에 올라오지 않는다.
+          .select('id, name, storage_path, uploaded_by, uploaded_at')
           .eq('id', fileId)
           .single()
       )
@@ -98,35 +131,24 @@ export async function POST(request: NextRequest) {
       originalFiles.push({ id: files[i], data: originalFile });
     }
 
-    // 병렬: Storage에서 모든 원본 파일 다운로드
-    const downloadResults = await Promise.all(
-      originalFiles.map(({ data: originalFile }) =>
-        supabase.storage
-          .from(STORAGE_BUCKET)
-          .download(originalFile.storage_path)
-      )
-    );
-
-    // 다운로드 에러 확인
-    for (let i = 0; i < downloadResults.length; i++) {
-      const { error: downloadError } = downloadResults[i];
-      if (downloadError) {
-        console.error('Failed to download original file:', downloadError);
-        return NextResponse.json(
-          { error: `Failed to download file ${originalFiles[i].id}` },
-          { status: 500 }
-        );
-      }
-    }
-
     // 각 파일 처리
     for (let fileIdx = 0; fileIdx < originalFiles.length; fileIdx++) {
-      const { data: originalFile } = fileDataResults[fileIdx];
-      const { data: fileData } = downloadResults[fileIdx];
+      // 위에서 null을 걸러낸 목록을 쓴다. fileDataResults는 아직 검사 전이라
+      // 타입상 null이 섞여 있다.
+      const originalFile = originalFiles[fileIdx].data;
 
-      if (!fileData) {
-        console.error('File data is null');
-        return NextResponse.json({ error: 'Failed to process file' }, { status: 500 });
+      // 원본은 처리 직전에 하나씩 받는다. 미리 전부 받아두면 고른 파일 크기의
+      // 합이 그대로 메모리에 올라가고, 첫 파일에서 실패해도 나머지를 이미 다 받은 뒤다.
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .download(originalFile.storage_path);
+
+      if (downloadError || !fileData) {
+        console.error('Failed to download original file:', downloadError);
+        return NextResponse.json(
+          { error: `Failed to download file ${originalFiles[fileIdx].id}` },
+          { status: 500 }
+        );
       }
 
       // 원본 엑셀 파싱 (헤더 + 데이터 행)
@@ -235,25 +257,44 @@ export async function POST(request: NextRequest) {
 
       // 행별 분류 → 분류명 기준으로 행 묶기 (서버에서 재계산, 클라이언트 값 신뢰 안 함)
       // 분류 결과 시트는 중복이 제거된 행만 담는다.
-      const rowsByCategory: Record<string, any[][]> = {};
+      // 행과 함께 '누가 정했는지'를 들고 다닌다. 나중에 소속별로 나눌 때
+      // 그 값을 DB에 실어야 관리자가 배포본을 열어볼 때 근거를 볼 수 있다.
+      const rowsByCategory: Record<string, Array<{ row: any[]; assignedBy: string }>> = {};
       const processedRows: any[][] = [];
+      // 원본의 DB 내용. 분류 결과와 같은 모양이되 제외 열(구분·방송사명 등)까지
+      // 담는다. 원본은 관리자용이라 원래 갖고 있던 열로도 검색돼야 한다.
+      const originalContent: any[] = [];
       let seq = 1;
       const picked = assignmentsByFile[fileIdx] ?? {};
       const unpickedRows: Array<{ region: SelectableRegion; key: string }> = [];
+      // 주문번호가 없는 행. 분류 화면에서도 막지만 그건 UX일 뿐이라 여기서 다시 본다.
+      const missingOrderRows: number[] = [];
 
       // 중복이 제거된 행만 순회 (dedupedRows)
-      for (const row of dedupedRows) {
+      for (let dedupedIndex = 0; dedupedIndex < dedupedRows.length; dedupedIndex++) {
+        const row = dedupedRows[dedupedIndex];
         const keptRow = keptIdx.map((idx) => row[idx] ?? '');
+
+        // 주문번호가 없으면 이 건을 가리킬 방법이 없다. 아래에서 한꺼번에 막는다.
+        if (isOrderNumberMissing(row[orderIdx])) {
+          missingOrderRows.push(dedupedIndex);
+          processedRows.push([seq++, '오류', '', ...keptRow]);
+          continue;
+        }
 
         const assigned = assignRow(insurerType, row[juminIdx], row[addressIdx], memoRuleFor(row));
 
         let category: string;
+        // 규칙이 정했는지 사람이 골랐는지. 배포하고 나면 소속만 남아
+        // "이 고객이 왜 여기로 갔나"를 되짚을 수 없어서 함께 적어 둔다.
+        let assignedBy = ASSIGNED_BY_RULE;
         if (assigned.kind === 'error') {
           category = 'error';
         } else if (assigned.kind === 'select') {
+          assignedBy = ASSIGNED_BY_PERSON;
           // 사람이 고른 부서. 클라이언트 값은 신뢰하지 않고,
           // 그 지역에 허용된 부서인지 여기서 다시 확인한다.
-          const key = String(row[orderIdx] ?? '');
+          const key = pendingRowKey(row[orderIdx], dedupedIndex);
           const choice = picked[key];
           if (choice && (REGION_CHOICES[assigned.region] as readonly string[]).includes(choice)) {
             category = choice;
@@ -266,11 +307,58 @@ export async function POST(request: NextRequest) {
           category = assigned.dept;
         }
 
-        processedRows.push([seq++, category === 'error' ? '오류' : category, ...keptRow]);
+        const rowNo = seq++;
+        const deptLabel = category === 'error' ? '오류' : category;
+        processedRows.push([rowNo, deptLabel, category === 'error' ? '' : assignedBy, ...keptRow]);
+
+        // 날짜 칸은 Date 객체다. 그대로 JSON에 넣으면 UTC ISO 문자열이 되어
+        // 하루 어긋난 값으로 저장되고, 사람이 쓰는 표기로 검색해도 안 걸린다.
+        const contentRow: any = {
+          [ROW_NO_COLUMN]: rowNo,
+          [ASSIGNED_DEPT_COLUMN]: deptLabel,
+          [ASSIGNED_BY_COLUMN]: category === 'error' ? '' : assignedBy,
+        };
+        headerRow.forEach((header, i) => {
+          contentRow[header] = formatCellValue(row[i] ?? '');
+        });
+        contentRow[ASSIGNED_AT_COLUMN] = formatAssignedAt(deployedAt);
+        originalContent.push(contentRow);
 
         if (category === 'error') continue;
         if (!rowsByCategory[category]) rowsByCategory[category] = [];
-        rowsByCategory[category].push(keptRow);
+        rowsByCategory[category].push({ row: keptRow, assignedBy });
+      }
+
+      // 중복으로 제외된 행도 DB에 담는다. 배포되진 않지만 고객 문의가 오면
+      // "그 건은 중복이라 빠졌다"고 답할 수 있어야 하고, 검색에도 걸려야 한다.
+      // 파일의 중복 시트와 같은 내용이다.
+      for (const [reason, removed] of [
+        ['주문번호 중복', removedByOrder],
+        ['고객 중복 (tel2+고객명+상품명)', removedByCustomer],
+      ] as const) {
+        for (const row of removed) {
+          const contentRow: any = {
+            [ROW_NO_COLUMN]: '',
+            [ASSIGNED_DEPT_COLUMN]: '중복 제외',
+            [ASSIGNED_BY_COLUMN]: '',
+            [DUPLICATE_REASON_COLUMN]: reason,
+          };
+          headerRow.forEach((header, i) => {
+            contentRow[header] = formatCellValue(row[i] ?? '');
+          });
+          contentRow[ASSIGNED_AT_COLUMN] = formatAssignedAt(deployedAt);
+          originalContent.push(contentRow);
+        }
+      }
+
+      // 주문번호가 없는 행이 있으면 배포를 막는다. 내보낸 뒤에는 되짚을 수 없다.
+      if (missingOrderRows.length > 0) {
+        return NextResponse.json(
+          {
+            error: `${originalFile.name}: ${ORDER_NUMBER_MISSING_REASON}인 행이 있어 배포할 수 없습니다. (${missingOrderRows.length}건)`,
+          },
+          { status: 400 }
+        );
       }
 
       // 배정하지 않은 row가 있으면 배포를 막는다.
@@ -293,16 +381,23 @@ export async function POST(request: NextRequest) {
       const xlsxMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       const rebuiltWorkbook = XLSX.utils.book_new();
 
-      XLSX.utils.book_append_sheet(rebuiltWorkbook, XLSX.utils.aoa_to_sheet(aoa, { cellDates: true, dateNF: 'yyyy-mm-dd' }), '원본');
+      // 열 너비를 안 주면 기본값(8자 남짓)으로 저장돼, 날짜 칸이 ########으로 보인다.
+      const toSheet = (rows: unknown[][]) => {
+        const sheet = XLSX.utils.aoa_to_sheet(rows, { cellDates: true, dateNF: 'yyyy-mm-dd' });
+        sheet['!cols'] = fitColumnWidths(rows);
+        return sheet;
+      };
+
+      XLSX.utils.book_append_sheet(rebuiltWorkbook, toSheet(aoa), '원본');
       XLSX.utils.book_append_sheet(
         rebuiltWorkbook,
-        XLSX.utils.aoa_to_sheet([['번호', '배정소속', ...keptHeader], ...processedRows], { cellDates: true, dateNF: 'yyyy-mm-dd' }),
+        toSheet([['번호', '배정소속', '배정방식', ...keptHeader], ...processedRows]),
         '분류 결과'
       );
       // 중복 시트. 사유 열 + 배포용 열. 헤더와 데이터의 열 개수가 반드시 같아야 한다.
       XLSX.utils.book_append_sheet(
         rebuiltWorkbook,
-        XLSX.utils.aoa_to_sheet([['중복사유', ...keptHeader], ...duplicateRows], { cellDates: true, dateNF: 'yyyy-mm-dd' }),
+        toSheet([['중복사유', ...keptHeader], ...duplicateRows]),
         '중복'
       );
 
@@ -329,7 +424,7 @@ export async function POST(request: NextRequest) {
       // 시트가 늘어 용량이 바뀌었으므로 갱신한다.
       const { error: sizeUpdateError } = await supabase
         .from('files')
-        .update({ size: rebuiltBuffer.byteLength })
+        .update({ size: rebuiltBuffer.byteLength, file_content: originalContent })
         .eq('id', originalFiles[fileIdx].id);
 
       if (sizeUpdateError) {
@@ -343,24 +438,35 @@ export async function POST(request: NextRequest) {
       }> = [];
 
       for (const dept of departments) {
-        const deptRows = rowsByCategory[dept.name];
-        if (!deptRows || deptRows.length === 0) continue; // 배정된 행이 없으면 스킵
+        const deptEntries = rowsByCategory[dept.name];
+        if (!deptEntries || deptEntries.length === 0) continue; // 배정된 행이 없으면 스킵
+        const deptRows = deptEntries.map((e) => e.row);
 
         const newFileId = uuidv4();
         const timestamp = new Date().toISOString();
 
         // 해당 부서의 행만으로 새 워크북 생성 (정리된 열만)
-        const newSheet = XLSX.utils.aoa_to_sheet([keptHeader, ...deptRows], { cellDates: true, dateNF: 'yyyy-mm-dd' });
+        // 실제로 업체에 나가는 파일이다. 여기서 날짜가 ####으로 보이면 바로 문의가 온다.
+        const newSheet = toSheet([keptHeader, ...deptRows]);
         const newWorkbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(newWorkbook, newSheet, 'Sheet1');
         const outBuffer: Buffer = XLSX.write(newWorkbook, { type: 'buffer', bookType: 'xlsx' });
 
         // 파일 내용 인덱싱: 배포 파일의 행들을 객체로 변환
-        const fileContentRows = deptRows.map((row) => {
-          const obj: any = {};
-          keptHeader.forEach((header, idx) => {
-            obj[header] = row[idx] ?? '';
+        // DB에는 엑셀 시트와 같은 모양으로 담는다. 시스템이 붙이는 열(번호·배정방식·
+        // 배정날짜)까지 넣어야 파일을 열지 않고도 그대로 볼 수 있고 검색에도 걸린다.
+        // 배정방식만은 엑셀 파일에 넣지 않는다 — 관리자가 받을 때만 열로 붙인다.
+        const assignedAtText = formatAssignedAt(deployedAt);
+        const fileContentRows = deptEntries.map(({ row, assignedBy }, idx) => {
+          const obj: any = { [ROW_NO_COLUMN]: idx + 1 };
+          keptHeader.forEach((header, i) => {
+            // Date를 그대로 넣으면 UTC ISO로 저장돼 하루 어긋난다.
+            obj[header] = formatCellValue(row[i] ?? '');
           });
+          obj[ASSIGNED_BY_COLUMN] = assignedBy;
+          // 배포본의 uploaded_at은 '원본을 올린 시각'이라 배정 시각과 다를 수 있다.
+          // 배정날짜는 배포한 때이므로 여기서 직접 적어 둔다.
+          obj[ASSIGNED_AT_COLUMN] = assignedAtText;
           return obj;
         });
 
@@ -411,12 +517,14 @@ export async function POST(request: NextRequest) {
 
         if (uploadError) {
           console.error('Failed to upload split file:', uploadError);
+          await cleanupUploads();
           return NextResponse.json(
             { error: `Failed to deploy file to department ${record.department_id}` },
             { status: 500 }
           );
         }
 
+        uploadedPaths.push(record.storage_path);
         fileRecords.push(record);
       }
     }
@@ -433,6 +541,8 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Database error:', error);
+      // 기록이 없으면 추적할 수 없는 파일이 된다. 올린 것을 전부 되돌린다.
+      await cleanupUploads();
       return NextResponse.json({ error: 'Failed to save deployed files' }, { status: 500 });
     }
 

@@ -13,6 +13,10 @@ interface DownloadRecord {
   file_name: string;
   user_department: string;
   downloaded_at: string;
+  ip_address: string | null;
+  device_type: string | null;
+  os_name: string | null;
+  browser_name: string | null;
 }
 
 interface RecentDownloadsSectionProps {
@@ -42,7 +46,14 @@ function RecentDownloadsSection({
       if (sortBy === 'downloaded_at') {
         aVal = new Date(aVal).getTime();
         bVal = new Date(bVal).getTime();
+      } else {
+        // IP·OS·브라우저는 값이 없을 수 있다. null끼리, null과 문자열의 비교는
+        // 어느 쪽으로도 참이 아니라 정렬이 뒤죽박죽 되므로 빈 문자열로 맞춘다.
+        aVal = aVal ?? '';
+        bVal = bVal ?? '';
       }
+
+      if (aVal === bVal) return 0;
 
       if (sortOrder === 'asc') {
         return aVal > bVal ? 1 : -1;
@@ -96,6 +107,46 @@ function RecentDownloadsSection({
                     )}
                   </div>
                 </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => onSort('ip_address')}>
+                  <div className={styles.headerContent}>
+                    <span>IP 주소</span>
+                    {sortBy === 'ip_address' && (
+                      <span className={styles.sortIcon}>
+                        {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => onSort('device_type')}>
+                  <div className={styles.headerContent}>
+                    <span>기기 종류</span>
+                    {sortBy === 'device_type' && (
+                      <span className={styles.sortIcon}>
+                        {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => onSort('os_name')}>
+                  <div className={styles.headerContent}>
+                    <span>OS</span>
+                    {sortBy === 'os_name' && (
+                      <span className={styles.sortIcon}>
+                        {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => onSort('browser_name')}>
+                  <div className={styles.headerContent}>
+                    <span>브라우저</span>
+                    {sortBy === 'browser_name' && (
+                      <span className={styles.sortIcon}>
+                        {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                      </span>
+                    )}
+                  </div>
+                </th>
                 <th style={{ cursor: 'pointer' }} onClick={() => onSort('downloaded_at')}>
                   <div className={styles.headerContent}>
                     <span>다운로드 시간</span>
@@ -126,6 +177,10 @@ function RecentDownloadsSection({
                     {record.file_name}
                   </td>
                   <td>{record.user_department || '-'}</td>
+                  <td>{record.ip_address || '-'}</td>
+                  <td>{record.device_type || '-'}</td>
+                  <td>{record.os_name || '-'}</td>
+                  <td>{record.browser_name || '-'}</td>
                   <td>{new Date(record.downloaded_at).toLocaleDateString('ko-KR').slice(0, -1)} {new Date(record.downloaded_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
                 </tr>
               ))}

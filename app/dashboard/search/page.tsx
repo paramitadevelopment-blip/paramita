@@ -8,6 +8,7 @@ import ExcelPreviewModal from '@/app/dashboard/download/components/ExcelPreviewM
 import OriginalFilesSection from './components/OriginalFilesSection';
 import DownloadFilesSection from './components/DownloadFilesSection';
 import DownloadLogsSection from './components/DownloadLogsSection';
+import DownloadRequestsSection from './components/DownloadRequestsSection';
 import DeletionHistorySection from './components/DeletionHistorySection';
 import styles from './page.module.css';
 
@@ -89,6 +90,11 @@ function SearchPage() {
                 formatDateTime={formatDateTime}
               />
               <DownloadLogsSection
+                searchQuery={searchQuery}
+                onPreview={handlePreview}
+                formatDateTime={formatDateTime}
+              />
+              <DownloadRequestsSection
                 searchQuery={searchQuery}
                 onPreview={handlePreview}
                 formatDateTime={formatDateTime}

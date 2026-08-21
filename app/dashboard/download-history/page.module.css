@@ -202,7 +202,8 @@
   text-align: center;
 }
 
-.table tbody tr:first-child td:first-child {
+/* 체크박스 칸은 모든 행에서 왼쪽으로 붙인다. 첫 행에만 걸면 두 번째 행부터 가운데로 밀린다. */
+.table tbody tr td:first-child {
   text-align: left;
 }
 

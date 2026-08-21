@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
+import { isAssignableGroup } from '@/lib/departments';
+import { parsePagination } from '@/lib/pagination';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -21,11 +23,25 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     let search = searchParams.get('search') || '';
     const department = searchParams.get('department');
-    const page = parseInt(searchParams.get('page') || '1');
-    const sortBy = searchParams.get('sortBy') || 'username';
+    // page=abc면 NaN이 되어 range(NaN, NaN)으로 나가고, page=-5면 음수 범위가 나간다.
+    const { page, limit, offset } = parsePagination(
+      searchParams.get('page'),
+      searchParams.get('limit')
+    );
+    const sortByParam = searchParams.get('sortBy') || 'username';
     const sortOrder = searchParams.get('sortOrder') === 'desc' ? false : true;
-    const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 100);
-    const offset = (page - 1) * limit;
+
+    // sortBy를 그대로 .order()에 넘기면 클라이언트가 정렬 대상을 마음대로 고른다.
+    // password_hash 같은 컬럼으로 정렬시키면 순서만으로 값을 좁혀갈 수 있다.
+    const SORTABLE = [
+      'username',
+      'name',
+      'department',
+      'employee_id',
+      'created_at',
+      'role',
+    ];
+    const sortBy = SORTABLE.includes(sortByParam) ? sortByParam : 'username';
 
     // 입력값 검증 및 sanitization
     search = search.trim().slice(0, 100);
@@ -154,14 +170,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Department name must be less than 50 characters' }, { status: 400 });
     }
 
-    // department 존재 확인
-    const { data: deptExists, error: deptCheckError } = await supabase
-      .from('departments')
-      .select('id')
-      .eq('name', department.trim())
-      .single();
+    // 화면에서 고를 수 없게 해둔 소속이 요청으로 직접 올 수 있다. 여기서도 막는다.
+    if (!isAssignableGroup(department.trim())) {
+      return NextResponse.json(
+        { error: '해당 소속은 사용자에게 배정할 수 없습니다.' },
+        { status: 400 }
+      );
+    }
 
-    if (deptCheckError || !deptExists) {
+    // department 존재 확인.
+    // 사용자가 속하는 건 조직('파라인슈')이지 배정 분류('파라인슈1')가 아니다.
+    // 한 조직이 여러 분류로 나뉘면 group_name이 여러 행에 걸리므로 개수로 본다.
+    const { count: deptCount } = await supabase
+      .from('departments')
+      .select('id', { count: 'exact', head: true })
+      .eq('group_name', department.trim());
+
+    if (!deptCount) {
       return NextResponse.json({ error: '존재하지 않는 소속입니다.' }, { status: 400 });
     }
 
@@ -243,15 +268,21 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
     }
 
-    // department 존재 확인 (수정하려는 경우)
+    // department 존재 확인 (수정하려는 경우). 생성 때와 같은 기준으로 본다.
     if (department) {
-      const { data: deptExists, error: deptCheckError } = await supabase
-        .from('departments')
-        .select('id')
-        .eq('name', department.trim())
-        .single();
+      if (!isAssignableGroup(department.trim())) {
+        return NextResponse.json(
+          { error: '해당 소속은 사용자에게 배정할 수 없습니다.' },
+          { status: 400 }
+        );
+      }
 
-      if (deptCheckError || !deptExists) {
+      const { count: deptCount } = await supabase
+        .from('departments')
+        .select('id', { count: 'exact', head: true })
+        .eq('group_name', department.trim());
+
+      if (!deptCount) {
         return NextResponse.json({ error: '존재하지 않는 소속입니다.' }, { status: 400 });
       }
     }

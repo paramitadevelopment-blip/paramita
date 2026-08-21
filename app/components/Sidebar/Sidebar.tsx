@@ -3,13 +3,18 @@
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/app/store/authStore';
-import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch } from 'react-icons/md';
+import { usePendingRequestCount } from '@/app/hooks/usePendingRequestCount';
+import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck } from 'react-icons/md';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
+  // 필요한 값만 구독한다. 스토어를 통째로 받으면 관련 없는 값이 바뀌어도
+  // 다시 그려지는데, 사이드바는 모든 화면에 떠 있어 영향이 넓다.
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const { data: pendingCount = 0 } = usePendingRequestCount(user?.role === 'admin');
 
   // 쿠키 만료를 서버에 요청하므로 완료 후 이동한다.
   const handleLogout = async () => {
@@ -82,6 +87,20 @@ export default function Sidebar() {
               <span>파일 다운로드</span>
             </Link>
           </li>
+          {user?.role === 'admin' && (
+            <li>
+              <Link
+                href="/dashboard/download-approval"
+                className={`${styles.navLink} ${pathname === '/dashboard/download-approval' ? styles.active : ''}`}
+              >
+                <MdFactCheck className={styles.icon} />
+                <span>파일 다운로드 승인</span>
+                {pendingCount > 0 && (
+                  <span className={styles.badge}>{pendingCount > 99 ? '99+' : pendingCount}</span>
+                )}
+              </Link>
+            </li>
+          )}
           {user?.role === 'admin' && (
             <li>
               <Link

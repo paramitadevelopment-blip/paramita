@@ -18,7 +18,7 @@ interface AuthState {
   initializeFromStorage: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   csrfToken: '',
 
@@ -38,7 +38,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     // httpOnly 쿠키는 JS로 지울 수 없으므로 서버에 만료를 요청한다.
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        // 서버가 CSRF를 확인한다. 안 보내면 로그아웃이 403으로 막힌다.
+        headers: { 'X-CSRF-Token': get().csrfToken },
+      });
     } catch (error) {
       console.error('Logout request failed:', error);
     }

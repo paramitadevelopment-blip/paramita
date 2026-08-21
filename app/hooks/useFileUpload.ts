@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
+import { invalidateDashboard } from './useDashboardCache';
 
 interface UploadedFile {
   id: string;
@@ -37,6 +38,7 @@ export function useUploadFiles() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
+      invalidateDashboard(queryClient);
     },
   });
 }
@@ -72,6 +74,7 @@ export function useDeployFiles() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
+      invalidateDashboard(queryClient);
     },
   });
 }

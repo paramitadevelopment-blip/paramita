@@ -1,26 +1,21 @@
 /**
- * 보험나이 계산 (한국 보험 기준)
- * 주민번호 7자리 기반으로 계산
- * @param jumin 생년월일성별 (예: "6609012" 또는 "660901-2")
- * @returns 보험나이 또는 -1 (오류)
+ * 주민번호 앞자리에서 실제 생년월일을 읽는다.
+ * 나이 계산과 생년월일 정렬이 같은 규칙(성별코드로 세기 판단)을 써야 하므로
+ * 한 곳에 모아 둔다. 읽을 수 없으면 null이다.
  */
-export function calculateInsuranceAge(jumin: string, baseDate: Date = new Date()): number {
+export function parseJuminBirth(jumin: unknown): Date | null {
   try {
-    jumin = jumin.replace('-', '').trim();
+    const text = String(jumin ?? '').replace('-', '').trim();
 
-    if (jumin.length < 7) {
-      return -1;
-    }
+    if (text.length < 7) return null;
 
-    const birthYY = jumin.substring(0, 2);
-    const birthMM = jumin.substring(2, 4);
-    const birthDD = jumin.substring(4, 6);
-    const genderCode = jumin.substring(6, 7);
+    const birthYY = text.substring(0, 2);
+    const birthMM = text.substring(2, 4);
+    const birthDD = text.substring(4, 6);
+    const genderCode = text.substring(6, 7);
 
     // 숫자 유효성 검사
-    if (!/^\d+$/.test(birthYY + birthMM + birthDD + genderCode)) {
-      return -1;
-    }
+    if (!/^\d+$/.test(birthYY + birthMM + birthDD + genderCode)) return null;
 
     let fullYear: number;
     switch (genderCode) {
@@ -41,26 +36,51 @@ export function calculateInsuranceAge(jumin: string, baseDate: Date = new Date()
         fullYear = 1800 + parseInt(birthYY);
         break;
       default:
-        return -1;
+        return null;
     }
 
     const mm = parseInt(birthMM);
     const dd = parseInt(birthDD);
 
-    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) {
-      return -1;
-    }
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
 
     const birthDate = new Date(fullYear, mm - 1, dd);
 
-    // 날짜 유효성 검사
+    // 날짜 유효성 검사 (2월 30일 같은 값을 걸러낸다)
     if (
       birthDate.getFullYear() !== fullYear ||
       birthDate.getMonth() !== mm - 1 ||
       birthDate.getDate() !== dd
     ) {
-      return -1;
+      return null;
     }
+
+    return birthDate;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 생년월일 정렬용 값 (yyyymmdd).
+ * 읽을 수 없는 값은 가장 큰 수를 줘서 뒤로 밀린다 — 자동 배분에서 먼저 자리를
+ * 차지하지 않게 하려는 것이다.
+ */
+export function birthSortKey(jumin: unknown): number {
+  const birth = parseJuminBirth(jumin);
+  if (!birth) return Number.MAX_SAFE_INTEGER;
+  return birth.getFullYear() * 10000 + (birth.getMonth() + 1) * 100 + birth.getDate();
+}
+
+/**
+ * 보험나이 계산 (한국 보험 기준)
+ * @param jumin 생년월일성별 (예: "6609012" 또는 "660901-2")
+ * @returns 보험나이 또는 -1 (오류)
+ */
+export function calculateInsuranceAge(jumin: string, baseDate: Date = new Date()): number {
+  try {
+    const birthDate = parseJuminBirth(jumin);
+    if (!birthDate) return -1;
 
     // 만나이 계산
     let ageFull = baseDate.getFullYear() - birthDate.getFullYear();
@@ -567,3 +587,154 @@ export const ASSIGN_DEPARTMENTS = [
   '파라인슈2',
   '이외지역',
 ] as const;
+
+/**
+ * 사람이 부서를 골라야 하는 행의 키.
+ *
+ * 주문번호로 잡는다 — 화면은 지역별로 묶어 보여주고 배포는 파일 행 순서로 도는데,
+ * 위치 번호로 주고받으면 선택이 엉뚱한 사람에게 붙기 때문이다.
+ * 다만 주문번호는 비어 있을 수 있고(중복 제거는 빈 값을 지우지 않는다),
+ * 빈 값끼리는 키가 겹쳐 한 사람을 고르면 다른 사람까지 같이 바뀐다.
+ * 그래서 비었을 때만 중복 제거 후 순번으로 대신한다.
+ *
+ * 중복 제거를 마친 목록은 분류와 배포가 같은 규칙·같은 순서로 만들므로 순번이 서로 맞는다.
+ * 주문번호가 있으면 중복 제거가 이미 유일함을 보장한다.
+ *
+ * @param orderValue    행의 주문번호
+ * @param dedupedIndex  중복 제거 후 목록에서의 위치
+ */
+export function pendingRowKey(orderValue: unknown, dedupedIndex: number): string {
+  const order = normalizeOrderKey(orderValue);
+  return order || `#${dedupedIndex}`;
+}
+
+/**
+ * 주문번호가 비어 있는가.
+ *
+ * 주문번호는 이 건을 가리키는 유일한 식별자다. 없으면
+ *   - 중복 제거 1단계(주문번호 기준)를 건너뛰고
+ *   - 사람이 부서를 고를 때 행을 지목할 수단이 사라지며
+ *   - 배포 뒤에 문제가 생겨도 어느 건인지 되짚을 수 없다.
+ * 조용히 내보내면 나중에 찾을 방법이 없으므로 배포를 막는 쪽이 맞다.
+ */
+export function isOrderNumberMissing(orderValue: unknown): boolean {
+  return normalizeOrderKey(orderValue) === '';
+}
+
+/** 주문번호가 없어 배포를 막을 때 쓰는 사유. 분류와 배포가 같은 문구를 쓴다. */
+export const ORDER_NUMBER_MISSING_REASON = '주문번호 없음';
+
+/**
+ * 자동 배분이 쓰는 소속들.
+ * REGION_CHOICES에 나오는 것들의 합집합이다. 한울부원·파라인슈2·이외지역은
+ * 사람이 고르는 대상이 아니므로 여기 없다.
+ */
+export const AUTO_DISTRIBUTE_DEPARTMENTS = ['경기', '굿모닝제너럴', '파라인슈1'] as const;
+
+/** 자동 배분에 넣을 한 건 */
+export interface PendingEntry {
+  /** pendingRowKey로 만든 행 식별자 */
+  key: string;
+  region: SelectableRegion;
+  /** 생년월일성별 (정렬 기준) */
+  jumin: unknown;
+}
+
+/**
+ * 사람이 골라야 하는 건들을 소속별 숫자가 고르게 되도록 나눈다.
+ *
+ * - 규칙으로 이미 배정된 수(baseCounts)를 시작점으로 잡는다. 그래야 최종 숫자가 맞는다.
+ * - 강원 건을 먼저 넣는다. 갈 수 있는 곳이 굿모닝제너럴·파라인슈1 둘뿐이라,
+ *   나중에 넣으면 그 둘이 이미 차 있어 한쪽으로 몰린다.
+ * - 그 다음 나머지를 생년월일이 이른 순으로 넣는다. 같은 순서를 다시 돌리면
+ *   같은 결과가 나와야 하므로 정렬 기준을 고정한다.
+ * - 매번 "갈 수 있는 곳 중 가장 적게 받은 곳"에 넣는다.
+ *
+ * @param pending    선택 대기 건들
+ * @param baseCounts 규칙으로 이미 배정된 소속별 건수
+ * @returns key → 소속명
+ */
+export function autoDistributePending(
+  pending: PendingEntry[],
+  baseCounts: Record<string, number> = {}
+): Record<string, string> {
+  const counts: Record<string, number> = {};
+  for (const dept of AUTO_DISTRIBUTE_DEPARTMENTS) {
+    counts[dept] = baseCounts[dept] ?? 0;
+  }
+
+  // 강원을 앞으로. 그 안에서는 생년월일 순, 같으면 키 순으로 고정한다.
+  const ordered = [...pending].sort((a, b) => {
+    const aNarrow = a.region === '강원' ? 0 : 1;
+    const bNarrow = b.region === '강원' ? 0 : 1;
+    if (aNarrow !== bNarrow) return aNarrow - bNarrow;
+
+    const diff = birthSortKey(a.jumin) - birthSortKey(b.jumin);
+    if (diff !== 0) return diff;
+    return a.key.localeCompare(b.key);
+  });
+
+  const picks: Record<string, string> = {};
+
+  for (const entry of ordered) {
+    const choices = REGION_CHOICES[entry.region];
+    if (!choices || choices.length === 0) continue;
+
+    // 가장 적게 받은 곳. 같으면 REGION_CHOICES에 적힌 순서를 따라 결과를 고정한다.
+    let best = choices[0];
+    for (const dept of choices) {
+      if ((counts[dept] ?? 0) < (counts[best] ?? 0)) best = dept;
+    }
+
+    picks[entry.key] = best;
+    counts[best] = (counts[best] ?? 0) + 1;
+  }
+
+  return picks;
+}
+
+/**
+ * 업로드 파일명 규칙.
+ *
+ * `YYYYMMDD` 뒤에 보험사명이 와야 한다. 날짜와 회사명 사이는 밑줄이든 공백이든
+ * 상관없다 — 받는 파일이 두 표기를 오가는데 한쪽만 받으면 내용은 멀쩡한 파일이
+ * 이름 때문에 반려된다.
+ *
+ * 화면과 서버가 반드시 같은 판정을 써야 한다. 서버가 느슨하면 화면이 거부한
+ * 파일이 API로는 들어와, 보험사를 못 가려 배포에서 막힐 파일이 이미 저장된 뒤다.
+ */
+const UPLOAD_FILE_NAME_PATTERN = /^\d{8}[_\s]*(동양생명|흥국생명|한화생명)/;
+
+export function isValidUploadFileName(fileName: unknown): boolean {
+  return UPLOAD_FILE_NAME_PATTERN.test(String(fileName ?? ''));
+}
+
+/** 파일명 규칙을 어겼을 때 보여줄 문구. 화면과 서버가 같은 말을 하도록 모아 둔다. */
+export const UPLOAD_FILE_NAME_HINT =
+  '파일명은 YYYYMMDD 회사명 형식이어야 합니다. (예: 20260815_동양생명.xlsx, 20260815 동양생명.xlsx / 흥국생명, 한화생명도 가능)';
+
+/**
+ * 배정방식 — 그 행이 어떻게 소속을 얻었는지.
+ *
+ * 규칙이 주소·나이로 정했으면 자동분류, 관리자가 배정할 소속 화면에서 넘겼으면
+ * 직접분류다. 배포하고 나면 소속만 남아 "이 고객이 왜 여기로 갔나"를 되짚을 수
+ * 없어서 함께 기록한다. 분류·배포·다운로드가 같은 값을 써야 하므로 여기 모아 둔다.
+ */
+export const ASSIGNED_BY_COLUMN = '배정방식';
+export const ASSIGNED_BY_RULE = '자동분류';
+export const ASSIGNED_BY_PERSON = '직접분류';
+
+/** 시스템이 붙이는 열 이름. 분류·배포·다운로드가 같은 이름을 써야 한다. */
+export const ROW_NO_COLUMN = '번호';
+export const ASSIGNED_DEPT_COLUMN = '배정소속';
+export const ASSIGNED_AT_COLUMN = '배정날짜';
+export const DUPLICATE_REASON_COLUMN = '중복사유';
+
+/** 배정날짜 표기. 파일과 DB가 같은 모양이어야 눈으로 대조된다. */
+export function formatAssignedAt(date: Date): string {
+  return `${date.toLocaleDateString('ko-KR').slice(0, -1)} ${date.toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })}`;
+}
