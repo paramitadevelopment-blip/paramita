@@ -14,6 +14,9 @@ import {
 } from '@/lib/insurance';
 import { MdChevronLeft, MdChevronRight, MdArrowDropDown, MdArrowDropUp } from 'react-icons/md';
 import ExcelPreviewModal from '../../download/components/ExcelPreviewModal';
+import FilePager from './FilePager';
+import DeptResultGrids from './DeptResultGrids';
+import PendingAssignTable from './PendingAssignTable';
 import styles from '../page.module.css';
 
 interface Department {
@@ -269,6 +272,13 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
     );
   };
 
+  const handlePickRow = (key: string, dept: string) => {
+    setRowPicks((prev) => ({
+      ...prev,
+      [currentIndex]: { ...(prev[currentIndex] ?? {}), [key]: dept },
+    }));
+  };
+
   const handleDeploy = async () => {
     // 업로드가 끝난 뒤 배포가 실패하면 원본만 남는다. 되돌릴 수 있게 id를 들고 있는다.
     let uploadedIds: string[] = [];
@@ -357,36 +367,12 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
             </div>
           ) : current ? (
             <>
-              <div className={styles.filePager}>
-                <button
-                  type="button"
-                  className={styles.filePagerBtn}
-                  onClick={() => setCurrentIndex((i) => i - 1)}
-                  disabled={currentIndex === 0}
-                  aria-label="이전 파일"
-                >
-                  <MdChevronLeft />
-                </button>
-
-                <div className={styles.filePagerInfo}>
-                  <span className={styles.filePagerName} title={current.fileName}>
-                    {current.fileName}
-                  </span>
-                  <span className={styles.filePagerCount}>
-                    {currentIndex + 1}/{classifiedFiles.length}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  className={styles.filePagerBtn}
-                  onClick={() => setCurrentIndex((i) => i + 1)}
-                  disabled={currentIndex >= classifiedFiles.length - 1}
-                  aria-label="다음 파일"
-                >
-                  <MdChevronRight />
-                </button>
-              </div>
+              <FilePager
+                fileName={current.fileName}
+                currentIndex={currentIndex}
+                totalFiles={classifiedFiles.length}
+                onChangeIndex={setCurrentIndex}
+              />
 
               <div className={styles.resultGrid}>
                 <div className={styles.resultGridLeft}>
@@ -427,284 +413,29 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
                   </button>
                 </div>
 
-                <div className={styles.resultGridRight}>
-                  {/* 규칙이 배정한 결과와, 지금 고른 것까지 반영한 결과를 나란히 둔다.
-                      위아래로 두면 두 숫자를 번갈아 보려고 스크롤해야 한다. */}
-                  <div className={styles.deptResultPair}>
-                    <div className={styles.deptResultColumn}>
-                      <div className={styles.deptResultTitle}>규칙 배정</div>
-                      <div className={styles.departmentResults}>
-                        {departments
-                          .filter((dept) => !dept.is_admin)
-                          .map((dept) => {
-                            const count = current.classificationByDeptId[dept.id] || 0;
-                            const deptRows = current.rowsByDeptId[dept.id] ?? [];
-                            return (
-                              <div
-                                key={dept.id}
-                                className={styles.resultItem}
-                                style={{ cursor: deptRows.length > 0 ? 'pointer' : 'default' }}
-                                onClick={() => {
-                                  if (deptRows.length === 0) return;
-                                  setPreview({ title: `${current.fileName} — ${dept.name}`, headers: current.previewHeaders, rows: deptRows });
-                                }}
-                              >
-                                <div className={styles.resultDeptName}>{dept.name}</div>
-                                <div className={styles.resultCountWrapper}>
-                                  <span className={styles.resultCount}>{count}건</span>
-                                  <span className={styles.checkMark}>✓</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-
-                    <div className={styles.deptResultColumn}>
-                      <div className={styles.deptResultTitle}>
-                        선택 반영
-                        <span className={styles.deptResultHint}>배포되는 최종 숫자</span>
-                      </div>
-                      <div className={styles.departmentResults}>
-                        {departments
-                          .filter((dept) => !dept.is_admin)
-                          .map((dept) => {
-                            const added = resultWithPicks?.[dept.name] ?? [];
-                            const ruleRows = current.rowsByDeptId[dept.id] ?? [];
-                            const finalCount = (current.classificationByDeptId[dept.id] || 0) + added.length;
-                            // 어느 건이 규칙으로 왔고 어느 건이 사람 손을 거쳤는지 표시한다.
-                            // 배포하고 나면 소속만 남아 근거를 되짚을 수 없다.
-                            const finalRows = [
-                              ...ruleRows.map((row: any[]) => ['자동분류', ...row]),
-                              ...added.map((row: any[]) => ['직접분류', ...row]),
-                            ];
-                            return (
-                              <div
-                                key={dept.id}
-                                className={styles.resultItem}
-                                style={{ cursor: finalRows.length > 0 ? 'pointer' : 'default' }}
-                                onClick={() => {
-                                  if (finalRows.length === 0) return;
-                                  setPreview({
-                                    title: `${current.fileName} — ${dept.name} (선택 반영)`,
-                                    headers: ['배정방식', ...current.previewHeaders],
-                                    rows: finalRows,
-                                  });
-                                }}
-                              >
-                                <div className={styles.resultDeptName}>{dept.name}</div>
-                                <div className={styles.resultCountWrapper}>
-                                  <span className={styles.resultCount}>{finalCount}건</span>
-                                  {/* 늘어난 만큼을 짚어준다. 총합만 보면 뭘 바꿨는지 안 보인다. */}
-                                  {added.length > 0 && (
-                                    <span className={styles.pickedDelta}>+{added.length}</span>
-                                  )}
-                                  <span className={styles.checkMark}>✓</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <DeptResultGrids
+                  departments={departments}
+                  fileName={current.fileName}
+                  previewHeaders={current.previewHeaders}
+                  classificationByDeptId={current.classificationByDeptId}
+                  rowsByDeptId={current.rowsByDeptId}
+                  addedRowsByDept={resultWithPicks}
+                  onPreview={setPreview}
+                />
               </div>
 
-              {Object.entries(current.pendingByRegion ?? {}).some(([, c]) => c > 0) && (
-                <div
-                  style={{
-                    marginBottom: '16px',
-                    padding: '24px 14px',
-                    border: '1px solid #ddd',
-                    borderRadius: '8px',
-                    background: 'white',
-                  }}
-                >
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{ fontWeight: 700, marginBottom: '8px', fontSize: '26px' }}>
-                        배정할 소속을 선택해주세요
-                      </div>
-                      <div style={{ fontSize: '20px', color: '#666', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
-                        <span style={{ color: '#db1a62', fontWeight: 700 }}>
-                          총 {Object.values(current.pendingByRegion ?? {}).reduce((a, b) => a + b, 0)}건
-                        </span>
-                        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                          {Object.entries(current.pendingByRegion ?? {}).map(([region, count]) => {
-                            const regionColors: Record<string, string> = {
-                              '서울': '#2196F3',
-                              '경기': '#4CAF50',
-                              '인천': '#FF9800',
-                              '강원': '#9C27B0',
-                            };
-                            return (
-                              <span key={region} style={{ color: regionColors[region] || '#666' }}>
-                                {region} : {count}건
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-
-                  {/* 선택 방식. 자동은 같은 표에 값만 미리 채워 넣는다 — 채운 뒤에도 고칠 수 있다. */}
-                  <div className={styles.pickModeTabs}>
-                    {([
-                      { mode: 'manual' as const, label: '직접선택' },
-                      { mode: 'auto' as const, label: '자동선택' },
-                    ]).map(({ mode, label }) => {
-                      const active = (pickMode[currentIndex] ?? 'manual') === mode;
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          className={`${styles.pickModeTab} ${active ? styles.pickModeTabActive : ''}`}
-                          onClick={() => handlePickMode(currentIndex, mode)}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div style={{ overflowX: 'auto', marginBottom: '12px' }}>
-                    <table
-                      style={{
-                        width: '100%',
-                        borderCollapse: 'collapse',
-                        fontSize: '16px',
-                        minWidth: '200px',
-                        // 열이 내용대로 늘어나면 표가 화면을 넘겨 '배정 소속'이 스크롤 밖으로
-                        // 나간다. 주어진 폭 안에서 열을 나눠 가져 전부 한눈에 보이게 한다.
-                        tableLayout: 'fixed',
-                      }}
-                    >
-                      <thead>
-                        <tr style={{ background: '#fafafa', borderBottom: '2px solid #ddd' }}>
-                          <th
-                            className={styles.pendingSortableTh}
-                            onClick={() => togglePendingSort('region')}
-                          >
-                            <span className={styles.pendingThInner}>
-                              지역
-                              {pendingSort.by === 'region' &&
-                                (pendingSort.order === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />)}
-                            </span>
-                          </th>
-                          {current.previewHeaders?.map((header, colIdx) => (
-                            <th
-                              key={header}
-                              className={`${styles.pendingSortableTh} ${narrowCols.has(colIdx) ? styles.pendingNarrowCol : ''}`}
-                              onClick={() => togglePendingSort(colIdx)}
-                            >
-                              <span className={styles.pendingThInner}>
-                                {header}
-                                {pendingSort.by === colIdx &&
-                                  (pendingSort.order === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />)}
-                              </span>
-                            </th>
-                          ))}
-                          <th className={styles.pendingDeptTh}>배정 소속</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          // 행을 가리키는 건 화면 순서가 아니라 주문번호다.
-                          // 배포는 파일 행 순서로 도는데 여긴 지역별로 묶어 보여주므로,
-                          // 위치 번호로 주고받으면 선택이 다른 사람에게 붙는다.
-                          const list: Array<{ key: string; region: SelectableRegion; row: any[] }> = [];
-                          SELECTABLE_REGIONS.forEach((r) => {
-                            const rows = current.pendingRowsByRegion?.[r] ?? [];
-                            const keys = current.pendingKeysByRegion?.[r] ?? [];
-                            rows.forEach((row, i) => {
-                              // 키는 서버가 만들어 보낸 것을 그대로 쓴다. 여기서 다시 만들면
-                              // 배포가 쓰는 키와 규칙이 갈려 선택이 엉뚱한 행에 붙는다.
-                              const key = keys[i];
-                              if (key === undefined) return;
-                              list.push({ key, region: r, row });
-                            });
-                          });
-
-                          // 정렬. 숫자로 읽히면 숫자로, 아니면 한국어 기준 문자열로 비교한다.
-                          // 값이 비어 있는 행은 항상 뒤로 보낸다 — 오름/내림을 오갈 때마다
-                          // 빈 칸이 맨 위로 올라오면 정작 볼 것이 가려진다.
-                          const sortValue = (item: { region: SelectableRegion; row: any[] }) =>
-                            pendingSort.by === 'region' ? item.region : item.row[pendingSort.by];
-
-                          const dir = pendingSort.order === 'asc' ? 1 : -1;
-                          list.sort((a, b) => {
-                            const av = sortValue(a);
-                            const bv = sortValue(b);
-                            const aEmpty = av === null || av === undefined || av === '';
-                            const bEmpty = bv === null || bv === undefined || bv === '';
-                            if (aEmpty && bEmpty) return 0;
-                            if (aEmpty) return 1;
-                            if (bEmpty) return -1;
-
-                            const aNum = Number(av);
-                            const bNum = Number(bv);
-                            if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) return (aNum - bNum) * dir;
-
-                            return String(av).localeCompare(String(bv), 'ko-KR') * dir;
-                          });
-
-                          return list.map(({ key, region, row }) => (
-                            <tr key={`${region}-${key}`} style={{ borderBottom: '1px solid #eee' }}>
-                              <td style={{ padding: '10px 12px', textAlign: 'center', color: '#666', fontSize: '16px', whiteSpace: 'nowrap' }}>{region}</td>
-                              {row.map((cell, i) => (
-                                <td
-                                  key={i}
-                                  className={`${styles.pendingDataCell} ${narrowCols.has(i) ? styles.pendingNarrowCol : ''}`}
-                                  title={String(cell ?? '')}
-                                >
-                                  {cell ?? '-'}
-                                </td>
-                              ))}
-                              <td style={{ padding: '10px 12px' }}>
-                                <div style={{ position: 'relative' }}>
-                                  <select
-                                    className={styles.regionSelect}
-                                    required
-                                    value={rowPicks[currentIndex]?.[key] ?? ''}
-                                    onChange={(e) =>
-                                      setRowPicks((prev) => ({
-                                        ...prev,
-                                        [currentIndex]: {
-                                          ...(prev[currentIndex] ?? {}),
-                                          [key]: e.target.value,
-                                        },
-                                      }))
-                                    }
-                                  >
-                                    <option value="" hidden disabled>
-                                      소속 선택
-                                    </option>
-                                    {(regionChoices[region] ?? []).map((dept) => (
-                                      <option key={dept} value={dept}>
-                                        {dept}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <MdArrowDropDown
-                                    style={{
-                                      position: 'absolute',
-                                      right: '6px',
-                                      top: '50%',
-                                      transform: 'translateY(-50%)',
-                                      pointerEvents: 'none',
-                                      fontSize: '16px',
-                                      color: '#666',
-                                    }}
-                                  />
-                                </div>
-                              </td>
-                            </tr>
-                          ));
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+              <PendingAssignTable
+                current={current}
+                currentIndex={currentIndex}
+                pickMode={pickMode[currentIndex] ?? 'manual'}
+                onPickMode={handlePickMode}
+                pendingSort={pendingSort}
+                onToggleSort={togglePendingSort}
+                narrowCols={narrowCols}
+                rowPicks={rowPicks[currentIndex] ?? {}}
+                onPickRow={handlePickRow}
+                regionChoices={regionChoices}
+              />
             </>
           ) : null}
 
