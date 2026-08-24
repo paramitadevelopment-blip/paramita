@@ -9,6 +9,42 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+/** 사용자가 지워져 자동으로 거부될 때 남기는 사유 */
+const DELETED_USER_REJECT_REASON = '사용자 삭제됨 (요청자 계정이 삭제되어 자동 거부)';
+
+/**
+ * 지우려는 사용자들의 대기 중인 재다운로드 요청을 자동으로 거부한다.
+ *
+ * 사용자를 지우면 요청의 user_id는 빈 값이 된다(기록은 남겨야 하므로 SET NULL).
+ * 대기 상태로 남으면 관리자 승인 큐에 영원히 떠 있고, 승인해 봐야 권한은
+ * user_id로 계산하므로 아무에게도 안 붙는다. 승인한 줄 알고 넘어가게 된다.
+ *
+ * 반드시 삭제 "전에" 불러야 한다. 지운 뒤에는 누구 요청이었는지 찾을 수 없다.
+ */
+async function rejectPendingRequestsOfDeletedUsers(userIds: number[], reviewer: { id: number; name?: string }) {
+  const { data: reviewerRow } = await supabase
+    .from('users')
+    .select('name')
+    .eq('id', reviewer.id)
+    .single();
+
+  const { error } = await supabase
+    .from('redownload_requests')
+    .update({
+      status: 'rejected',
+      reviewed_by: reviewer.id,
+      reviewed_by_name: reviewerRow?.name || reviewer.name || null,
+      reviewed_at: new Date().toISOString(),
+      review_reason: DELETED_USER_REJECT_REASON,
+    })
+    .in('user_id', userIds)
+    .eq('status', 'pending');
+
+  // 여기서 실패해도 삭제 자체는 막지 않는다. 큐에 남은 건은 관리자가 손으로 처리할 수 있지만,
+  // 삭제가 반쯤 되다 마는 것이 더 나쁘다.
+  if (error) console.error('Failed to auto-reject pending redownload requests:', error);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = getUserFromRequest(request);
@@ -370,6 +406,9 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: 'Cannot delete admin user' }, { status: 403 });
       }
 
+      // 지우기 전에 대기 중인 재다운로드 요청을 정리한다. 지운 뒤에는 찾을 수 없다.
+      await rejectPendingRequestsOfDeletedUsers(userIds, user);
+
       // 일괄 삭제
       const { error } = await supabase
         .from('users')
@@ -409,6 +448,9 @@ export async function DELETE(request: NextRequest) {
     if (targetUser?.username === 'admin') {
       return NextResponse.json({ error: 'Cannot delete admin user' }, { status: 403 });
     }
+
+    // 지우기 전에 대기 중인 재다운로드 요청을 정리한다. 지운 뒤에는 찾을 수 없다.
+    await rejectPendingRequestsOfDeletedUsers([deleteUserId], user);
 
     const { error } = await supabase
       .from('users')

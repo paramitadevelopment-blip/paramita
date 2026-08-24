@@ -77,7 +77,8 @@ export async function GET(request: NextRequest) {
         query = query.eq('user_department', department);
       }
 
-      return query.order(dbSortBy, { ascending: sortOrder });
+      // 동점이면 순서가 고정되지 않아 페이지를 넘길 때 행이 중복되거나 빠진다.
+      return query.order(dbSortBy, { ascending: sortOrder }).order('id', { ascending: false });
     };
 
     let { data: requests, error } = await fetchAllRows<any>(buildQuery);
@@ -92,17 +93,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Apply search filter
+    // 검색 대상. 사유(요청·거부)와 처리자까지 넣는다 — 승인 이력을 되짚을 때
+    // "왜 요청했는지·왜 거부했는지"로 찾는 일이 사람 이름으로 찾는 것만큼 흔하다.
     if (search && requests) {
       const searchLower = search.toLowerCase();
-      requests = requests.filter((req: any) => {
-        return (
-          req.file_name.toLowerCase().includes(searchLower) ||
-          req.user_name?.toLowerCase().includes(searchLower) ||
-          req.username?.toLowerCase().includes(searchLower) ||
-          req.user_employee_id?.toLowerCase().includes(searchLower)
-        );
-      });
+      requests = requests.filter((req: any) =>
+        [
+          req.file_name,
+          req.user_name,
+          req.username,
+          req.user_employee_id,
+          req.user_department,
+          req.reason,
+          req.review_reason,
+          req.reviewed_by_name,
+        ].some((field) => String(field ?? '').toLowerCase().includes(searchLower))
+      );
     }
 
     // 이 파일이 지금까지 몇 번 거부됐는지. 목록에는 상태 필터가 걸려 있어서

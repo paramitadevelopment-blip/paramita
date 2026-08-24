@@ -100,7 +100,10 @@ export async function GET(request: NextRequest) {
     let eventsQuery = supabase
       .from('file_deletion_events')
       .select('id, deleted_at, deleted_by, total_count, reason, restored_at, restored_by')
-      .order('deleted_at', { ascending: false });
+      // 일괄 삭제하면 여러 행의 deleted_at이 같다. 동점 순서를 못 박아야
+      // 페이지를 넘길 때 같은 행이 두 번 나오거나 빠지지 않는다.
+      .order('deleted_at', { ascending: false })
+      .order('id', { ascending: false });
 
     if (eventIdsToShow !== null && eventIdsToShow.length > 0) {
       eventsQuery = eventsQuery.in('id', eventIdsToShow);
@@ -123,7 +126,8 @@ export async function GET(request: NextRequest) {
           'id, name, size, department_id, is_original, original_file_id, restored_at, deletion_event_id'
         )
         .in('deletion_event_id', eventIds)
-        .order('deletion_event_id', { ascending: false });
+        .order('deletion_event_id', { ascending: false })
+        .order('id', { ascending: false });
 
       if (filesError) {
         throw filesError;

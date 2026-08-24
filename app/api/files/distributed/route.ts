@@ -37,7 +37,10 @@ export async function GET(request: NextRequest) {
       .select('id, name, department_id, original_file_id, departments(name)')
       .in('original_file_id', originalFileIds)
       .eq('is_original', false)
-      .order('name', { ascending: true });
+      // 같은 이름의 배포 파일이 여러 개다(배포할 때마다 생긴다). 이름만으로 정렬하면
+      // 동점 행의 순서가 고정되지 않아, 페이지를 넘길 때 같은 행이 두 번 나오거나 빠진다.
+      .order('name', { ascending: true })
+      .order('id', { ascending: true });
 
     if (error) {
       throw error;

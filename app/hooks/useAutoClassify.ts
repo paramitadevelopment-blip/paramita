@@ -36,7 +36,7 @@ export interface ClassifiedFile {
   duplicateRows: any[][];
 }
 
-interface ClassifyResponse {
+export interface ClassifyResponse {
   success: boolean;
   /** 지역별 고를 수 있는 부서 (서버가 정한 목록) */
   regionChoices: Record<SelectableRegion, string[]>;

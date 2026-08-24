@@ -121,7 +121,14 @@ export async function GET(request: NextRequest) {
         fileQuery = fileQuery.in('department_id', departmentIds);
       }
 
-      return fileQuery.order(dbSortBy, { ascending: sortOrder === 'asc' });
+      // 같은 배포에서 나온 파일들은 uploaded_at이 마이크로초까지 같다. 동점일 때
+      // 순서를 정해주지 않으면 DB가 행을 물리적으로 놓인 순서대로 돌려주는데,
+      // 그 위치는 행을 고칠 때마다 바뀐다. 다운로드하면 download_count가 올라가므로
+      // 바로 그 순간 순서가 뒤집혀, 방금 누른 줄이 아니라 옆줄이 바뀐 것처럼 보인다.
+      // (파라인슈1·2처럼 한 사용자에게 두 파일이 같이 보이는 소속에서 특히 그렇다.)
+      return fileQuery
+        .order(dbSortBy, { ascending: sortOrder === 'asc' })
+        .order('id', { ascending: true });
     };
 
     let { data: allFiles, error } = await fetchAllRows<any>(buildFileQuery);

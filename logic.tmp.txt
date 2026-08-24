@@ -1,0 +1,87 @@
+   * 자동 배분. 규칙으로 이미 배정된 수를 이어받아, 갈 수 있는 소속 중
+   * 가장 적게 받은 곳부터 채운다. 강원 건은 갈 곳이 둘뿐이라 먼저 넣는다.
+   * 채워진 값은 그대로 고칠 수 있다 — 자동은 출발점일 뿐이다.
+   */
+  const applyAutoDistribute = (fileIdx: number) => {
+    const file = classifiedFiles[fileIdx];
+    if (!file) return;
+
+    const pending: PendingEntry[] = SELECTABLE_REGIONS.flatMap((region) => {
+      const keys = file.pendingKeysByRegion?.[region] ?? [];
+      const jumins = file.pendingJuminByRegion?.[region] ?? [];
+      return keys.map((key, i) => ({ key, region, jumin: jumins[i] ?? '' }));
+    });
+
+    // 규칙으로 이미 들어간 수. 소속ID가 아니라 이름으로 세야 배분 대상과 맞는다.
+    const baseCounts: Record<string, number> = {};
+    for (const [dept, count] of Object.entries(file.classification ?? {})) {
+      baseCounts[dept] = count;
+    }
+
+    const picks = autoDistributePending(pending, baseCounts);
+    setRowPicks((prev) => ({ ...prev, [fileIdx]: picks }));
+  };
+
+  const handlePickMode = (fileIdx: number, mode: 'manual' | 'auto') => {
+    setPickMode((prev) => ({ ...prev, [fileIdx]: mode }));
+    if (mode === 'auto') {
+      applyAutoDistribute(fileIdx);
+    } else {
+      // 직접 고르는 탭으로 오면 빈 상태에서 시작한다. 자동으로 채운 값이 남아 있으면
+      // 사람이 고른 것인지 자동인지 구분되지 않는다.
+      setRowPicks((prev) => ({ ...prev, [fileIdx]: {} }));
+    }
+  };
+
+  /**
+   * 지금 고른 것까지 반영한 소속별 결과.
+   * 위 그리드는 규칙이 배정한 것만 보여준다. 사람이 고른 건이 어디로 몇 건 가는지는
+   * 배포하기 전에는 알 수 없어서, 고르는 도중에 실시간으로 같이 보여준다.
+   */
+  const resultWithPicks = useMemo(() => {
+    if (!current) return null;
+
+    // 소속명 → 선택으로 추가된 행들
+    const addedRows: Record<string, any[][]> = {};
+
+    for (const region of SELECTABLE_REGIONS) {
+      const rows = current.pendingRowsByRegion?.[region] ?? [];
+      const keys = current.pendingKeysByRegion?.[region] ?? [];
+      keys.forEach((key, i) => {
+        const dept = rowPicks[currentIndex]?.[key];
+        if (!dept) return;
+        (addedRows[dept] ??= []).push(rows[i]);
+      });
+    }
+
+    return addedRows;
+  }, [current, rowPicks, currentIndex]);
+
+  /**
+   * 좁게 눌러도 되는 열. tel1은 tel2와 같은 번호라 앞자리만 보이면 충분하다.
+   * 이 열이 넓게 자리를 차지하면 정작 골라야 할 '배정 소속'이 밀려 잘린다.
+   */
+  const narrowCols = useMemo(() => {
+    const set = new Set<number>();
+    (current?.previewHeaders ?? []).forEach((header, i) => {
+      if (/^tel\s*1$/i.test(String(header).trim())) set.add(i);
+    });
+    return set;
+  }, [current]);
+
+  const togglePendingSort = (by: 'region' | number) => {
+    setPendingSort((prev) =>
+      prev.by === by
+        ? { by, order: prev.order === 'asc' ? 'desc' : 'asc' }
+        : { by, order: 'asc' }
+    );
+  };
+
+  const handlePickRow = (key: string, dept: string) => {
+    setRowPicks((prev) => ({
+      ...prev,
+      [currentIndex]: { ...(prev[currentIndex] ?? {}), [key]: dept },
+    }));
+  };
+
+  const handleDeploy = async () => {

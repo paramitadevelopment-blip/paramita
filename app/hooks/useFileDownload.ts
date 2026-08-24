@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
+import { patchFileStatus, type MyDownloadStatus } from '@/lib/fileListCache';
 
 export function useDownloadFile() {
   const queryClient = useQueryClient();
@@ -21,6 +22,9 @@ export function useDownloadFile() {
         throw new Error('파일 다운로드에 실패했습니다.');
       }
 
+      // 받고 난 뒤의 버튼 상태를 서버가 알려준다 (관리자는 제한이 없어 보내지 않는다).
+      const statusAfter = response.headers.get('X-My-Download-Status');
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -30,11 +34,23 @@ export function useDownloadFile() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+
+      return { fileId, statusAfter };
     },
-    onSuccess: () => {
-      // 받고 나면 다운로드 한도가 줄어 버튼 상태(다운로드 → 재다운로드 요청)가 바뀐다.
-      // 목록을 다시 받지 않으면 화면은 계속 '다운로드'로 남는다.
-      queryClient.invalidateQueries({ queryKey: ['files'], exact: false });
+    onSuccess: ({ fileId, statusAfter }) => {
+      // 목록을 통째로 다시 받지 않고 방금 받은 줄만 고친다.
+      //
+      // 다시 받으면 서버가 새 상태로 정렬을 다시 한다. 사용자가 상태순으로
+      // 정렬해 두고 작업 중이었다면, 방금 누른 줄이 그 자리에서 사라지고
+      // 아래 줄들이 한 칸씩 올라온다. 누른 줄은 안 바뀌고 엉뚱한 줄이
+      // 바뀐 것처럼 보인다. 정렬은 사용자가 정렬을 다시 걸거나 페이지를
+      // 옮길 때 반영되면 충분하다.
+      if (statusAfter) {
+        queryClient.setQueriesData({ queryKey: ['files'], exact: false }, (old: any) =>
+          patchFileStatus(old, fileId, statusAfter as MyDownloadStatus)
+        );
+      }
+
       // 방금 받은 기록이 파일별 다운로드 로그에도 한 줄 늘어난다.
       queryClient.invalidateQueries({ queryKey: ['downloadLogs'], exact: false });
     },

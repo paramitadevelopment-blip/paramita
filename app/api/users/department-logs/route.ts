@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
       .from('department_change_logs')
       .select('id, from_department, to_department, reason, changed_by, changed_at')
       .eq('user_id', userId)
-      .order('changed_at', { ascending: false });
+      // 한 번에 여러 명을 옮기면 changed_at이 같다. 동점 순서를 못 박는다.
+      .order('changed_at', { ascending: false })
+      .order('id', { ascending: false });
 
     if (error) throw error;
 

@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
       if (department) q = q.eq('user_department', department);
       // 특정 파일의 다운로드 이력만 조회할 때 사용한다.
       if (fileId) q = q.eq('file_id', fileId);
-      return q.order(sortBy, { ascending: sortOrder });
+      // 동점이면 순서가 고정되지 않아 페이지를 넘길 때 행이 중복되거나 빠진다.
+      return q.order(sortBy, { ascending: sortOrder }).order('id', { ascending: false });
     };
 
     let records: any[];

@@ -50,7 +50,9 @@ export async function GET(request: NextRequest) {
       query = query.eq('user_id', user.id);
     }
 
-    const { data: records, error } = await query.order('requested_at', { ascending: false });
+    const { data: records, error } = await query
+      .order('requested_at', { ascending: false })
+      .order('id', { ascending: false });
 
     if (error) {
       console.error('Failed to fetch request history:', error);

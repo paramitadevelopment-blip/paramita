@@ -76,6 +76,11 @@ export async function GET(
 ) {
   // 스토리지 다운로드 전에 미리 잡아둔 기록. 이후 단계가 실패하면 되돌려야 한다.
   let reservedRecordId: number | null = null;
+  // 이 사람이 이 파일을 받고 난 뒤의 버튼 상태. 응답 헤더로 알려줘서
+  // 화면이 목록을 통째로 다시 받지 않고 그 줄만 고칠 수 있게 한다.
+  // 다시 받으면 상태가 바뀐 줄이 정렬 규칙에 따라 자리를 옮겨,
+  // 방금 누른 줄이 눈앞에서 사라진다.
+  let statusAfterDownload: string | null = null;
 
   try {
     const user = getUserFromRequest(request);
@@ -196,6 +201,23 @@ export async function GET(
       }
 
       reservedRecordId = reserved.id;
+
+      // 이번 다운로드까지 센 뒤의 상태. files/list의 계산과 같은 규칙을 쓴다.
+      if (downloadCount + 1 < allowed) {
+        statusAfterDownload = 'available';
+      } else {
+        // 한도를 다 썼다. 마지막 요청이 거부된 상태였다면 그 사실을 그대로 보여준다.
+        const { data: latest } = await supabase
+          .from('redownload_requests')
+          .select('status')
+          .eq('user_id', user.id)
+          .eq('file_id', fileId)
+          .order('requested_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        statusAfterDownload = latest?.status === 'rejected' ? 'rejected' : 'downloaded';
+      }
     }
 
     // Supabase Storage에서 파일 다운로드
@@ -317,6 +339,11 @@ export async function GET(
     const response = new NextResponse(outputBuffer as any);
     response.headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     response.headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
+    if (statusAfterDownload) {
+      response.headers.set('X-My-Download-Status', statusAfterDownload);
+      // 브라우저 fetch는 기본적으로 몇 개 헤더만 읽게 해준다. 직접 열어줘야 보인다.
+      response.headers.set('Access-Control-Expose-Headers', 'X-My-Download-Status');
+    }
     return response;
   } catch (error) {
     console.error('File download error:', error);
