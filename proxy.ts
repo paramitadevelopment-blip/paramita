@@ -106,6 +106,9 @@ export const config = {
     // 모든 라우트 보호 (정적 자산 제외)
     // public/ 아래 이미지·폰트도 제외한다. next/image가 원본을 가져올 때는
     // 브라우저 쿠키가 실리지 않아, 막아두면 로그인 전 로고가 깨진다.
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|gif|svg|webp|avif|ico|woff2?)$).*)',
+    //
+    // robots.txt 도 뺀다. 로봇은 로그인을 못 하므로 막아두면 "긁지 말라"는
+    // 지시 자체를 못 읽는다. 안에 든 것은 전부 금지라 공개해도 새어 나갈 게 없다.
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|.*\\.(?:png|jpe?g|gif|svg|webp|avif|ico|woff2?)$).*)',
   ],
 };

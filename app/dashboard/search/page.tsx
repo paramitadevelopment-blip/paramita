@@ -11,6 +11,7 @@ import DownloadLogsSection from './components/DownloadLogsSection';
 import DownloadRequestsSection from './components/DownloadRequestsSection';
 import DeletionHistorySection from './components/DeletionHistorySection';
 import BlacklistSection from './components/BlacklistSection';
+import ReapplySection from './components/ReapplySection';
 import styles from './page.module.css';
 
 function SearchPage() {
@@ -106,6 +107,7 @@ function SearchPage() {
                 formatDateTime={formatDateTime}
               />
               <BlacklistSection searchQuery={searchQuery} formatDateTime={formatDateTime} />
+              <ReapplySection searchQuery={searchQuery} formatDateTime={formatDateTime} />
             </div>
           )}
 

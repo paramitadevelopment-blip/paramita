@@ -8,6 +8,13 @@ export const metadata: Metadata = {
   icons: {
     icon: "/logo/favicon.png",
   },
+  // 사내 업무 시스템이라 검색에 뜰 이유가 없다. robots.txt·헤더와 함께 세 겹으로 막는다.
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false },
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
