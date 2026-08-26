@@ -243,6 +243,15 @@ const UserForm = memo(function UserForm({
           onChange={handleChange}
           placeholder={isEditMode ? '변경하지 않으려면 비워두세요' : ''}
           maxLength={10}
+          /*
+           * 브라우저가 저장해 둔 로그인 정보를 채우지 않게 한다.
+           *
+           * 크롬은 type="password" 가 있으면 그 폼을 로그인 폼으로 보고 저장된
+           * 계정을 아이디 칸에 밀어 넣는다. 아이디 칸의 autoComplete="off" 는
+           * 그때 무시된다. 여기에 new-password 를 주면 "새 비밀번호를 만드는
+           * 자리"로 보고 건드리지 않는다.
+           */
+          autoComplete="new-password"
           className={styles.input}
         />
         <div className={styles.helperRow}>
