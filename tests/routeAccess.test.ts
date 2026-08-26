@@ -81,6 +81,32 @@ describe('관리자는 전부 들어간다', () => {
   }
 });
 
+/**
+ * 루트로 들어오면 각자 첫 화면으로 보낸다. 한 곳으로만 보내면 일반 사용자는
+ * 대시보드에 못 들어가서 곧바로 한 번 더 튕긴다.
+ */
+describe('루트 경로', () => {
+  it('관리자는 대시보드로', async () => {
+    expect(await visit('/', 'admin')).toBe('/dashboard');
+  });
+
+  it('일반 사용자는 파일 다운로드로', async () => {
+    expect(await visit('/', 'user')).toBe('/dashboard/download');
+  });
+
+  it('토큰을 못 읽으면 로그인으로', async () => {
+    expect(await visit('/', null)).toBe('/login');
+  });
+
+  /** 보내는 곳이 그 사람이 들어갈 수 있는 화면이어야 한다. 아니면 또 튕긴다. */
+  it('보낸 곳에서 다시 튕기지 않는다', async () => {
+    for (const role of ['admin', 'user']) {
+      const 목적지 = await visit('/', role);
+      expect(await visit(목적지!, role)).toBeNull();
+    }
+  });
+});
+
 describe('토큰이 없거나 못 읽으면', () => {
   it('로그인 화면으로 보낸다', async () => {
     expect(await visit('/dashboard/reapply', null)).toBe('/login');

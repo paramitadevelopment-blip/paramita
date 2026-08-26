@@ -53,6 +53,26 @@ export async function proxy(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  /*
+   * 루트로 들어오면 각자 첫 화면으로 보낸다.
+   *
+   * 관리자는 대시보드, 그 외에는 파일 다운로드다. 일반 사용자는 대시보드에
+   * 들어갈 수 없어서, 한 곳으로만 보내면 곧바로 한 번 더 튕긴다.
+   */
+  if (pathname === '/') {
+    let role: string | undefined;
+
+    try {
+      const verified = await jwtVerify(token, secret);
+      role = (verified.payload as { role?: string }).role;
+    } catch {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+
+    const target = role === 'admin' ? '/dashboard' : '/dashboard/download';
+    return NextResponse.redirect(new URL(target, request.url));
+  }
+
   // 대시보드 페이지 접근 시 역할 기반 차단 (렌더링 전에 서버에서 처리)
   if (pathname.startsWith('/dashboard')) {
     let role: string | undefined;
