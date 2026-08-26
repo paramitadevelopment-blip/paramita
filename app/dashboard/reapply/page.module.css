@@ -1,0 +1,327 @@
+/*
+ * 재신청 고객 화면.
+ *
+ * 배치와 표 규칙은 다운로드 이력 화면의 값을 그대로 쓴다. 페이지마다 여백과
+ * 글씨를 눈대중으로 다시 정하면 미묘하게 어긋나 같은 시스템으로 안 보인다.
+ *
+ * 가져오지 않은 것 두 가지:
+ *   - 첫 열·마지막 열 너비 규칙 — 저쪽은 체크박스 칸이 있고 여기는 없다
+ *   - 정렬 화살표를 흐름 안에 두는 규칙 — 정렬을 켤 때마다 그 열만 넓어져
+ *     옆 칸 글자가 두 줄로 접힌다. 블랙리스트에서 같은 문제를 고쳤다
+ */
+
+.container {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 120px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+}
+
+.contentWrapper {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 40px 20px;
+  background: white;
+  overflow: visible;
+}
+
+.searchSection {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 50px;
+  margin-bottom: 40px;
+}
+
+.totalCount {
+  display: flex;
+  align-items: center;
+  height: 47px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  padding: 0;
+}
+
+.totalCount span {
+  font-size: 24px;
+  font-weight: 700;
+  color: #db1a62;
+  margin: 0 4px;
+}
+
+.controlsSection {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.select {
+  padding: 10px 40px 10px 16px;
+  height: 47px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #333;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23db1a62' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+}
+
+.select:hover {
+  border-color: #db1a62;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.tableContainer {
+  background: #fafafa;
+  border-radius: 0;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0;
+}
+
+.table th {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.table tbody {
+  background: white;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+.table td {
+  padding: 16px 12px;
+  font-size: 18px;
+  color: #333;
+  text-align: center;
+  /* 값의 모양이 정해진 칸은 접지 않는다. 접히면 행 높이가 들쭉날쭉해진다. */
+  white-space: nowrap;
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sortableHeader {
+  cursor: pointer;
+  position: relative;
+}
+
+/*
+ * 정렬 화살표는 자리를 차지하지 않게 띄운다. 흐름 안에 두면 정렬을 켠 열만
+ * 화살표 너비만큼 넓어지고, 그만큼 밀린 옆 칸 글자가 두 줄로 접힌다.
+ */
+.sortIcon {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  font-size: 30px;
+  color: #db1a62;
+  pointer-events: none;
+}
+
+/* ── 이 화면에만 있는 것 ─────────────────────────────────── */
+
+/* 자기 줄에 놓는다. inline-flex 라야 글자 옆까지만 눌린다. */
+.unreadToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 18px;
+  color: #333;
+  cursor: pointer;
+  user-select: none;
+}
+
+.unreadToggle input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #db1a62;
+}
+
+/* 이미 확인한 줄은 가라앉혀 안 본 것이 눈에 먼저 들어오게 한다. */
+.rowRead {
+  background-color: #f5f5f5;
+}
+
+/* 사유는 길이를 예측할 수 없다. 잘라 두고 title로 전체를 보여준다. */
+.reasonCell {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reasonBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* 중복으로 빠진 것과 영구 차단된 것은 지사가 할 일이 다르다. 색으로 가른다. */
+.reasonDup {
+  background: #f2f4f7;
+  border: 1px solid #d6dae0;
+  color: #5a6472;
+}
+
+.reasonBlack {
+  background: #fdf2f6;
+  border: 1px solid #f3c3d4;
+  color: #db1a62;
+}
+
+.readBtn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #db1a62;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.readBtn:hover:not(:disabled) {
+  background: #c2154e;
+}
+
+.readBtn:disabled {
+  background: #e0e0e0;
+  cursor: default;
+}
+
+.readAt {
+  font-size: 16px;
+  color: #999;
+}
+
+/* 다른 화면과 같은 기준으로 좁은 화면을 접는다. */
+@media (max-width: 768px) {
+  .searchSection {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .controlsSection {
+    flex-wrap: wrap;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 10px;
+    font-size: 14px;
+  }
+
+  .totalCount,
+  .totalCount span {
+    font-size: 18px;
+  }
+
+  .select {
+    font-size: 14px;
+    padding: 8px 35px 8px 12px;
+    height: 40px;
+  }
+}
+
+/*
+ * 소속 필터. 관리자만 본다.
+ *
+ * 배정 분류('파라인슈1')가 아니라 조직('파라인슈')으로 묶는다 — 사람이 속한
+ * 단위가 조직이라, 분류로 나누면 같은 지사 사람이 자기 건을 두 군데서 찾게 된다.
+ * 값은 파일 다운로드 화면의 것을 그대로 쓴다.
+ */
+.departmentsFilter {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.departmentBtn {
+  padding: 8px 28px;
+  border: 1px solid #e0e0e0;
+  border-radius: 100px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.departmentBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.departmentBtn.active {
+  background: #db1a62;
+  color: white;
+  border-color: #db1a62;
+}

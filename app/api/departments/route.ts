@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
+import { getUndeletableReason } from '@/lib/departments';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -136,6 +137,19 @@ export async function DELETE(request: NextRequest) {
         { error: '관리자 소속은 삭제할 수 없습니다. 업로드한 원본 파일이 이 소속에 들어갑니다.' },
         { status: 400 }
       );
+    }
+
+    // 쪼개진 조직의 하위 분류(파라인슈1·파라인슈2)는 혼자 지울 수 없다.
+    // 사용자는 조직에 속하고 파일은 분류에 속해서, 하나만 지우면 사용자는
+    // 그대로인데 파일만 갈 곳을 잃는다. 화면에서 버튼을 감추는 것만으로는
+    // API를 직접 부르는 걸 막지 못한다.
+    const { data: allDepts } = await supabase
+      .from('departments')
+      .select('id, name, group_name');
+
+    const undeletable = getUndeletableReason(allDepts ?? undefined, deptToDelete.name);
+    if (undeletable) {
+      return NextResponse.json({ error: undeletable }, { status: 400 });
     }
 
     // checkOnly면 소속을 옮겨야 하는 대상 수만 반환한다.

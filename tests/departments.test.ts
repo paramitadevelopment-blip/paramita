@@ -4,6 +4,7 @@ import {
   toAssignableDepartmentGroups,
   getSubDepartments,
   isAssignableGroup,
+  getUndeletableReason,
 } from '@/lib/departments';
 import { parsePagination } from '@/lib/pagination';
 
@@ -92,6 +93,62 @@ describe('사람에게 배정 가능한 소속', () => {
     const all = toDepartmentGroups(DEPARTMENTS);
     const assignable = toAssignableDepartmentGroups(DEPARTMENTS);
     expect(all.filter((g) => g !== '이외지역')).toEqual(assignable);
+  });
+});
+
+/**
+ * 쪼개진 조직의 하위 분류는 혼자 지울 수 없다.
+ *
+ * 사용자는 조직('파라인슈')에 속하고 파일은 분류('파라인슈1')에 속한다.
+ * 하나만 지우면 사용자는 그대로인데 파일만 갈 곳을 잃는다. 그 상태를 화면이
+ * "0명의 사용자를 옮깁니다"로 안내해, 실제로 2명이 있는데도 0명처럼 보였다.
+ */
+describe('지울 수 없는 소속', () => {
+  it('파라인슈1·파라인슈2는 막힌다', () => {
+    expect(getUndeletableReason(DEPARTMENTS, '파라인슈1')).toBeTruthy();
+    expect(getUndeletableReason(DEPARTMENTS, '파라인슈2')).toBeTruthy();
+  });
+
+  it('왜 못 지우는지 알려준다 — 회색 버튼만 있으면 고장으로 읽힌다', () => {
+    const reason = getUndeletableReason(DEPARTMENTS, '파라인슈1')!;
+    expect(reason).toContain('파라인슈');
+    expect(reason).toContain('2개');
+  });
+
+  it('쪼개지지 않은 소속은 그대로 지워진다', () => {
+    for (const name of ['경기', '굿모닝제너럴', '한울부원', '이외지역']) {
+      expect(getUndeletableReason(DEPARTMENTS, name)).toBeNull();
+    }
+  });
+
+  it('셋으로 쪼개져도 막는다', () => {
+    const three = [...DEPARTMENTS, { id: 33, name: '파라인슈3', group_name: '파라인슈' }];
+    expect(getUndeletableReason(three, '파라인슈3')).toContain('3개');
+  });
+
+  it('형제가 사라져 혼자 남으면 지울 수 있다', () => {
+    // 더 이상 쪼개진 게 아니므로, 사용자를 옮기는 기존 흐름이 정상 동작한다
+    const alone = DEPARTMENTS.filter((d) => d.name !== '파라인슈2');
+    expect(getUndeletableReason(alone, '파라인슈1')).toBeNull();
+  });
+
+  it('없는 소속이면 막지 않는다 — 다른 곳에서 404로 걸러진다', () => {
+    expect(getUndeletableReason(DEPARTMENTS, '없는소속')).toBeNull();
+  });
+
+  it('목록이 비어도 터지지 않는다', () => {
+    expect(getUndeletableReason(undefined, '파라인슈1')).toBeNull();
+    expect(getUndeletableReason([], '파라인슈1')).toBeNull();
+  });
+
+  /**
+   * 화면이 "쪼개져 있다"고 보여주는 조직과 삭제를 막는 조직이 갈리면,
+   * 하위 분류를 그려놓고 삭제는 열어주는 모순이 생긴다.
+   */
+  it('하위 분류를 내놓는 조직의 분류는 전부 막힌다', () => {
+    for (const name of getSubDepartments(DEPARTMENTS, '파라인슈')) {
+      expect(getUndeletableReason(DEPARTMENTS, name)).toBeTruthy();
+    }
   });
 });
 

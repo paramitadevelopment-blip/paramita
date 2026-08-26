@@ -3,7 +3,6 @@ import { getUserFromRequest } from '@/lib/jwt';
 import { createClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { parsePagination } from '@/lib/pagination';
-import { ASSIGNED_BY_COLUMN } from '@/lib/insurance';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -137,24 +136,29 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
-    // 검색: 파일명 또는 file_content에서 검색
+    // 검색 대상.
+    //
+    // 엑셀 내용은 관리자만 검색한다. 비관리자는 파일명까지다.
+    //
+    // 응답에 내용을 실어 보내지는 않지만, 걸리느냐 안 걸리느냐로 "그 값이 이 파일에
+    // 있다"는 사실이 새어 나간다. 고객명을 넣어보면 다운로드하지 않고도 그 고객이
+    // 자기 소속 파일에 있는지 알 수 있다. 다운로드는 1회로 묶여 있고 기록도 남는데
+    // 검색은 둘 다 거치지 않으므로, 열어두면 그 장치들이 무의미해진다.
     let files = allFiles || [];
     if (search) {
       const searchLower = search.toLowerCase();
-      files = files.filter((file) => {
-        // 파일명 검색
-        if (file.name.toLowerCase().includes(searchLower)) return true;
+      const searchContent = user.role === 'admin';
 
-        // file_content 검색
+      files = files.filter((file) => {
+        if (file.name.toLowerCase().includes(searchLower)) return true;
+        if (!searchContent) return false;
+
         if (!Array.isArray(file.file_content)) return false;
         return file.file_content.some((row: any) => {
           if (typeof row !== 'object' || row === null) return false;
-          return Object.entries(row).some(([key, value]) => {
-            // 배정방식은 관리자만 볼 수 있는 값이다. 검색까지 열어두면
-            // 파일을 열면 안 보이는 정보를 검색으로는 알아낼 수 있게 된다.
-            if (key === ASSIGNED_BY_COLUMN && user.role !== 'admin') return false;
-            return String(value || '').toLowerCase().includes(searchLower);
-          });
+          return Object.values(row).some((value) =>
+            String(value || '').toLowerCase().includes(searchLower)
+          );
         });
       });
     }

@@ -8,7 +8,6 @@ import {
   type SelectableRegion,
   isExcludedColumn,
   dedupeByOrderNumber,
-  dedupeByCustomerKey,
   findRequiredColumns,
   getMissingColumnLabels,
   getInsurerTypeFromRows,
@@ -22,9 +21,31 @@ import {
   ASSIGNED_DEPT_COLUMN,
   ASSIGNED_AT_COLUMN,
   DUPLICATE_REASON_COLUMN,
+  DUP_ORDER_SHEET,
+  DUP_ORDER_REASON,
+  DUP_CUSTOMER_SHEET,
+  DUP_CUSTOMER_REASON,
+  DUP_CROSS_PHONE_SHEET,
+  DUP_CROSS_PHONE_REASON,
+  INSURER_KIND_COLUMN,
+  formatInsurerKind,
   formatAssignedAt,
+  HISTORY_DUP_DAYS,
+  BLACKLIST_DAYS,
+  BLACKLIST_SHEET,
+  BLACKLIST_REASON_LISTED,
+  BLACKLIST_REASON_NEW,
+  normalizeBirth,
 } from '@/lib/insurance';
-import { formatCellValue, fitColumnWidths } from '@/lib/excelCell';
+import { formatCellValue, fitColumnWidths, isBlankRow } from '@/lib/excelCell';
+import { parseDateCell } from '@/lib/parseDateCell';
+import { normalizeSheet } from '@/lib/columnAliases';
+import { dedupeAgainstHistory } from '@/lib/historyDedupe';
+import { resolveAddresses } from '@/lib/addressFix';
+import { loadRecentKeys, withinDays, toDedupeKeys, toBlacklistKeys } from '@/lib/historyLookup';
+import { splitAlreadyListed, splitOverThreshold } from '@/lib/blacklist';
+import { loadBlacklist, registerBlacklist, type BlacklistEntry } from '@/lib/blacklistStore';
+import { recordReapplyNotices, type ReapplyCandidate } from '@/lib/reapplyStore';
 import * as XLSX from 'xlsx';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -107,6 +128,22 @@ export async function POST(request: NextRequest) {
     // 상담메모 규칙의 "오늘". 파일마다 다시 재면 처리 도중 11시를 넘길 때 갈린다.
     const deployedAt = new Date();
 
+    // 지난 30일치 과거 기록. 파일마다 다시 읽으면 같은 것을 여러 번 퍼 올리므로
+    // 루프 밖에서 한 번만 읽는다. 이번에 올린 파일들은 뺀다 — 자기 자신과
+    // 비교하면 모든 행이 중복이 된다.
+    let recentKeys: Awaited<ReturnType<typeof loadRecentKeys>>;
+    let blacklistKeys: Awaited<ReturnType<typeof loadBlacklist>>;
+    try {
+      recentKeys = await loadRecentKeys(supabase, deployedAt, files);
+      blacklistKeys = await loadBlacklist(supabase);
+    } catch (historyError) {
+      console.error('Failed to load recent records:', historyError);
+      return NextResponse.json(
+        { error: '최근 기록이나 블랙리스트를 읽지 못해 걸러낼 수 없습니다. 잠시 후 다시 시도해주세요.' },
+        { status: 500 }
+      );
+    }
+
     // 병렬: 모든 파일 정보 조회
     const fileDataResults = await Promise.all(
       files.map((fileId) =>
@@ -132,6 +169,17 @@ export async function POST(request: NextRequest) {
     }
 
     // 각 파일 처리
+    // 배포할 게 하나도 안 나왔을 때 왜인지 알려주려고 모아 둔다.
+    // 'No files to deploy'만 보면 원인이 중복인지 오류인지 알 수 없다.
+    // 이번 배포에서 새로 명단에 올릴 사람들. 배포가 다 끝난 뒤에 한 번에 넣는다 —
+    // 중간에 실패하면 배정도 안 됐는데 명단만 남는다.
+    const pendingBlacklist: BlacklistEntry[] = [];
+    // 배정에서 빠진 건을 직전에 받았던 지사에게 알린다. 배포가 끝난 뒤 한 번에 넣는다.
+    const pendingReapply: ReapplyCandidate[] = [];
+
+    let totalRowsSeen = 0;
+    let totalDupRemoved = 0;
+
     for (let fileIdx = 0; fileIdx < originalFiles.length; fileIdx++) {
       // 위에서 null을 걸러낸 목록을 쓴다. fileDataResults는 아직 검사 전이라
       // 타입상 null이 섞여 있다.
@@ -175,10 +223,19 @@ export async function POST(request: NextRequest) {
         if (!headerIsEmpty || !allCellsEmpty) validColIndices.push(i);
       }
 
-      const headerRow = validColIndices.map((i) => allHeaders[i]);
-      const dataRows = allRows
+      const rawHeaderRow = validColIndices.map((i) => allHeaders[i]);
+      const rawDataRows = allRows
         .map((row) => validColIndices.map((i) => row?.[i] ?? ''))
-        .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''));
+        .filter((row) => !isBlankRow(row));
+
+      // 거래처 양식이 두 가지다. 신규 양식이면 여기서 기존 컬럼 이름으로 바꿔놓아
+      // 아래 로직이 양식을 몰라도 되게 한다. 기존 양식이면 그대로 지나간다.
+      // classify도 같은 함수를 같은 자리에서 부른다 — 다르면 미리보기와 실제가 갈린다.
+      const {
+        headers: headerRow,
+        rows: dataRows,
+        converted: isNewFormatFile,
+      } = normalizeSheet(rawHeaderRow, rawDataRows, deployedAt);
 
       // 필수 컬럼 찾기 — classify와 반드시 같은 규칙을 써야 하므로 공용 함수를 쓴다.
       const cols = findRequiredColumns(headerRow);
@@ -199,8 +256,15 @@ export async function POST(request: NextRequest) {
       const nameIdx = headerRow.indexOf(cols.nameCol!);
       const phoneIdx = headerRow.indexOf(cols.phoneCol!);
       const productIdx = headerRow.indexOf(cols.productCol!);
+      // Tel1은 필수 컬럼이 아니다(중복 판정 기준은 Tel2). 없으면 -1이고,
+      // 그때는 번호가 하나뿐인 것으로 보아 '번호가 같은' 갈래를 탄다.
+      const tel1Idx = headerRow.indexOf('Tel1');
+      // 우편번호는 필수 컬럼이 아니다. 없으면 -1이고, 그때는 주소 오타를 못 고친다.
+      const zipIdx = headerRow.indexOf('우편번호');
       // 상담메모는 없는 파일도 있다. 없으면 -1.
       const memoIdx = cols.memoCol ? headerRow.indexOf(cols.memoCol) : -1;
+      // 접수일자는 필수 컬럼이 아니다. 없으면 -1이고, 그때는 배포 시각으로 물러선다.
+      const receiptIdx = headerRow.indexOf('접수일자');
       // 규칙이 꺼졌거나 상담메모 열이 없으면 undefined — assignRow가 규칙을 건너뛴다.
       // 엑셀 날짜 칸은 Date로 들어오므로 formatCellValue를 거친다. 그대로 넘기면
       // 1899년 타임존 오차로 하루 밀린다.
@@ -208,18 +272,75 @@ export async function POST(request: NextRequest) {
         memoRuleOn && memoIdx >= 0
           ? { memo: formatCellValue(row[memoIdx] ?? ''), now: deployedAt }
           : undefined;
+      // 이 행이 어느 사람인지. 블랙리스트 판정 두 곳이 같은 값을 봐야 한다.
+      const toBlKey = (row: any[]) => ({
+        product: String(row[productIdx] ?? ''),
+        birth: normalizeBirth(String(row[juminIdx] ?? '')),
+        tel1: tel1Idx >= 0 ? String(row[tel1Idx] ?? '') : '',
+        tel2: String(row[phoneIdx] ?? ''),
+      });
 
-      // 중복 제거 (분류보다 먼저) — classify와 같은 순서, 같은 기준
+      // 1) 주문번호 중복을 먼저 정리한다. 같은 주문번호는 엑셀에 같은 줄이 두 번
+      //    들어간 것이지 두 번 신청한 게 아니다. 이걸 안 빼면 신청 횟수가 부풀려져
+      //    멀쩡한 사람이 영구 차단된다.
       const { items: dedupedByOrder, removed: removedByOrder } = dedupeByOrderNumber(
         dataRows,
         (row) => row[orderIdx]
       );
-      const { items: dedupedRows, removed: removedByCustomer } = dedupeByCustomerKey(
+
+      // 2) 이미 명단에 오른 사람. 30일 중복보다 먼저 봐야 사유가 정확히 남는다.
+      const { items: notListedRows, registered: blacklistListed } = splitAlreadyListed(
         dedupedByOrder,
-        (row) => row[nameIdx],
-        (row) => row[phoneIdx],
-        (row) => row[productIdx]
+        toBlKey,
+        blacklistKeys
       );
+
+      // 3) 60일 안에 3회 이상 신청했는지. 원천 내역을 기준으로 센다 —
+      //    30일 중복으로 빠질 건도 신청은 있었던 일이라 여기서 먼저 센다.
+      //    중복을 걷어낸 뒤에 세면 2번째부터 30일 중복이 다 걷어가 3회에 도달하지 못한다.
+      const { items: notBlacklisted, newlyHit: blacklistNew } = splitOverThreshold(
+        notListedRows,
+        toBlKey,
+        toBlacklistKeys(withinDays(recentKeys, deployedAt, BLACKLIST_DAYS))
+      );
+      // 지난 30일에 이미 들어온 사람인지 대조한다. 파일 안이 아니라 과거와 비교하므로
+      // 여기서만 DB를 읽는다. 두 갈래로 나뉘어 시트도 둘로 갈린다.
+      // 4) 지난 30일 대조
+      const { items: assignableRows, removedSamePhone, removedCrossPhone } =
+        dedupeAgainstHistory(
+          notBlacklisted,
+          (row) => ({
+            name: String(row[nameIdx] ?? ''),
+            tel1: tel1Idx >= 0 ? String(row[tel1Idx] ?? '') : '',
+            tel2: String(row[phoneIdx] ?? ''),
+            birth: String(row[juminIdx] ?? ''),
+          }),
+          toDedupeKeys(withinDays(recentKeys, deployedAt, HISTORY_DUP_DAYS))
+        );
+
+      // 보험사 판정 — 배정 규칙이 갈리므로 분류보다 먼저 정해야 한다.
+      // 열을 거르기 전 원본 행에서 보므로 productIdx를 그대로 쓴다.
+      // 보험사는 과거 중복을 걷어내기 "전"의 행으로 판정한다.
+      // 걷어낸 뒤 행이 하나도 안 남으면 판정할 근거가 사라져,
+      // 정작 문제는 "전부 중복"인데 "보험사를 못 가리겠다"는 엉뚱한 오류가 나간다.
+      const insurerType = getInsurerTypeFromRows(dedupedByOrder, productIdx);
+
+      if (!insurerType) {
+        return NextResponse.json(
+          {
+            error: `${originalFile.name}: 상품명에서 보험사(동양/흥국)를 가릴 수 없습니다. 한 파일에 두 보험사가 섞여 있는지 확인해주세요.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      // 보험사구분을 열로 붙인다. 여기 한 번만 끼우면 아래가 전부 따라온다 —
+      // 업체가 받는 배포 파일, 중복 시트, 원본·배포본의 DB 내용, 통합 검색.
+      // 각 행 배열은 dedupedRows·removedBy*와 같은 참조라 여기서 넣으면 다 반영된다.
+      // 맨 뒤에 붙이므로 위에서 구한 열 위치(orderIdx 등)는 그대로 유효하다.
+      const insurerKind = formatInsurerKind(insurerType, isNewFormatFile);
+      headerRow.push(INSURER_KIND_COLUMN);
+      for (const row of dataRows) row.push(insurerKind);
 
       // 업체에 넘기지 않을 열을 빼고 남길 열 위치만 추린다.
       const keptIdx = headerRow
@@ -230,30 +351,49 @@ export async function POST(request: NextRequest) {
 
       // 중복 시트에 넣을 행. 왜 빠졌는지 알아야 사람이 검증할 수 있으므로
       // 사유를 맨 앞 열에 따로 붙인다. 값에 섞으면 그 열을 다시 쓸 수 없다.
-      const duplicateRows = [
-        ...removedByOrder.map((row) => ['주문번호 중복', ...keptIdx.map((idx) => row[idx] ?? '')]),
-        ...removedByCustomer.map((row) => [
-          '고객 중복 (tel2+고객명+상품명)',
-          ...keptIdx.map((idx) => row[idx] ?? ''),
-        ]),
+      //
+      // 규칙이 다르면 시트도 나눈다 — 한데 섞으면 규칙 하나만 검토하려 할 때
+      // 사유 열로 일일이 골라내야 한다.
+      const toDupRow = (reason: string) => (row: any[]) =>
+        [reason, ...keptIdx.map((idx) => row[idx] ?? '')];
+
+      totalRowsSeen += dataRows.length;
+      totalDupRemoved +=
+        removedByOrder.length + removedSamePhone.length + removedCrossPhone.length;
+
+      const dupOrderRows = removedByOrder.map(toDupRow(DUP_ORDER_REASON));
+      const dupSamePhoneRows = removedSamePhone.map(toDupRow(DUP_CUSTOMER_REASON));
+      const dupCrossPhoneRows = removedCrossPhone.map(toDupRow(DUP_CROSS_PHONE_REASON));
+
+      // 블랙리스트 시트. 이번에 걸린 것과 예전에 걸려 계속 막히는 것을 사유로 나눈다.
+      const blacklistRows = [
+        ...blacklistListed.map(toDupRow(BLACKLIST_REASON_LISTED)),
+        ...blacklistNew.map(({ item, count }) =>
+          toDupRow(`${BLACKLIST_REASON_NEW} (${count}회)`)(item)
+        ),
       ];
 
       // 분류 결과 시트에서 중복 행을 가려내기 위한 집합.
       // dataRows의 각 행은 고유한 배열 객체라 참조로 비교해도 안전하다.
-      const duplicateSet = new Set<any[]>([...removedByOrder, ...removedByCustomer]);
+      const duplicateSet = new Set<any[]>([
+        ...removedByOrder,
+        ...removedSamePhone,
+        ...removedCrossPhone,
+      ]);
 
-      // 보험사 판정 — 배정 규칙이 갈리므로 분류보다 먼저 정해야 한다.
-      // 열을 거르기 전 원본 행에서 보므로 productIdx를 그대로 쓴다.
-      const insurerType = getInsurerTypeFromRows(dedupedRows, productIdx);
-
-      if (!insurerType) {
-        return NextResponse.json(
-          {
-            error: `${originalFile.name}: 상품명에서 보험사(동양/흥국)를 가릴 수 없습니다. 한 파일에 두 보험사가 섞여 있는지 확인해주세요.`,
-          },
-          { status: 400 }
-        );
-      }
+      // 시·도를 못 읽는 주소를 우편번호로 되찾는다. 거래처가 '경냄' 같은 오타를
+      // 보내면 전부 '이외지역'으로 빠지는데, 우편번호는 대개 멀쩡하다.
+      // 원본 주소는 그대로 두고 판정에 쓸 값만 따로 만든다 — 파일에는 사람이 올린
+      // 값이 남아야 대조할 수 있다.
+      const addressForAssign = await resolveAddresses(
+        dataRows.map((row) => ({
+          address: row[addressIdx],
+          zip: zipIdx >= 0 ? row[zipIdx] : '',
+        })),
+        process.env.ZIPCODE_API_KEY ?? ''
+      );
+      const addressAt = new Map<any[], unknown>();
+      dataRows.forEach((row, i) => addressAt.set(row, addressForAssign[i]));
 
       // 행별 분류 → 분류명 기준으로 행 묶기 (서버에서 재계산, 클라이언트 값 신뢰 안 함)
       // 분류 결과 시트는 중복이 제거된 행만 담는다.
@@ -270,9 +410,9 @@ export async function POST(request: NextRequest) {
       // 주문번호가 없는 행. 분류 화면에서도 막지만 그건 UX일 뿐이라 여기서 다시 본다.
       const missingOrderRows: number[] = [];
 
-      // 중복이 제거된 행만 순회 (dedupedRows)
-      for (let dedupedIndex = 0; dedupedIndex < dedupedRows.length; dedupedIndex++) {
-        const row = dedupedRows[dedupedIndex];
+      // 중복과 블랙리스트를 걷어낸 행만 순회한다
+      for (let dedupedIndex = 0; dedupedIndex < assignableRows.length; dedupedIndex++) {
+        const row = assignableRows[dedupedIndex];
         const keptRow = keptIdx.map((idx) => row[idx] ?? '');
 
         // 주문번호가 없으면 이 건을 가리킬 방법이 없다. 아래에서 한꺼번에 막는다.
@@ -282,7 +422,12 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const assigned = assignRow(insurerType, row[juminIdx], row[addressIdx], memoRuleFor(row));
+        const assigned = assignRow(
+          insurerType,
+          row[juminIdx],
+          addressAt.get(row) ?? row[addressIdx],
+          memoRuleFor(row)
+        );
 
         let category: string;
         // 규칙이 정했는지 사람이 골랐는지. 배포하고 나면 소속만 남아
@@ -333,8 +478,9 @@ export async function POST(request: NextRequest) {
       // "그 건은 중복이라 빠졌다"고 답할 수 있어야 하고, 검색에도 걸려야 한다.
       // 파일의 중복 시트와 같은 내용이다.
       for (const [reason, removed] of [
-        ['주문번호 중복', removedByOrder],
-        ['고객 중복 (tel2+고객명+상품명)', removedByCustomer],
+        [DUP_ORDER_REASON, removedByOrder],
+        [DUP_CUSTOMER_REASON, removedSamePhone],
+        [DUP_CROSS_PHONE_REASON, removedCrossPhone],
       ] as const) {
         for (const row of removed) {
           const contentRow: any = {
@@ -350,6 +496,72 @@ export async function POST(request: NextRequest) {
           originalContent.push(contentRow);
         }
       }
+
+      // 블랙리스트로 빠진 행도 같은 방식으로 담는다. 고객 문의가 오면
+      // "여러 번 신청해서 배정에서 빠졌다"고 답할 수 있어야 한다.
+      for (const [reason, rows] of [
+        [BLACKLIST_REASON_LISTED, blacklistListed],
+        [BLACKLIST_REASON_NEW, blacklistNew.map((h) => h.item)],
+      ] as const) {
+        for (const row of rows) {
+          const contentRow: any = {
+            [ROW_NO_COLUMN]: '',
+            [ASSIGNED_DEPT_COLUMN]: BLACKLIST_SHEET,
+            [ASSIGNED_BY_COLUMN]: '',
+            [DUPLICATE_REASON_COLUMN]: reason,
+          };
+          headerRow.forEach((header, i) => {
+            contentRow[header] = formatCellValue(row[i] ?? '');
+          });
+          contentRow[ASSIGNED_AT_COLUMN] = formatAssignedAt(deployedAt);
+          originalContent.push(contentRow);
+        }
+      }
+
+      // 이번에 걸린 사람을 명단에 올린다. 미리보기에서는 하지 않는다 —
+      // 올려보기만 하고 배포를 안 했는데 영구 차단되면 안 된다.
+      for (const { item, count } of blacklistNew) {
+        pendingBlacklist.push({
+          product: String(item[productIdx] ?? ''),
+          birth: String(item[juminIdx] ?? ''),
+          tel1: tel1Idx >= 0 ? String(item[tel1Idx] ?? '') : '',
+          tel2: String(item[phoneIdx] ?? ''),
+          customerName: String(item[nameIdx] ?? ''),
+          reason: BLACKLIST_REASON_NEW,
+          count,
+          sourceFileId: originalFiles[fileIdx].id,
+          sourceFileName: originalFile.name,
+        });
+      }
+
+      /*
+       * 배정에서 빠진 건을 알림 후보로 모은다.
+       *
+       * 주문번호 중복(중복1)은 넣지 않는다 — 같은 줄이 두 번 들어온 것이지
+       * 다시 신청한 게 아니다. 30일 중복과 블랙리스트만 담는다.
+       */
+      const toReapply = (reason: string) => (item: any[]): ReapplyCandidate => ({
+        customerName: String(item[nameIdx] ?? ''),
+        birth: String(item[juminIdx] ?? ''),
+        tel1: tel1Idx >= 0 ? String(item[tel1Idx] ?? '') : '',
+        tel2: String(item[phoneIdx] ?? ''),
+        product: String(item[productIdx] ?? ''),
+        reason,
+        orderNo: String(item[orderIdx] ?? ''),
+        sourceFileId: originalFiles[fileIdx].id,
+        sourceFileName: originalFile.name,
+        // 고객이 실제로 신청한 날. 우리가 배포한 날이 아니다.
+        receivedAt: receiptIdx >= 0 ? parseDateCell(item[receiptIdx]) : null,
+      });
+
+      pendingReapply.push(
+        ...removedSamePhone.map(toReapply(DUP_CUSTOMER_REASON)),
+        ...removedCrossPhone.map(toReapply(DUP_CROSS_PHONE_REASON)),
+        ...blacklistListed.map(toReapply(BLACKLIST_REASON_LISTED)),
+        ...blacklistNew.map(({ item, count }) =>
+          toReapply(`${BLACKLIST_REASON_NEW} (${count}회)`)(item)
+        )
+      );
 
       // 주문번호가 없는 행이 있으면 배포를 막는다. 내보낸 뒤에는 되짚을 수 없다.
       if (missingOrderRows.length > 0) {
@@ -372,12 +584,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 원본파일을 시트 3장으로 다시 저장한다.
-      //   Sheet1 = 업로드한 원본 그대로
-      //   Sheet2 = 번호 + 배정소속이 붙은 가공본
-      //   Sheet3 = 중복으로 제외된 행 (사유 포함)
-      // 중복 시트는 제외된 행이 없어도 헤더만 넣어 항상 만든다. 시트 구성이 파일마다
-      // 달라지면 받는 쪽에서 "없는 건지 안 만든 건지" 구분이 안 된다.
+      // 원본파일을 시트 4장으로 다시 저장한다.
+      //   원본     = 업로드한 파일 그대로
+      //   분류 결과 = 번호 + 배정소속이 붙은 가공본
+      //   중복1    = 주문번호가 같아 빠진 행
+      //   중복2    = 30일 내 이름+전화가 같아 빠진 행
+      //   중복3    = 30일 내 이름+생년월일+번호가 겹쳐 빠진 행
+      //   블랙리스트 = 60일 내 3회 이상 신청해 지사 배정에서 뺀 행
+      // 시트 구성이 파일마다 달라지면 받는 쪽에서 "없는 건지 안 만든 건지"
+      // 구분이 안 되므로, 빠진 행이 없어도 시트는 항상 만든다.
       const xlsxMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       const rebuiltWorkbook = XLSX.utils.book_new();
 
@@ -394,12 +609,21 @@ export async function POST(request: NextRequest) {
         toSheet([['번호', '배정소속', '배정방식', ...keptHeader], ...processedRows]),
         '분류 결과'
       );
-      // 중복 시트. 사유 열 + 배포용 열. 헤더와 데이터의 열 개수가 반드시 같아야 한다.
-      XLSX.utils.book_append_sheet(
-        rebuiltWorkbook,
-        toSheet([['중복사유', ...keptHeader], ...duplicateRows]),
-        '중복'
-      );
+      // 중복 시트 두 장. 사유 열 + 배포용 열. 헤더와 데이터의 열 개수가 반드시 같아야 한다.
+      // 빠진 행이 없어도 헤더만 넣어 항상 만든다 — 시트가 없으면 받는 쪽에서
+      // "중복이 없는 건지 안 만든 건지" 구분이 안 된다.
+      for (const [sheetName, rows] of [
+        [DUP_ORDER_SHEET, dupOrderRows],
+        [DUP_CUSTOMER_SHEET, dupSamePhoneRows],
+        [DUP_CROSS_PHONE_SHEET, dupCrossPhoneRows],
+        [BLACKLIST_SHEET, blacklistRows],
+      ] as const) {
+        XLSX.utils.book_append_sheet(
+          rebuiltWorkbook,
+          toSheet([[DUPLICATE_REASON_COLUMN, ...keptHeader], ...rows]),
+          sheetName
+        );
+      }
 
       const rebuiltBuffer: Buffer = XLSX.write(rebuiltWorkbook, {
         type: 'buffer',
@@ -530,7 +754,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (fileRecords.length === 0) {
-      return NextResponse.json({ error: 'No files to deploy' }, { status: 400 });
+      // 중복으로 다 빠진 것과 애초에 배정될 게 없던 것은 원인이 다르다.
+      // 같은 문구로 뭉뚱그리면 사람이 무엇을 고쳐야 할지 알 수 없다.
+      const message =
+        totalDupRemoved > 0 && totalDupRemoved === totalRowsSeen
+          ? `배포할 행이 없습니다. ${totalRowsSeen}건이 모두 중복으로 제외되었습니다. (최근 ${HISTORY_DUP_DAYS}일 안에 이미 올라온 건이거나 파일 안에서 겹칩니다)`
+          : totalDupRemoved > 0
+            ? `배포할 행이 없습니다. ${totalRowsSeen}건 중 ${totalDupRemoved}건이 중복으로 빠졌고, 남은 행은 어느 소속에도 배정되지 않았습니다.`
+            : '배포할 행이 없습니다. 배정된 건이 하나도 없습니다.';
+
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
     // 배포된 파일들을 DB에 저장
@@ -546,10 +779,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save deployed files' }, { status: 500 });
     }
 
+    // 배포가 다 끝난 뒤에 명단에 올린다. 중간에 실패하면 배정도 안 됐는데
+    // 명단만 남아 영구히 막히는 사람이 생긴다.
+    // 실패해도 배포는 되돌리지 않는다 — 이번 건은 이미 빠졌고, 다음에 다시 걸린다.
+    const blacklistedCount = await registerBlacklist(supabase, pendingBlacklist);
+
+    /*
+     * 재신청 알림을 쌓는다.
+     *
+     * 직전에 받았던 지사를 찾을 때는 매칭된 그 행이 아니라, 그 사람의 과거 기록 중
+     * 실제로 배정된 가장 최근 건을 본다. 매칭된 행이 자기도 '중복 제외'였으면
+     * 알려줄 지사가 없기 때문이다.
+     *
+     * 파일에는 배정 분류('파라인슈1')로 적히는데 사용자 소속은 조직명('파라인슈')이라
+     * 여기서 한 번 바꿔 둔다.
+     */
+    const { data: deptRows } = await supabase.from('departments').select('name, group_name');
+    const groupByDept = new Map<string, string>(
+      (deptRows ?? []).map((d: any) => [String(d.name), String(d.group_name)])
+    );
+
+    const reapplyResult = await recordReapplyNotices(
+      supabase,
+      pendingReapply,
+      recentKeys,
+      (dept) => groupByDept.get(dept) ?? null,
+      deployedAt
+    );
+
     return NextResponse.json({
       success: true,
       message: 'Files deployed successfully to all departments',
       deployedCount: fileRecords.length,
+      // 걸린 행 수가 아니라 명단에 오른 사람 수다. 한 사람이 3번 걸려도 1명이다.
+      blacklistedCount,
     });
   } catch (error) {
     console.error('File deployment error:', error);

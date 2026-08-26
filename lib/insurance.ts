@@ -121,6 +121,10 @@ export function normalizeOrderKey(value: unknown): string {
 
 /**
  * 주문번호 기준 중복 제거 (VBA RemoveDuplicatesByOrderNum과 동일한 규칙)
+ *
+ * 주문번호는 이 건을 가리키는 유일한 식별자다. 같은 번호가 두 번 오면
+ * 같은 건이 두 번 들어온 것으로 본다.
+ *
  * - 먼저 나온 행을 남기고 이후 중복은 버린다
  * - 주문번호가 비어 있으면 중복 판정 없이 살린다
  * - 대소문자는 구분하지 않는다 (VBA vbTextCompare)
@@ -159,56 +163,22 @@ export function dedupeByOrderNumber<T>(
 }
 
 /**
- * 고객 기준 중복 제거: 전화번호(tel2) + 고객명 + 상품명
- *
- * 세 값이 모두 같아야 중복이다. 상품명이 다르면 같은 사람이라도 별개 건이다.
- *   김철수 / 01012345678 / 동양생명 실손보험  ─┐ 전부 같음 → 뒤엣것 제거
- *   김철수 / 01012345678 / 동양생명 실손보험  ─┘
- *   김철수 / 01012345678 / 동양생명 암보험   → 상품이 다름 → 유지
- *   김철수 / 01012345678 / 흥국화재 운전자   → 상품이 다름 → 유지
- *
- * 세 값 중 하나라도 비어 있으면 같은 사람인지 판단할 근거가 없으므로 살린다.
- * 조용히 지우는 것보다 중복이 한 건 남는 쪽이 낫다.
- */
-export function dedupeByCustomerKey<T>(
-  items: T[],
-  getName: (item: T) => unknown,
-  getPhone: (item: T) => unknown,
-  getProduct: (item: T) => unknown
-): { items: T[]; removed: T[]; removedCount: number } {
-  const seen = new Set<string>();
-  const result: T[] = [];
-  const removed: T[] = [];
-
-  for (const item of items) {
-    const name = String(getName(item) ?? '').trim().toLowerCase();
-    const phone = normalizePhone(getPhone(item));
-    const product = normalizeProductName(getProduct(item));
-
-    if (!name || !phone || !product) {
-      result.push(item);
-      continue;
-    }
-
-    const key = `${phone}|${name}|${product}`;
-
-    if (seen.has(key)) {
-      removed.push(item);
-      continue;
-    }
-
-    seen.add(key);
-    result.push(item);
-  }
-
-  return { items: result, removed, removedCount: removed.length };
-}
-
-/**
  * 배포 파일에서 제외할 컬럼
  * 업체에 넘길 필요가 없는 내부 관리용 열이다.
  */
-export const EXCLUDED_COLUMNS = ['구분', '방송사명', '주문상태', '업체명', '비고'];
+export const EXCLUDED_COLUMNS = [
+  '구분',
+  '방송사명',
+  '주문상태',
+  '업체명',
+  '비고',
+  // 신규 양식에만 있는 열. 기존 양식에 대응하는 자리가 없어 이름을 그대로 두되,
+  // 업체가 받는 파일 모양은 지금과 같아야 하므로 여기서 걸러낸다.
+  // 원본에는 남으므로 고객 문의가 오면 되짚을 수 있다.
+  '배송메세지',
+  '설치비공지',
+  '마켓팅 동의',
+];
 
 /**
  * 배포 파일에서 뺄 컬럼인지 판정
@@ -228,9 +198,8 @@ export function isExcludedColumn(header: string): boolean {
 /**
  * 상품명 정규화
  *
- * 상품명이 "완전히 같을 때"만 중복으로 본다. 보험사만 같고 상품이 다르면
- * ("동양생명 실손보험" vs "동양생명 암보험") 같은 사람이 둘 다 가입할 수 있는
- * 별개 건이므로 중복이 아니다.
+ * 상품명이 "완전히 같을 때"만 같은 상품으로 본다. 보험사만 같고 상품이 다르면
+ * ("동양생명 실손보험" vs "동양생명 암보험") 별개 건이다.
  *
  * 앞뒤 공백, 연속 공백, 대소문자만 맞춰준다. 이건 표기 흔들림이지 다른 상품이 아니다.
  */
@@ -247,6 +216,39 @@ export function normalizeProductName(value: unknown): string {
  */
 export function normalizePhone(value: unknown): string {
   return String(value ?? '').replace(/\D/g, '');
+}
+
+/**
+ * 생년월일을 YYMMDD 형식으로 정규화
+ * "1995-11-05" → "951105", "650101-1234567" → "650101", "19951105" → "951105"
+ */
+export function normalizeBirth(value: unknown): string {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+
+  const digits = text.replace(/\D/g, '');
+  if (digits.length < 6) return '';
+
+  // 주민번호 전체(13자리)면 앞 7자리가 생년월일+성별이다.
+  // 뒤에서 세면 뒷자리 끄트머리를 생년월일로 읽어 엉뚱한 값이 나온다.
+  if (digits.length >= 13) {
+    return digits.slice(0, 7);
+  }
+  // YYYYMMDD+성별(9자리)이면 뒤 7자리
+  if (digits.length === 9) {
+    return digits.slice(-7);
+  }
+  // YYYYMMDD(8자리)면 뒤 6자리 (YYMMDD)
+  if (digits.length >= 8) {
+    return digits.slice(-6);
+  }
+  // 7자리(YYMMDD성별)이면 전체 유지. 성별 코드는 같은 날 태어난 남녀를
+  // 가르는 유일한 값이라 떼어내면 다른 사람이 한 사람으로 엮인다.
+  if (digits.length === 7) {
+    return digits;
+  }
+  // 6자리 이하면 앞 6자리
+  return digits.slice(0, 6);
 }
 
 /**
@@ -523,7 +525,7 @@ function isHanulRegion(address: unknown): boolean {
 }
 
 /** 주소에서 시·도를 아예 못 읽는가 */
-function isUnreadableAddress(address: unknown): boolean {
+export function isUnreadableAddress(address: unknown): boolean {
   const first = String(address ?? '').trim().split(/[\s,]+/)[0] || '';
   if (!first) return true;
   return (
@@ -729,6 +731,61 @@ export const ROW_NO_COLUMN = '번호';
 export const ASSIGNED_DEPT_COLUMN = '배정소속';
 export const ASSIGNED_AT_COLUMN = '배정날짜';
 export const DUPLICATE_REASON_COLUMN = '중복사유';
+
+/**
+ * 중복 사유와 그 행이 들어갈 시트.
+ *
+ * 두 규칙이 서로 다른 이유로 걸러내므로 시트를 나눈다. 한 시트에 섞어두면
+ * "왜 빠졌나"를 사유 열로 일일이 짚어야 하고, 규칙 하나만 검토하고 싶을 때
+ * 걸러낼 방법이 없다.
+ *
+ * 분류(classify)와 배포(deploy)가 같은 문구를 써야 미리보기와 실제 파일이 맞는다.
+ */
+export const DUP_ORDER_SHEET = '중복1';
+export const DUP_ORDER_REASON = '주문번호 중복';
+
+export const DUP_CUSTOMER_SHEET = '중복2';
+export const DUP_CUSTOMER_REASON = '30일 내 이름+전화 중복';
+
+export const DUP_CROSS_PHONE_SHEET = '중복3';
+export const DUP_CROSS_PHONE_REASON = '30일 내 이름+생년월일+번호 중복 (Tel1·Tel2 교차)';
+
+/** 과거 몇 일치를 뒤져 볼지. 분류와 배포가 같은 범위를 봐야 결과가 갈리지 않는다. */
+export const HISTORY_DUP_DAYS = 30;
+
+/**
+ * 블랙리스트 — 짧은 기간에 여러 번 신청한 사람을 지사에 넘기지 않는다.
+ *
+ * 조건은 '60일 안에 3회 이상'이지만, 한 번 걸리면 명단에 올라 영구히 막힌다.
+ * 매번 계산만 하면 61일째에 저절로 풀려버리기 때문이다.
+ *
+ * 사유를 둘로 나눈다 — '이번에 걸린 것'과 '예전에 걸려 계속 막히는 것'은
+ * 사람이 확인할 때 의미가 다르다.
+ */
+export const BLACKLIST_SHEET = '블랙리스트';
+export const BLACKLIST_REASON_LISTED = '블랙리스트 등록됨';
+export const BLACKLIST_REASON_NEW = '60일 내 3회 이상 신청';
+export const BLACKLIST_DAYS = 60;
+export const BLACKLIST_THRESHOLD = 3;
+export const INSURER_KIND_COLUMN = '보험사구분';
+
+/**
+ * 보험사 구분 — 어느 보험사의 어느 양식으로 들어온 건인지.
+ *
+ * 보험사(동양·흥국)는 상품명으로 가리고, 숫자는 엑셀 양식으로 가린다.
+ * 거래처가 양식을 바꿔 보내기 시작하면서 같은 보험사 안에서도 열 구성이
+ * 달라졌는데, 배포하고 나면 어느 양식에서 온 건인지 알 수 없어 함께 적어 둔다.
+ *
+ * 1 = 기존 양식 (구분·방송사명·생년월일성별 …)
+ * 2 = 신규 양식 (위탁사명·관련번호·고객번호 …)
+ *
+ * 로마숫자(I·II)를 쓰면 통합검색에서 갈리지 않는다 — 검색이 부분 일치라
+ * '동양I'로 찾으면 '동양II'까지 딸려 나와 1형만 볼 방법이 없어진다.
+ * '동양1'·'동양2'는 서로를 포함하지 않아 각각 정확히 걸린다.
+ */
+export function formatInsurerKind(insurer: 'hk' | 'dy', isNewFormat: boolean): string {
+  return `${insurer === 'dy' ? '동양' : '흥국'}${isNewFormat ? '2' : '1'}`;
+}
 
 /** 배정날짜 표기. 파일과 DB가 같은 모양이어야 눈으로 대조된다. */
 export function formatAssignedAt(date: Date): string {

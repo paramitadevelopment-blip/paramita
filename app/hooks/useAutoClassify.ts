@@ -29,6 +29,9 @@ export interface ClassifiedFile {
   /** 중복 시트의 헤더 (중복사유 + 원본 열) */
   duplicateHeaders: string[];
   rowsByDeptId: Record<number, any[][]>;
+  /** 올린 파일의 헤더 그대로. 변환·열거르기 전이라 previewHeaders와 다를 수 있다 */
+  originalHeaders: string[];
+  /** 올린 파일의 행 그대로. 중복도 아직 들어 있다 */
   originalRows: any[][];
   /** 분류 결과 시트 (번호, 배정소속, ...) */
   processedRows: any[][];

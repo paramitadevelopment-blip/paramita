@@ -10,6 +10,7 @@ import DownloadFilesSection from './components/DownloadFilesSection';
 import DownloadLogsSection from './components/DownloadLogsSection';
 import DownloadRequestsSection from './components/DownloadRequestsSection';
 import DeletionHistorySection from './components/DeletionHistorySection';
+import BlacklistSection from './components/BlacklistSection';
 import styles from './page.module.css';
 
 function SearchPage() {
@@ -104,6 +105,7 @@ function SearchPage() {
                 onPreview={handlePreview}
                 formatDateTime={formatDateTime}
               />
+              <BlacklistSection searchQuery={searchQuery} formatDateTime={formatDateTime} />
             </div>
           )}
 

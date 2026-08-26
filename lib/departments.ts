@@ -56,6 +56,39 @@ export function toAssignableDepartmentGroups(
 }
 
 /**
+ * 지울 수 없는 소속인지. 지울 수 없으면 이유를 주고, 지울 수 있으면 null을 준다.
+ *
+ * 쪼개진 조직의 하위 분류(파라인슈1·파라인슈2)는 혼자 지울 수 없다.
+ * 사용자는 조직('파라인슈')에 속하고 파일은 분류('파라인슈1')에 속해서,
+ * 하나만 지우면 사용자는 그대로인데 파일만 갈 곳을 잃는다. 그 상태를 화면이
+ * "0명의 사용자를 옮깁니다"로 안내해 실제로 2명이 있는데도 0명처럼 보였다.
+ *
+ * 조직을 없애려면 배정 규칙부터 바꿔야 하는 일이라 화면에서 지울 수 있게
+ * 둘 이유가 없다.
+ *
+ * @param departments 전체 소속 목록. 형제 분류가 있는지 봐야 한다.
+ */
+export function getUndeletableReason(
+  departments: DepartmentLike[] | undefined,
+  deptName: string
+): string | null {
+  if (!Array.isArray(departments)) return null;
+
+  const target = departments.find((d) => d.name === deptName);
+  if (!target) return null;
+
+  const siblings = departments.filter(
+    (d) => d.group_name === target.group_name && d.name !== target.name
+  );
+
+  if (siblings.length > 0) {
+    return `'${target.group_name}'은(는) ${siblings.length + 1}개 분류로 나뉘어 있어 하나만 삭제할 수 없습니다.`;
+  }
+
+  return null;
+}
+
+/**
  * 한 조직이 쪼개져 있을 때 그 하위 분류들을 준다.
  * 쪼개지지 않은 조직(하위가 1개)은 보여줄 게 없으므로 빈 배열을 준다.
  */

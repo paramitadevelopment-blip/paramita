@@ -1,0 +1,1156 @@
+.container {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 120px;
+  gap: 20px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+}
+
+.contentWrapper {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 40px 20px;
+  background: white;
+  overflow: visible;
+}
+
+.searchSection {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 50px;
+  margin-bottom: 40px;
+}
+
+.totalCount {
+  display: flex;
+  align-items: center;
+  height: 47px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  padding: 0;
+}
+
+.totalCount span {
+  font-size: 24px;
+  font-weight: 700;
+  color: #db1a62;
+  margin: 0 4px;
+}
+
+.controlsSection {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.select {
+  padding: 10px 40px 10px 16px;
+  height: 47px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #333;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23db1a62' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+}
+
+.select:hover {
+  border-color: #db1a62;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.bulkDeleteBtn {
+  padding: 12px 20px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bulkDeleteBtn:hover:not(:disabled) {
+  background: #c0392b;
+}
+
+.bulkDeleteBtn:disabled {
+  background: #e0e0e0;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.allDeleteBtn {
+  padding: 12px 20px;
+  background: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.allDeleteBtn:hover:not(:disabled) {
+  background: #a01a49;
+}
+
+.allDeleteBtn:disabled {
+  background: #e0e0e0;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.emptyState {
+  padding: 60px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 18px;
+}
+
+.tableContainer {
+  background: #fafafa;
+  border-radius: 0;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.table {
+  width: 100%;
+  min-width: 1200px;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0;
+}
+
+.table th {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.table thead tr th:first-child {
+  text-align: left;
+  width: 60px;
+}
+
+.table thead tr th:last-child {
+  width: 240px;
+  text-align: center;
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/*
+ * 정렬 화살표는 자리를 차지하지 않게 띄운다.
+ *
+ * 흐름 안에 두면 정렬을 켠 열만 화살표 너비(+간격)만큼 넓어지고, 그만큼
+ * 밀린 옆 칸 글자가 두 줄로 접힌다. 정렬을 켜고 끌 때마다 표가 출렁인다.
+ */
+.sortIcon {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  font-size: 30px;
+  color: #db1a62;
+  pointer-events: none;
+}
+
+.table tbody {
+  background: white;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table td {
+  padding: 16px 12px;
+  font-size: 18px;
+  color: #333;
+  text-align: center;
+  /*
+   * 모양이 정해진 값(생년월일·전화번호·날짜)은 접지 않는다. 접히면 행 높이가
+   * 들쭉날쭉해져 표를 훑기 어렵다. 넘치면 컨테이너가 가로로 스크롤한다.
+   */
+  white-space: nowrap;
+}
+
+/* 체크박스 칸은 모든 행에서 왼쪽으로 붙인다. 첫 행에만 걸면 두 번째 행부터 가운데로 밀린다. */
+.table tbody tr td:first-child {
+  text-align: left;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #db1a62;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  height: 40px;
+  background: #db1a62;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.iconBtn:hover {
+  background: #a01a49;
+  color: white;
+}
+
+.iconBtn.delete {
+  background: #e74c3c;
+}
+
+.iconBtn.delete:hover {
+  background: #c62828;
+}
+
+.paginationWrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+@media (max-width: 1024px) {
+  .searchSection {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .controlsSection {
+    flex-wrap: wrap;
+  }
+}
+
+.departmentsFilter {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.departmentBtn {
+  padding: 8px 28px;
+  border: 1px solid #e0e0e0;
+  border-radius: 100px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.excelModalContent {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw;
+  max-height: 80vh;
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.excelModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.excelModalHeader h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeBtn:hover {
+  color: #333;
+}
+
+.excelModalBody {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.excelTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.excelTable thead {
+  background: #f5f5f5;
+  position: sticky;
+  top: 0;
+}
+
+.excelTable th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #e0e0e0;
+  white-space: nowrap;
+}
+
+.excelTable td {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.excelTable tbody tr:hover {
+  background: #fafafa;
+}
+
+.loadingCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  font-size: 16px;
+  color: #666;
+}
+
+.errorCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  font-size: 16px;
+  color: #db1a62;
+}
+
+.departmentBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.departmentBtn.active {
+  background: #db1a62;
+  color: white;
+  border-color: #db1a62;
+}
+
+.userModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.userModalContent {
+  background-color: white;
+  border-radius: 8px;
+  padding: 32px;
+  min-width: 400px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.userModalTitle {
+  margin: 0 0 24px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #000;
+}
+
+.userModalField {
+  margin-bottom: 16px;
+}
+
+.userModalLabel {
+  display: block;
+  font-size: 18px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.userModalValue {
+  font-size: 18px;
+  color: #000;
+  font-weight: 500;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.userModalCloseBtn {
+  width: 100%;
+  padding: 12px;
+  background-color: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.userModalCloseBtn:hover {
+  background-color: #c2154e;
+}
+
+.reasonModalContent {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  border-radius: 8px;
+  padding: 32px;
+  min-width: 450px;
+  max-width: 90vw;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1001;
+}
+
+.reasonModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.reasonModalHeader h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #000;
+}
+
+.reasonModalBody {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  font-size: 15px;
+  color: #333;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 60px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .table {
+    font-size: 14px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 10px;
+    font-size: 14px;
+  }
+
+  .totalCount,
+  .totalCount span {
+    font-size: 18px;
+  }
+
+  .select {
+    font-size: 14px;
+    padding: 8px 35px 8px 12px;
+    height: 40px;
+  }
+
+  .bulkDeleteBtn,
+  .allDeleteBtn {
+    font-size: 14px;
+    padding: 10px 16px;
+  }
+
+  .downloadBtn {
+    font-size: 16px;
+    padding: 8px 12px;
+    height: 36px;
+  }
+}
+
+/* 정렬되는 머리말. 인라인 style로 박혀 있던 것을 옮겼다. */
+.sortableHeader {
+  cursor: pointer;
+  position: relative;
+}
+
+/* 상품명·파일명은 길다. 표가 옆으로 늘어나지 않게 자르고 title로 전체를 보여준다. */
+.productCell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 고객명은 짧지만 정렬할 때 너비가 변하면 줄바꿈되므로 최소 너비를 잡는다 */
+.customerNameCell {
+  min-width: 120px;
+  white-space: nowrap;
+  text-align: center !important;
+}
+
+/* 신청횟수. 이 숫자가 3 이상이라 명단에 오른 것이므로 눈에 띄게 둔다. */
+.countBadge {
+  cursor: pointer;
+  display: inline-block;
+  min-width: 44px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  background: #fdf2f6;
+  border: 1px solid #f3c3d4;
+  color: #db1a62;
+  font-weight: 700;
+}
+
+.countCell {
+  min-width: 80px;
+  white-space: nowrap;
+}
+
+/* 해제 버튼. 되돌리기 어려운 판정을 뒤집는 자리라 삭제색을 쓰지 않고
+   테두리 버튼으로 둔다 — 실수로 누르기 쉬운 모양이면 안 된다. */
+.releaseBtn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.releaseBtn:hover:not(:disabled) {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.releaseBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.releasedBtn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #d9534f;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.releasedBtn:hover {
+  background: #c9302c;
+}
+
+.fileNameCell {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.table td.fileNameCell {
+  color: #db1a62;
+}
+
+/*
+ * 길이를 예측할 수 없는 칸은 잘라 두고 title로 전체를 보여준다.
+ * 등록 사유는 사람이 500자까지 적을 수 있어, 안 자르면 표가 통째로 늘어난다.
+ */
+.reasonCell,
+.table td.fileNameCell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.registerInput {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.registerInput:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+  background: #fff;
+}
+
+.registerTextarea {
+  min-height: 80px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 16px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  resize: vertical;
+}
+
+.registerTextarea:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+  background: #fff;
+}
+
+.registerModalBtn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.registerModalBtn.cancel {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.registerModalBtn.cancel:hover:not(:disabled) {
+  background: #e8e8e8;
+  border-color: #ddd;
+}
+
+.registerModalBtn.submit {
+  background: #db1a62;
+  color: white;
+}
+
+.registerModalBtn.submit:hover:not(:disabled) {
+  background: #a01a49;
+}
+
+.registerModalBtn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.2);
+}
+
+.registerModalBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/*
+ * 명단에 오른 경로.
+ *
+ * 관리자가 손으로 올린 건과 배포가 규칙으로 올린 건은 확인할 때 의미가 다르다.
+ * 색으로 갈라 한눈에 구분되게 한다 — 수동은 사람 손이 닿은 것이라 눈에 띄게,
+ * 자동은 대다수라 조용하게.
+ */
+.byCell {
+  min-width: 96px;
+}
+
+.byBadge {
+  display: inline-block;
+  min-width: 62px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.byAdmin {
+  background: #fff4e5;
+  border: 1px solid #ffcf99;
+  color: #b35c00;
+}
+
+.bySystem {
+  background: #f2f4f7;
+  border: 1px solid #d6dae0;
+  color: #5a6472;
+}
+
+/*
+ * 출처 파일은 신청 한 건에 한 줄이다. 3회면 세 줄이 되므로 칸 안에서 줄을 나눈다.
+ * 파일명이 길어도 표가 옆으로 늘어나지 않게 자르고 title로 전체를 보여준다.
+ */
+.sourceCell {
+  max-width: 260px;
+}
+
+.sourceLine,
+.sourceLineEmpty {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sourceLine {
+  color: #db1a62;
+  cursor: pointer;
+}
+
+.sourceLine:hover {
+  text-decoration: underline;
+}
+
+.sourceLineEmpty {
+  color: #333;
+}
+
+/*
+ * 신청 기록 목록.
+ *
+ * 신청 한 건이 한 덩어리다. 이름이 서로 다른 행이 한 사람으로 묶이는 일이
+ * 흔해서(번호만 보고 판정한다) 그 행에 적힌 이름과 주문번호를 같이 보여준다.
+ */
+.historySection {
+  margin-bottom: 16px;
+}
+
+.historyTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.historyList {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.historyItem {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eee;
+  font-size: 18px;
+}
+
+.historyItem:last-child {
+  border-bottom: none;
+}
+
+.historyRow {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.historyRow:last-child {
+  margin-bottom: 0;
+}
+
+.historyLabel {
+  flex: 0 0 76px;
+  font-weight: 600;
+  color: #666;
+}
+
+.historyFileBtn {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 18px;
+  color: #db1a62;
+  cursor: pointer;
+  text-align: left;
+}
+
+.historyFileBtn:hover {
+  text-decoration: underline;
+}
+
+.historyProduct {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.historyEmpty {
+  padding: 20px;
+  text-align: center;
+  color: #999;
+  font-size: 18px;
+}
+
+/*
+ * 해제된 항목 보기 토글.
+ *
+ * 명단은 지금 막혀 있는 사람을 보는 화면이라 해제된 줄은 기본으로 감춘다.
+ * 같은 번호가 활성 한 줄·해제 두 줄로 섞여 보이면 지금 차단 중인지 알 수 없다.
+ */
+.releasedToggle {
+  /* 정렬·개수 드롭다운 아래 자기 줄에 놓는다. 너비를 글자에 맞춰 잡아야
+     라벨 전체가 아니라 글자 옆까지만 눌린다. */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 18px;
+  color: #333;
+  cursor: pointer;
+  user-select: none;
+}
+
+.releasedToggle input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #db1a62;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * 모달 공통 뼈대
+ * 인라인으로 흩어져 있던 값을 그대로 옮긴 것이다. 보이는 모습은 같다.
+ * ───────────────────────────────────────────────────────────── */
+.modalBody {
+  padding: 20px;
+}
+
+.modalFooter {
+  padding: 20px;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  border-top: 1px solid #eee;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.fieldLast {
+  margin-bottom: 20px;
+}
+
+.fieldLabel {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* 필수 표시. 빨간 별로 눈에 걸리게 둔다. */
+.required {
+  color: #e74c3c;
+}
+
+/* ── 직접 등록 모달 ───────────────────────────────────────── */
+.registerModalContent {
+  min-width: 500px;
+}
+
+.juminRow {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.juminDate {
+  flex: 1;
+}
+
+.juminGender {
+  width: 50px;
+}
+
+/* 입력칸 사이의 하이픈과 뒷자리 안내. 입력칸 아래선에 맞춰 내려 둔다. */
+.juminSep,
+.juminMask {
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.juminSep {
+  color: #999;
+}
+
+.juminMask {
+  color: #333;
+}
+
+.telGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* ── 신청 내역 모달의 머리 정보 ───────────────────────────── */
+.infoLabel {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.infoValue {
+  font-size: 18px;
+  color: #333;
+}
+
+/* ── 해제 정보 모달 ───────────────────────────────────────── */
+.reasonSection {
+  margin-bottom: 20px;
+}
+
+.reasonLabel {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.reasonTimeBody {
+  min-height: auto;
+  padding: 12px;
+  font-size: 18px;
+}
+
+.reasonTextBody {
+  font-size: 18px;
+  min-height: 80px;
+}
+
+.reasonCloseBtn {
+  margin-top: 20px;
+}
+
+.allHistoryTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.allHistoryList {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.allHistoryItem {
+  padding: 16px;
+  border-bottom: 1px solid #eee;
+}
+
+.allHistoryItem:last-child {
+  border-bottom: none;
+}
+
+/* 등록과 해제를 바탕색으로 갈라 훑을 때 눈에 들어오게 한다. */
+.allHistoryReleased {
+  background-color: #fff3f0;
+}
+
+.allHistoryRegistered {
+  background-color: #fef3f0;
+}
+
+.allHistoryHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.actionBadge {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 6px;
+  color: white;
+}
+
+.actionReleased {
+  background-color: #ff8800;
+}
+
+.actionRegistered {
+  background-color: #e74c3c;
+}
+
+.allHistoryTime {
+  font-size: 18px;
+  color: #666;
+}
+
+/* 배지 너비만큼 들여써서 어느 항목에 딸린 사유인지 보이게 한다. */
+.allHistoryReason {
+  font-size: 18px;
+  color: #333;
+  margin-left: 60px;
+}
+
+/* ── 해제 확인창 안의 사유 입력 ───────────────────────────── */
+.releaseReasonLabel {
+  display: block;
+  margin-top: 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.releaseReasonInput {
+  display: block;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px;
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* ── 표 안에서 인라인으로 두던 것들 ───────────────────────── */
+.rowReleased {
+  background-color: #f5f5f5;
+}
+
+.countHeader {
+  min-width: 110px;
+}
+
+.dash {
+  color: #999;
+}
+
+/* ── 페이지 머리의 직접 등록 버튼 ─────────────────────────── */
+.registerBtn {
+  padding: 12px 24px;
+  background-color: #db1a62;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.registerBtn:hover {
+  background-color: #c2154e;
+}

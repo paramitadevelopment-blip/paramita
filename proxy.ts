@@ -6,7 +6,10 @@ const publicApiRoutes = ['/api/auth/login'];
 
 // 일반 사용자(비 admin)가 접근 가능한 대시보드 경로 (화이트리스트)
 // 여기 없는 /dashboard 하위 경로는 전부 admin 전용으로 간주한다.
-const userAllowedRoutes = ['/dashboard/download'];
+//
+// 재신청 고객은 지사가 자기 소속 건만 본다. 무엇을 보여줄지는 API가 소속으로
+// 거르므로, 여기서는 화면에 들어올 수 있게만 열어 준다.
+const userAllowedRoutes = ['/dashboard/download', '/dashboard/reapply'];
 
 // 다른 곳(lib/jwt, lib/csrf, 로그인)은 시크릿이 없으면 전부 throw한다.
 // 여기만 기본값으로 넘어가면, 설정이 빠진 배포에서 누구나 알 수 있는 키로 서명한

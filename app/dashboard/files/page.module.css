@@ -442,6 +442,22 @@
   border-left: 4px solid #db1a62;
 }
 
+/**
+ * 요약 세 칸을 버튼으로 쓸 때. 버튼 기본 모양(테두리·배경)을 지우고
+ * 가운데 정렬로 바꾼다. 누를 게 없으면 커서를 기본으로 되돌린다.
+ */
+.summaryBtn {
+  padding: 12px;
+  text-align: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.summaryBtnEmpty {
+  cursor: default;
+}
+
 .resultLabel {
   font-size: 18px;
   font-weight: 600;

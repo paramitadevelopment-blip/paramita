@@ -8,6 +8,7 @@ import { useClassifyFiles } from '@/app/hooks/useClassifyFiles';
 import { useDeployFlow } from '@/app/hooks/useDeployFlow';
 import { usePendingPicks } from '@/app/hooks/usePendingPicks';
 import ExcelPreviewModal from '../../download/components/ExcelPreviewModal';
+import { toDuplicateBadges } from '@/lib/duplicateSummary';
 import FilePager from './FilePager';
 import FileSummaryButtons from './FileSummaryButtons';
 import DeployActions from './DeployActions';
@@ -176,6 +177,9 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
         <ExcelPreviewModal
           title={preview.title}
           data={{ headers: preview.headers, rows: preview.rows }}
+          // 중복이 갈래별로 몇 건인지 총 건수 옆에 같이 보여준다.
+          // 총 건수만 있으면 왜 빠졌는지 알려면 표를 훑어야 한다.
+          summary={toDuplicateBadges(current.duplicateRows)}
           onClose={() => setPreview(null)}
         />
       )}

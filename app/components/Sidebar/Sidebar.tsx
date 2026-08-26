@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/app/store/authStore';
 import { usePendingRequestCount } from '@/app/hooks/usePendingRequestCount';
-import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck } from 'react-icons/md';
+import { useUnreadReapplyCount } from '@/app/hooks/useReapplyNotices';
+import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck, MdBlock, MdPersonSearch } from 'react-icons/md';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar() {
@@ -15,6 +16,8 @@ export default function Sidebar() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const { data: pendingCount = 0 } = usePendingRequestCount(user?.role === 'admin');
+  // 재신청 알림은 지사도 본다. 로그인만 되어 있으면 자기 소속 건수를 센다.
+  const { data: reapplyCount = 0 } = useUnreadReapplyCount(Boolean(user));
 
   // 쿠키 만료를 서버에 요청하므로 완료 후 이동한다.
   const handleLogout = async () => {
@@ -87,6 +90,18 @@ export default function Sidebar() {
               <span>파일 다운로드</span>
             </Link>
           </li>
+          <li>
+            <Link
+              href="/dashboard/reapply"
+              className={`${styles.navLink} ${pathname === '/dashboard/reapply' ? styles.active : ''}`}
+            >
+              <MdPersonSearch className={styles.icon} />
+              <span>재신청 고객</span>
+              {reapplyCount > 0 && (
+                <span className={styles.badge}>{reapplyCount > 99 ? '99+' : reapplyCount}</span>
+              )}
+            </Link>
+          </li>
           {user?.role === 'admin' && (
             <li>
               <Link
@@ -120,6 +135,17 @@ export default function Sidebar() {
               >
                 <MdHistory className={styles.icon} />
                 <span>다운로드 로그</span>
+              </Link>
+            </li>
+          )}
+          {user?.role === 'admin' && (
+            <li>
+              <Link
+                href="/dashboard/blacklist"
+                className={`${styles.navLink} ${pathname === '/dashboard/blacklist' ? styles.active : ''}`}
+              >
+                <MdBlock className={styles.icon} />
+                <span>블랙리스트</span>
               </Link>
             </li>
           )}

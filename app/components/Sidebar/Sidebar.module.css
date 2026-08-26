@@ -8,7 +8,11 @@
   position: fixed;
   left: 0;
   top: 0;
-  overflow-y: auto;
+  /*
+   * 여기서 스크롤하면 로고와 로그아웃까지 함께 밀려 올라간다. 메뉴가 길어졌을 때
+   * 필요한 건 메뉴만 굴리는 것이라 스크롤은 .nav 가 맡는다.
+   */
+  overflow: hidden;
 }
 
 .logo {
@@ -23,7 +27,15 @@
 }
 
 .nav {
+  /*
+   * 메뉴만 굴린다. 로고(위)와 로그아웃(아래)은 늘 제자리에 있어야 한다.
+   *
+   * min-height: 0 이 필요하다 — flex 항목의 기본 최소 높이는 내용 높이라,
+   * 이게 없으면 nav 가 내용만큼 늘어나 스크롤이 안 생기고 사이드바가 넘친다.
+   */
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 20px 0;
 }
 

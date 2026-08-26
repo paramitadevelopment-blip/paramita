@@ -642,6 +642,28 @@
   color: #333;
 }
 
+/*
+ * 엑셀 미리보기 전용 덮개.
+ *
+ * 미리보기는 늘 다른 것 위에서 열린다 — 블랙리스트 신청내역 모달에서 파일을
+ * 누르면 그 모달 위로 떠야 한다. 다른 모달과 z-index가 같으면 나중에 그려진
+ * 쪽이 이겨서, 미리보기가 뒤에 숨고 아무 반응이 없는 것처럼 보인다.
+ *
+ * 같은 페이지 안의 다른 모달까지 끌어올리지 않으려고 따로 둔다.
+ */
+.excelModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
 .excelModalContent {
   position: absolute;
   top: 50%;
@@ -692,13 +714,26 @@
   padding: 20px;
 }
 
+/**
+ * 표를 감싸기만 한다. 여기에 overflow를 걸면 이 요소가 세로 스크롤 컨테이너도
+ * 되어버려(overflow-x를 주면 overflow-y가 visible에서 auto로 바뀐다) 헤더의
+ * sticky가 이 요소를 기준으로 잡힌다. 이 요소는 높이 제한이 없어 세로로
+ * 스크롤될 일이 없으므로 헤더가 영영 안 붙는다.
+ * 가로·세로 스크롤은 높이가 제한된 .excelModalBody가 맡는다.
+ */
 .tableWrapper {
-  width: 100%;
-  overflow-x: auto;
+  width: max-content;
+  min-width: 100%;
 }
 
+/**
+ * 열이 많으면 표가 컨테이너보다 넓어져 가로 스크롤이 생긴다.
+ * width를 100%로 묶으면 표가 억지로 줄어들어, 스크롤은 안 생기고
+ * 열만 찌그러져 읽을 수 없게 된다. 열이 적으면 min-width가 폭을 채운다.
+ */
 .excelTable {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 17px;
 }
@@ -717,9 +752,12 @@
   white-space: nowrap;
 }
 
+/* 줄바꿈을 허용하면 열이 좁아진 채 세로로 길어져, 가로 스크롤 대신
+   읽기 힘든 표가 된다. 헤더(th)는 이미 같은 이유로 nowrap이다. */
 .excelTable td {
   padding: 14px 16px;
   border-bottom: 1px solid #f0f0f0;
+  white-space: nowrap;
 }
 
 .excelTable tbody tr:hover {
@@ -882,4 +920,50 @@
   position: absolute;
   right: 0;
   font-size: 20px;
+}
+
+/* 미리보기 머리말의 건수 줄. 예전엔 인라인으로 박혀 있었다. */
+.previewCount {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 0 0;
+  font-size: 22px;
+  color: #666;
+}
+
+/*
+ * 중복 갈래별 건수.
+ * 글자로만 이어 붙이면 총 건수에 묻혀 안 읽힌다. 칸을 둘러 갈래를 나누고
+ * 숫자는 이 앱이 쓰는 강조색으로 굵게 뽑는다 (.totalCount span과 같은 방식).
+ */
+.dupBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid #f3c3d4;
+  border-radius: 100px;
+  background: #fdf2f6;
+  font-size: 17px;
+  font-weight: 500;
+  color: #8a4a63;
+  white-space: nowrap;
+}
+
+.dupBadge strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: #db1a62;
+}
+
+/* 0건인 갈래는 흐리게. 걸린 것만 눈에 들어와야 한다. */
+.dupBadgeZero {
+  border-color: #e8e8e8;
+  background: #f7f7f7;
+  color: #aaa;
+}
+
+.dupBadgeZero strong {
+  color: #bbb;
 }

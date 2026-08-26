@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   dedupeByOrderNumber,
-  dedupeByCustomerKey,
   normalizePhone,
-  normalizeProductName,
   isExcludedColumn,
 } from '@/lib/insurance';
 
@@ -13,11 +11,9 @@ import {
  * 둘 다 되돌리기 어려운 실수라 경계를 분명히 해둔다.
  */
 
-type Row = { order?: unknown; name?: unknown; phone?: unknown; product?: unknown; tag: string };
+type Row = { order?: unknown; tag: string };
 
 const byOrder = (rows: Row[]) => dedupeByOrderNumber(rows, (r) => r.order);
-const byCustomer = (rows: Row[]) =>
-  dedupeByCustomerKey(rows, (r) => r.name, (r) => r.phone, (r) => r.product);
 
 describe('주문번호 중복 제거', () => {
   it('먼저 나온 행을 남기고 뒤엣것을 버린다', () => {
@@ -69,75 +65,12 @@ describe('주문번호 중복 제거', () => {
   });
 });
 
-describe('고객 중복 제거 (전화 + 이름 + 상품)', () => {
-  const base = { name: '김철수', phone: '010-1234-5678', product: '동양생명 실손보험' };
-
-  it('세 값이 모두 같아야 중복이다', () => {
-    const { items, removed } = byCustomer([
-      { ...base, tag: 'first' },
-      { ...base, tag: 'second' },
-    ]);
-    expect(items.map((r) => r.tag)).toEqual(['first']);
-    expect(removed.map((r) => r.tag)).toEqual(['second']);
-  });
-
-  it('상품이 다르면 같은 사람이라도 살린다', () => {
-    // 한 사람이 실손과 암보험에 둘 다 가입할 수 있다
-    const { items } = byCustomer([
-      { ...base, product: '동양생명 실손보험', tag: 'silson' },
-      { ...base, product: '동양생명 암보험', tag: 'am' },
-    ]);
-    expect(items).toHaveLength(2);
-  });
-
-  it('전화번호 표기가 달라도 같은 번호면 중복이다', () => {
-    const { removed } = byCustomer([
-      { ...base, phone: '010-1234-5678', tag: 'dash' },
-      { ...base, phone: '01012345678', tag: 'plain' },
-    ]);
-    expect(removed).toHaveLength(1);
-  });
-
-  it('상품명의 공백·대소문자 흔들림은 같은 것으로 본다', () => {
-    const { removed } = byCustomer([
-      { ...base, product: '동양생명  실손보험', tag: 'double space' },
-      { ...base, product: ' 동양생명 실손보험 ', tag: 'padded' },
-    ]);
-    expect(removed).toHaveLength(1);
-  });
-
-  it('세 값 중 하나라도 비면 판단 근거가 없으므로 살린다', () => {
-    const { items, removed } = byCustomer([
-      { name: '', phone: '01012345678', product: 'A', tag: 'no name' },
-      { name: '김철수', phone: '', product: 'A', tag: 'no phone' },
-      { name: '김철수', phone: '01012345678', product: '', tag: 'no product' },
-      { name: '', phone: '', product: '', tag: 'empty' },
-      { name: '', phone: '', product: '', tag: 'empty2' },
-    ]);
-    expect(items).toHaveLength(5);
-    expect(removed).toHaveLength(0);
-  });
-
-  it('이름만 같고 번호가 다르면 다른 사람이다', () => {
-    const { items } = byCustomer([
-      { ...base, phone: '010-1111-1111', tag: 'a' },
-      { ...base, phone: '010-2222-2222', tag: 'b' },
-    ]);
-    expect(items).toHaveLength(2);
-  });
-});
-
 describe('정규화 함수', () => {
   it('전화번호는 숫자만 남긴다', () => {
     expect(normalizePhone('010-1234-5678')).toBe('01012345678');
     expect(normalizePhone('010 1234 5678')).toBe('01012345678');
     expect(normalizePhone('(010)1234-5678')).toBe('01012345678');
     expect(normalizePhone(null)).toBe('');
-  });
-
-  it('상품명은 공백과 대소문자를 맞춘다', () => {
-    expect(normalizeProductName('  ABC   보험 ')).toBe('abc 보험');
-    expect(normalizeProductName(null)).toBe('');
   });
 });
 

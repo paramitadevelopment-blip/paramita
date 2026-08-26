@@ -4,6 +4,7 @@ import React, { memo, useCallback, useState } from 'react';
 import { MdClose, MdDelete } from 'react-icons/md';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { useDeleteDepartment } from '@/app/hooks/useDepartments';
+import { getUndeletableReason } from '@/lib/departments';
 import DepartmentForm from './DepartmentForm';
 import Pagination from '@/app/components/Pagination/Pagination';
 import styles from './DepartmentModal.module.css';
@@ -11,6 +12,11 @@ import styles from './DepartmentModal.module.css';
 interface Department {
   id: number;
   name: string;
+  /**
+   * 사람이 속하는 조직. 대부분 name과 같고, 파라인슈만 1:N이다
+   * ('파라인슈1'·'파라인슈2' → '파라인슈'). 지울 수 있는지 판단하는 데 쓴다.
+   */
+  group_name: string;
   /** 업로드한 원본이 들어가는 자리. 목록에서 뺀다. */
   is_admin?: boolean;
   created_at: string;
@@ -211,20 +217,26 @@ const DepartmentModal = memo(function DepartmentModal({
             </div>
             <div className={styles.departmentList}>
               {filteredDepartments && filteredDepartments.length > 0 ? (
-                currentDepartments.map((dept) => (
-                  <div key={dept.id} className={styles.departmentItem}>
-                    <span>{dept.name}</span>
-                    <button
-                      className={styles.deleteBtn}
-                      onClick={() => handleDelete(dept.id, dept.name)}
-                      disabled={isDeleting}
-                      title="삭제"
-                    >
-                      <MdDelete />
-                      <span>삭제</span>
-                    </button>
-                  </div>
-                ))
+                currentDepartments.map((dept) => {
+                  // 쪼개진 조직의 하위 분류는 혼자 지울 수 없다. 왜 못 지우는지
+                  // 툴팁으로 알려준다 — 회색 버튼만 보여주면 고장으로 읽힌다.
+                  const undeletable = getUndeletableReason(departments, dept.name);
+
+                  return (
+                    <div key={dept.id} className={styles.departmentItem}>
+                      <span>{dept.name}</span>
+                      <button
+                        className={styles.deleteBtn}
+                        onClick={() => handleDelete(dept.id, dept.name)}
+                        disabled={isDeleting || !!undeletable}
+                        title={undeletable ?? '삭제'}
+                      >
+                        <MdDelete />
+                        <span>삭제</span>
+                      </button>
+                    </div>
+                  );
+                })
               ) : (
                 <p className={styles.emptyText}>소속이 없습니다.</p>
               )}

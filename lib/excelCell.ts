@@ -54,6 +54,33 @@ export function formatCellRow(row: unknown[]): unknown[] {
 }
 
 /**
+ * 모든 칸이 비었거나 공백뿐인 행인가.
+ *
+ * 엑셀에서 행을 지운 자리에 공백 한 칸이 남는 일이 흔하다. 셀에 값이 있으니
+ * 시트 범위가 그 행까지 늘어나고, 읽는 쪽에서는 멀쩡한 데이터 행으로 보인다.
+ * 그대로 두면 주문번호가 비었다며 배포가 막히는데, 화면에는 아무것도 안 보여서
+ * 관리자가 원인을 찾을 방법이 없다.
+ *
+ * 신청 건이 아니므로 읽는 단계에서 버린다. 주문번호가 진짜로 빠진 행은
+ * 다른 칸에 값이 있으니 여기서 안 걸리고 그대로 막힌다.
+ *
+ * 배열(행 그대로)과 객체(열 이름 → 값) 둘 다 받는다 — classify는 객체로,
+ * deploy는 배열로 읽는데 두 곳이 같은 규칙을 써야 건수가 갈리지 않는다.
+ */
+export function isBlankRow(row: unknown): boolean {
+  if (row === null || row === undefined) return true;
+
+  const cells = Array.isArray(row)
+    ? row
+    : typeof row === 'object'
+      ? Object.values(row as Record<string, unknown>)
+      : [row];
+
+  // 날짜 칸(Date)은 문자열로 바꿔도 비지 않으므로 따로 봐줄 게 없다.
+  return cells.every((cell) => String(cell ?? '').trim() === '');
+}
+
+/**
  * 날짜 칸에 잡아주는 자리.
  * 서식 자체는 'yyyy-mm-dd'(10자)지만, 그 길이에 딱 맞추면 엑셀에서 여전히
  * ########으로 나온다. 화면 배율·글꼴·서식 아이콘이 자리를 더 먹기 때문이다.

@@ -12,14 +12,29 @@ import {
   type SelectableRegion,
   isExcludedColumn,
   dedupeByOrderNumber,
-  dedupeByCustomerKey,
   findRequiredColumns,
   getMissingColumnLabels,
   pendingRowKey,
   isOrderNumberMissing,
   ORDER_NUMBER_MISSING_REASON,
+  INSURER_KIND_COLUMN,
+  DUP_ORDER_REASON,
+  DUP_CUSTOMER_REASON,
+  DUP_CROSS_PHONE_REASON,
+  HISTORY_DUP_DAYS,
+  BLACKLIST_DAYS,
+  BLACKLIST_REASON_LISTED,
+  BLACKLIST_REASON_NEW,
+  formatInsurerKind,
+  normalizeBirth,
 } from '@/lib/insurance';
-import { formatCellValue } from '@/lib/excelCell';
+import { formatCellValue, isBlankRow } from '@/lib/excelCell';
+import { normalizeRecords } from '@/lib/columnAliases';
+import { dedupeAgainstHistory } from '@/lib/historyDedupe';
+import { resolveAddresses } from '@/lib/addressFix';
+import { loadRecentKeys, withinDays, toDedupeKeys, toBlacklistKeys } from '@/lib/historyLookup';
+import { splitAlreadyListed, splitOverThreshold } from '@/lib/blacklist';
+import { loadBlacklist } from '@/lib/blacklistStore';
 import * as XLSX from 'xlsx';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -83,6 +98,21 @@ export async function POST(request: NextRequest) {
     // 규칙이 보는 "오늘". 요청 안에서 한 번만 재야 파일마다 기준이 갈리지 않는다.
     const classifiedAt = new Date();
 
+    // 지난 30일치 과거 기록. 파일마다 다시 읽으면 같은 것을 여러 번 퍼 올린다.
+    // 분류 단계에서는 아직 파일이 저장되기 전이라 뺄 것이 없다.
+    let recentKeys: Awaited<ReturnType<typeof loadRecentKeys>>;
+    let blacklistKeys: Awaited<ReturnType<typeof loadBlacklist>>;
+    try {
+      recentKeys = await loadRecentKeys(supabase, classifiedAt);
+      blacklistKeys = await loadBlacklist(supabase);
+    } catch (historyError) {
+      console.error('Failed to load recent records:', historyError);
+      return NextResponse.json(
+        { error: '최근 기록이나 블랙리스트를 읽지 못해 걸러낼 수 없습니다. 잠시 후 다시 시도해주세요.' },
+        { status: 500 }
+      );
+    }
+
     // 부서 조회 (분류명 → 부서ID 변환용)
     const { data: departments } = await supabase
       .from('departments')
@@ -112,7 +142,32 @@ export async function POST(request: NextRequest) {
       const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const rawData = XLSX.utils.sheet_to_json(worksheet) as Record<string, any>[];
+      // 공백만 남은 유령 행을 여기서 버린다. 미리보기(아래 originalRows)와 deploy는
+      // 이미 걸러내고 있어, 여기만 안 걸러내면 화면 건수와 판정 건수가 갈린다.
+      const parsed = (XLSX.utils.sheet_to_json(worksheet) as Record<string, any>[]).filter(
+        (row) => !isBlankRow(row)
+      );
+
+      // '원본 데이터' 미리보기용. 사람이 올린 파일 그대로 — 열 이름을 바꾸기도,
+      // 열을 빼기도, 중복을 걷어내기도 전이다.
+      //
+      // 여기에 변환 결과를 보여주면 관리자가 엑셀을 켜놓고 대조할 수가 없고,
+      // 매핑이 틀려도 그럴듯한 값이 찍혀 있어 아무도 못 잡는다. 변환 후 모습은
+      // 바로 옆 '분류 결과'가 이미 보여준다.
+      const originalAoa = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      const originalHeaders = (originalAoa[0] ?? []).map((h) => String(h ?? ''));
+      const originalRows = originalAoa
+        .slice(1)
+        .filter((row) => !isBlankRow(row))
+        .map((row) => originalHeaders.map((_, i) => formatCellValue(row?.[i] ?? '')));
+
+      // 거래처 양식이 두 가지다. 신규 양식이면 여기서 기존 컬럼 이름으로 바꿔놓아
+      // 아래 로직이 양식을 몰라도 되게 한다. 기존 양식이면 그대로 지나간다.
+      // deploy도 같은 함수를 같은 자리에서 부른다 — 다르면 미리보기와 실제가 갈린다.
+      const { records: rawData, converted: isNewFormatFile } = normalizeRecords(
+        parsed,
+        classifiedAt
+      );
 
       if (!Array.isArray(rawData) || rawData.length === 0) {
         return NextResponse.json(
@@ -167,26 +222,65 @@ export async function POST(request: NextRequest) {
       // 원본 행 번호를 함께 들고 다녀야 오류 보고가 실제 파일 위치를 가리킨다.
       const indexedRows = rawData.map((row, i) => ({ row, sourceRow: i + 2 }));
 
-      // 1) 주문번호 기준
+      // 이 행이 어느 사람인지. 블랙리스트 판정 두 곳이 같은 값을 봐야 한다.
+      const toBlKey = (entry: { row: Record<string, any> }) => ({
+        product: String(entry.row[productCol] ?? ''),
+        birth: normalizeBirth(String(entry.row[juminCol] ?? '')),
+        tel1: String(entry.row['Tel1'] ?? ''),
+        tel2: String(entry.row[phoneCol] ?? ''),
+      });
+
+      // 1) 주문번호 중복을 먼저 정리한다. 같은 주문번호는 엑셀에 같은 줄이 두 번
+      //    들어간 것이지 두 번 신청한 게 아니다.
       const { items: dedupedByOrder, removed: removedByOrder } = dedupeByOrderNumber(
         indexedRows,
         (entry) => entry.row[orderCol]
       );
 
-      // 2) 고객 기준 (전화 + 이름 + 보험사)
-      const { items: dedupedRows, removed: removedByCustomer } = dedupeByCustomerKey(
+      // 2) 이미 명단에 오른 사람. 30일 중복보다 먼저 봐야 사유가 정확히 남는다.
+      const { items: notListedRows, registered: blacklistListed } = splitAlreadyListed(
         dedupedByOrder,
-        (entry) => entry.row[nameCol],
-        (entry) => entry.row[phoneCol],
-        (entry) => entry.row[productCol]
+        toBlKey,
+        blacklistKeys
       );
 
-      const duplicateRows = [...removedByOrder, ...removedByCustomer];
+      // 3) 60일 안에 3회 이상. 원천 내역 기준으로 센다 — 30일 중복으로 빠질 건도
+      //    신청은 있었던 일이라 여기서 먼저 센다. deploy와 같은 순서다.
+      const { items: notBlacklisted, newlyHit: blacklistNew } = splitOverThreshold(
+        notListedRows,
+        toBlKey,
+        toBlacklistKeys(withinDays(recentKeys, classifiedAt, BLACKLIST_DAYS))
+      );
+
+      // 4) 지난 30일 대조 — deploy와 같은 함수, 같은 순서를 쓴다.
+      //    다르면 미리보기에서 본 건수와 실제로 나가는 건수가 갈린다.
+      const { items: assignableEntries, removedSamePhone, removedCrossPhone } =
+        dedupeAgainstHistory(
+          notBlacklisted,
+          (entry) => ({
+            name: String(entry.row[nameCol] ?? ''),
+            tel1: String(entry.row['Tel1'] ?? ''),
+            tel2: String(entry.row[phoneCol] ?? ''),
+            birth: String(entry.row[juminCol] ?? ''),
+          }),
+          toDedupeKeys(withinDays(recentKeys, classifiedAt, HISTORY_DUP_DAYS))
+        );
+
+      const duplicateRows = [
+        ...removedByOrder,
+        ...removedSamePhone,
+        ...removedCrossPhone,
+        ...blacklistListed,
+        ...blacklistNew.map((h) => h.item),
+      ];
       const dupRemovedCount = duplicateRows.length;
 
       // 보험사 판정 — 배정 규칙이 갈리므로 분류보다 먼저 정한다.
+      // 보험사는 과거 중복을 걷어내기 "전"의 행으로 판정한다.
+      // 걷어낸 뒤 행이 하나도 안 남으면 판정할 근거가 사라져,
+      // 정작 문제는 "전부 중복"인데 "보험사를 못 가리겠다"는 엉뚱한 오류가 나간다.
       const insurerType = getInsurerTypeFromRows(
-        dedupedRows.map(({ row }) => [String(row[productCol] ?? '')]),
+        dedupedByOrder.map(({ row }) => [String(row[productCol] ?? '')]),
         0
       );
 
@@ -198,6 +292,25 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+
+      // 시·도를 못 읽는 주소를 우편번호로 되찾는다. 거래처가 '경냄' 같은 오타를
+      // 보내면 전부 '이외지역'으로 빠지는데, 우편번호는 대개 멀쩡하다.
+      // 원본 주소는 그대로 두고 판정에 쓸 값만 따로 만든다 — 미리보기에는 사람이
+      // 올린 값이 남아야 대조할 수 있다.
+      // deploy도 같은 함수를 쓴다. 다르면 미리보기와 실제 배정이 갈린다.
+      const addressForAssign = await resolveAddresses(
+        rawData.map((row) => ({ address: row[addressCol], zip: row['우편번호'] })),
+        process.env.ZIPCODE_API_KEY ?? ''
+      );
+      const addressAt = new Map<Record<string, any>, unknown>();
+      rawData.forEach((row, i) => addressAt.set(row, addressForAssign[i]));
+
+      // 보험사구분을 행에 붙인다. deploy와 같은 자리에서 같은 값을 넣어야
+      // 미리보기에서 본 것과 실제로 나가는 파일이 같다.
+      // 아래 previewHeaders가 행의 키에서 만들어지므로 여기서 넣으면
+      // 원본데이터·분류결과·중복 미리보기에 모두 따라온다.
+      const insurerKind = formatInsurerKind(insurerType, isNewFormatFile);
+      for (const row of rawData) row[INSURER_KIND_COLUMN] = insurerKind;
 
       // 사람이 부서를 골라야 하는 건은 지역별로 세어둔다.
       // 배정이 안 끝난 상태라 counts에는 넣지 않는다.
@@ -216,8 +329,8 @@ export async function POST(request: NextRequest) {
         pendingJuminByRegion[region] = [];
       }
 
-      for (let dedupedIndex = 0; dedupedIndex < dedupedRows.length; dedupedIndex++) {
-        const { row, sourceRow } = dedupedRows[dedupedIndex];
+      for (let dedupedIndex = 0; dedupedIndex < assignableEntries.length; dedupedIndex++) {
+        const { row, sourceRow } = assignableEntries[dedupedIndex];
         try {
           // 주문번호가 없으면 배정 전에 막는다. 이 건을 가리킬 방법이 없어
           // 내보낸 뒤에는 어느 행이었는지 되짚을 수 없다.
@@ -226,7 +339,12 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          const assigned = assignRow(insurerType, row[juminCol], row[addressCol], memoRuleFor(row));
+          const assigned = assignRow(
+          insurerType,
+          row[juminCol],
+          addressAt.get(row) ?? row[addressCol],
+          memoRuleFor(row)
+        );
 
           if (assigned.kind === 'error') {
             errorRows.push({ row: sourceRow, reason: assigned.reason });
@@ -266,9 +384,14 @@ export async function POST(request: NextRequest) {
       // 분류 결과 시트 / 중복 시트 생성 (미리보기용)
       // 어느 단계에서 빠졌는지까지 들고 있어야 배포 결과와 사유가 어긋나지 않는다.
       const duplicateReasonByRow = new Map<number, string>([
-        ...removedByOrder.map((entry) => [entry.sourceRow, '주문번호 중복'] as const),
-        ...removedByCustomer.map(
-          (entry) => [entry.sourceRow, '고객 중복 (tel2+고객명+상품명)'] as const
+        ...removedByOrder.map((entry) => [entry.sourceRow, DUP_ORDER_REASON] as const),
+        ...removedSamePhone.map((entry) => [entry.sourceRow, DUP_CUSTOMER_REASON] as const),
+        ...removedCrossPhone.map(
+          (entry) => [entry.sourceRow, DUP_CROSS_PHONE_REASON] as const
+        ),
+        ...blacklistListed.map((entry) => [entry.sourceRow, BLACKLIST_REASON_LISTED] as const),
+        ...blacklistNew.map(
+          ({ item, count }) => [item.sourceRow, `${BLACKLIST_REASON_NEW} (${count}회)`] as const
         ),
       ]);
 
@@ -287,7 +410,12 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const assigned = assignRow(insurerType, row[juminCol], row[addressCol], memoRuleFor(row));
+        const assigned = assignRow(
+          insurerType,
+          row[juminCol],
+          addressAt.get(row) ?? row[addressCol],
+          memoRuleFor(row)
+        );
         // 아직 안 고른 건은 '미정'이다. 여기 지역명을 넣으면 '선택: 인천'처럼
         // 소속 칸에 소속이 아닌 값이 들어가 무엇이 배정된 건지 헷갈린다.
         // 어느 지역인지는 아래 선택 화면에서 지역별로 묶어 보여준다.
@@ -342,8 +470,9 @@ export async function POST(request: NextRequest) {
         processedHeaders: ['번호', '배정소속', '배정방식', ...previewHeaders],
         duplicateHeaders: ['중복사유', ...previewHeaders],
         rowsByDeptId,
-        // 미리보기는 원본 그대로 (중복 포함)
-        originalRows: toRowArrays(rawData),
+        // 올린 파일 그대로 — 변환 전, 열 거르기 전, 중복 걷어내기 전
+        originalHeaders,
+        originalRows,
         // 분류 결과 / 중복 시트
         processedRows,
         duplicateRows: processedDuplicateRows,
