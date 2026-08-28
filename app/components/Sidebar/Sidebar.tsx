@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/app/store/authStore';
 import { usePendingRequestCount } from '@/app/hooks/usePendingRequestCount';
 import { useUnreadReapplyCount } from '@/app/hooks/useReapplyNotices';
-import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck, MdBlock, MdPersonSearch } from 'react-icons/md';
+import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck, MdBlock, MdPersonSearch, MdLogin } from 'react-icons/md';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar() {
@@ -135,6 +135,17 @@ export default function Sidebar() {
               >
                 <MdHistory className={styles.icon} />
                 <span>다운로드 로그</span>
+              </Link>
+            </li>
+          )}
+          {user?.role === 'admin' && (
+            <li>
+              <Link
+                href="/dashboard/login-history"
+                className={`${styles.navLink} ${pathname === '/dashboard/login-history' ? styles.active : ''}`}
+              >
+                <MdLogin className={styles.icon} />
+                <span>로그인 기록</span>
               </Link>
             </li>
           )}

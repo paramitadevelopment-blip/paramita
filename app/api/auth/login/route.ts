@@ -3,6 +3,12 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { extractDeviceInfo } from '@/lib/deviceInfo';
+import {
+  recordLogin,
+  LOGIN_FAIL_NO_USER,
+  LOGIN_FAIL_WRONG_PASSWORD,
+} from '@/lib/loginRecord';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -20,6 +26,9 @@ export async function POST(request: NextRequest) {
   try {
     const { username, password } = await request.json();
 
+    // 어디서 들어온 요청인지. 성공·실패 어느 쪽이든 기록에 함께 적는다.
+    const device = extractDeviceInfo(request);
+
     if (!username || !password) {
       return NextResponse.json(
         { error: '사용자명과 비밀번호를 입력해주세요.' },
@@ -36,6 +45,12 @@ export async function POST(request: NextRequest) {
 
     if (error || !user) {
       console.error('Login failed: user not found', { username, error });
+      await recordLogin(supabase, {
+        username,
+        success: false,
+        failReason: LOGIN_FAIL_NO_USER,
+        device,
+      });
       return NextResponse.json(
         { error: '아이디 또는 비밀번호가 일치하지 않습니다.' },
         { status: 401 }
@@ -46,11 +61,22 @@ export async function POST(request: NextRequest) {
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
+      // 아이디는 맞고 비밀번호만 틀린 것과, 아이디 자체가 없는 것은 다른 신호다.
+      // 화면에는 같은 문구를 보여주되(아이디 존재 여부를 흘리지 않는다) 기록은 나눈다.
+      await recordLogin(supabase, {
+        username,
+        success: false,
+        failReason: LOGIN_FAIL_WRONG_PASSWORD,
+        user,
+        device,
+      });
       return NextResponse.json(
         { error: '아이디 또는 비밀번호가 일치하지 않습니다.' },
         { status: 401 }
       );
     }
+
+    await recordLogin(supabase, { username, success: true, user, device });
 
     // JWT 토큰 생성
     const token = jwt.sign(

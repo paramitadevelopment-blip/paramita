@@ -34,11 +34,18 @@ const SortableHeader = memo(function SortableHeader({
     <th className={styles.sortableHeader} onClick={() => onSort(column)}>
       <div className={styles.headerContent}>
         <span>{label}</span>
-        {sortBy === column && (
-          <span className={styles.sortIcon}>
-            {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
-          </span>
-        )}
+        {/* 켜지지 않은 열도 자리는 잡아 둔다 — 켤 때 넓어지면 옆 칸이 접힌다. */}
+        <span
+          className={`${styles.sortIcon} ${
+            sortBy === column ? '' : styles.sortIconIdle
+          }`}
+        >
+          {sortBy === column && sortOrder === 'desc' ? (
+            <MdArrowDropDown />
+          ) : (
+            <MdArrowDropUp />
+          )}
+        </span>
       </div>
     </th>
   );

@@ -9,34 +9,13 @@ import {
   formatAssignedAt,
 } from '@/lib/insurance';
 import * as XLSX from 'xlsx';
-import { UAParser } from 'ua-parser-js';
+import { extractDeviceInfo } from '@/lib/deviceInfo';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const STORAGE_BUCKET = 'files';
-
-/** 요청에서 기기/OS/브라우저/IP 정보를 추출한다. */
-function extractDeviceInfo(request: NextRequest) {
-  const userAgent = request.headers.get('user-agent') || '';
-  const parser = new UAParser(userAgent);
-
-  const device = parser.getDevice();
-  const os = parser.getOS();
-  const browser = parser.getBrowser();
-
-  // x-forwarded-for는 프록시/로드밸런서가 넣는 헤더. 쉼표로 나뉜 여러 IP 중 첫 번째가 실 클라이언트.
-  const xForwarded = request.headers.get('x-forwarded-for');
-  const ip = xForwarded ? xForwarded.split(',')[0].trim() : null;
-
-  return {
-    ip_address: ip,
-    device_type: device.type || 'desktop', // mobile, tablet, desktop
-    os_name: os.name || null, // Windows, macOS, iOS, Android
-    browser_name: browser.name || null, // Chrome, Safari, Firefox, Edge
-  };
-}
 
 /** 선점해 둔 다운로드 기록을 되돌린다. 파일을 못 준 채로 한도만 깎이면 안 된다. */
 async function releaseReservedRecord(recordId: number | null) {
