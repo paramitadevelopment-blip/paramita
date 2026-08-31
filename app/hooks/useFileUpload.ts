@@ -75,6 +75,15 @@ export function useDeployFiles() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       invalidateDashboard(queryClient);
+
+      /*
+       * 배포는 파일만 만드는 게 아니다. 배정에서 빠진 건이 재신청 알림으로 쌓이고,
+       * 60일 3회에 걸린 사람이 명단에 오르며, 이미 명단에 있던 사람은 신청횟수가
+       * 늘어난다. 이걸 안 지우면 방금 배포했는데 화면 숫자가 그대로라 사람이
+       * "안 들어갔나" 하고 또 배포하게 된다.
+       */
+      queryClient.invalidateQueries({ queryKey: ['reapplyNotices'] });
+      queryClient.invalidateQueries({ queryKey: ['blacklist'] });
     },
   });
 }
