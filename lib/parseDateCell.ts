@@ -1,3 +1,5 @@
+import { formatCellValue } from '@/lib/excelCell';
+
 /**
  * 파일 안에 글자로 적혀 있는 날짜를 다시 Date로 읽는다.
  *
@@ -23,9 +25,26 @@ function parseKoreanTime(text: string): { h: number; m: number; s: number } | nu
 }
 
 export function parseDateCell(value: unknown): Date | null {
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    /*
+     * xlsx가 만든 Date는 그대로 읽으면 하루 밀린다.
+     *
+     * 1899년 서울 표준시가 UTC+8:27:52였는데 JS는 타임존을 분 단위로만 다뤄서
+     * 그 52초가 오차로 남는다. 날짜만 있는 칸이 자정이 아니라 자정 직전
+     * (전날 23:59:08)으로 들어와, 연·월·일을 읽으면 하루 전 날짜가 나온다.
+     *
+     * 저장할 때 formatCellValue가 푸는 것과 같은 방식으로 되돌린다. 두 곳이
+     * 다른 기준을 쓰면 같은 셀이 파일에 적힐 때와 비교될 때 다른 날이 된다.
+     */
+    const text = formatCellValue(value);
+    return typeof text === 'string' ? parseDateText(text) : value;
+  }
 
-  const text = String(value ?? '').trim();
+  return parseDateText(String(value ?? '').trim());
+}
+
+function parseDateText(text: string): Date | null {
   if (!text) return null;
 
   // `2026. 8. 25 오후 05:19:52` / `2026-08-11` / `2026/08/11 13:00`

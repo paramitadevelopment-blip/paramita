@@ -98,6 +98,38 @@ describe('직전 배정 찾기', () => {
     expect(findLastAssignment(이번건, [])).toBeNull();
   });
 
+  /**
+   * 접수일자가 같다고 "같은 신청서가 두 번 들어온 것"으로 단정하지 않는다.
+   * past는 이미 별도 업로드에서 온 행이라, 날짜가 같아도 실제로는 다시 신청한
+   * 것일 수 있다 — 알려줄 지사가 있으면 알린다.
+   */
+  it('접수일자가 같아도 직전 배정으로 인정한다', () => {
+    const past = [rec({ assignedTo: '경기', uploadedAt: now, receivedAt: now })];
+    const 같은날신청 = rec({ assignedTo: '', uploadedAt: now, receivedAt: now });
+
+    expect(findLastAssignment(같은날신청, past)?.dept).toBe('경기');
+  });
+
+  it('나중에 신청된 건은 직전 배정으로 안 본다', () => {
+    const past = [rec({ assignedTo: '경기', uploadedAt: daysAgo(-1), receivedAt: daysAgo(-1) })];
+
+    expect(findLastAssignment(이번건, past)).toBeNull();
+  });
+
+  /**
+   * 엑셀 일련번호를 문자열로 저장했다 다시 읽으면 같은 날짜인데도 시각이
+   * 몇십 초 어긋난다(1899년 서울 표준시 52초 오차, lib/excelCell.ts 참고).
+   * 시각까지 비교하면 그 오차 때문에 "같은 날"인데 "나중"으로 잘못 걸러진다.
+   */
+  it('같은 날짜라도 시각이 몇 초 어긋나면 직전 배정으로 인정한다', () => {
+    const 같은날_52초뒤 = new Date(now);
+    같은날_52초뒤.setSeconds(52);
+    const past = [rec({ assignedTo: '경기', uploadedAt: now, receivedAt: 같은날_52초뒤 })];
+    const 오늘신청 = rec({ assignedTo: '', uploadedAt: now, receivedAt: now });
+
+    expect(findLastAssignment(오늘신청, past)?.dept).toBe('경기');
+  });
+
   it('어느 파일의 어느 날 건인지 함께 돌려준다', () => {
     const past = [rec({ fileId: 'abc', fileName: '8월.xlsx', uploadedAt: daysAgo(7) })];
 

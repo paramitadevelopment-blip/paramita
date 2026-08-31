@@ -206,13 +206,19 @@ describe('시나리오 · 8/01 신청 → 8/05 재신청 → 8/26 또 신청', (
 });
 
 describe('예외 · 같은 날 두 번 들어온 신청', () => {
-  it('같은 날짜면 알림을 안 만든다 — 같은 신청서가 두 번 들어온 것이다', () => {
+  /**
+   * 접수일자만 보고 "같은 신청서가 두 번 들어온 것"이라 단정하지 않는다.
+   * 주문번호가 다르면(별도 업로드) 이미 중복 판정에서 걸러졌을 뿐, 실제로는
+   * 두 번 신청한 것일 수 있다 — 접수일자가 같다는 이유로 알림을 놓치면 안 된다.
+   */
+  it('같은 날짜여도 알림을 만든다 — 서로 다른 업로드 건이다', () => {
     const past: PastRow[] = [];
     deploy([row({ received: d(8, 1), order: 'A' })], past, [], d(8, 1));
     const 두번째 = deploy([row({ received: d(8, 1), order: 'B' })], past, [], d(8, 1));
 
     expect(두번째.excluded).toHaveLength(1);
-    expect(두번째.notices).toHaveLength(0);
+    expect(두번째.notices).toHaveLength(1);
+    expect(두번째.notices[0].previousAt).toEqual(d(8, 1));
   });
 });
 

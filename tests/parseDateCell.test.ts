@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseDateCell } from '@/lib/parseDateCell';
+import { formatCellValue } from '@/lib/excelCell';
 import { formatAssignedAt } from '@/lib/insurance';
 
 /**
@@ -53,9 +54,39 @@ describe('접수일자 — 거래처가 준 형식', () => {
 });
 
 describe('못 읽는 값', () => {
-  it('Date 는 그대로 돌려준다', () => {
+  it('Date 는 같은 날을 가리킨다', () => {
     const d = new Date(2026, 7, 11);
-    expect(parseDateCell(d)).toBe(d);
+    const got = parseDateCell(d)!;
+
+    expect(got.getFullYear()).toBe(2026);
+    expect(got.getMonth()).toBe(7);
+    expect(got.getDate()).toBe(11);
+  });
+
+  /**
+   * xlsx가 만든 Date는 1899년 서울 표준시(UTC+8:27:52)의 52초 오차 때문에
+   * 자정이 아니라 전날 23:59:08로 들어온다. 그대로 연·월·일을 읽으면 하루
+   * 전 날짜가 나와, 파일에 적힌 날짜(formatCellValue)와 비교값이 어긋난다.
+   */
+  it('엑셀이 준 Date가 자정 직전으로 밀려 있어도 그날로 읽는다', () => {
+    // 8/11 00:00 에서 52초 모자란 값 — xlsx 가 실제로 주는 모양
+    const 밀린값 = new Date(new Date(2026, 7, 11).getTime() - 52_000);
+
+    const got = parseDateCell(밀린값)!;
+
+    expect(got.getDate()).toBe(11);
+    expect(got.getMonth()).toBe(7);
+  });
+
+  /** 파일에 적히는 값과 비교에 쓰는 값이 같은 날을 가리켜야 한다. */
+  it('formatCellValue 가 적은 날짜와 같은 날로 읽힌다', () => {
+    const 밀린값 = new Date(new Date(2026, 7, 11).getTime() - 52_000);
+
+    const 적힌글자 = formatCellValue(밀린값) as string;
+    const 다시읽음 = parseDateCell(밀린값)!;
+
+    expect(적힌글자.slice(0, 10)).toBe('2026-08-11');
+    expect(parseDateCell(적힌글자)!.getTime()).toBe(다시읽음.getTime());
   });
 
   it('빈 값·글자는 null', () => {

@@ -64,6 +64,19 @@ function whenApplied(record: AssignmentRecord): Date {
   return record.receivedAt ?? record.assignedAt ?? record.uploadedAt;
 }
 
+/**
+ * 연-월-일만 비교할 수 있는 숫자로 바꾼다.
+ *
+ * 접수일자는 그 날 하루를 가리키는 값이지 정확한 시각이 아니다. 그런데 엑셀
+ * 일련번호를 문자열로 저장했다 다시 읽으면(1899년 서울 표준시의 52초 오차,
+ * lib/excelCell.ts의 formatCellValue 참고) 같은 날짜인데도 시각이 몇십 초
+ * 어긋난다. 시각까지 그대로 비교하면 그 오차 때문에 "같은 날"인데 DB에서
+ * 다시 읽은 기록이 "나중"으로 잘못 걸러진다.
+ */
+function dayOf(date: Date): number {
+  return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+}
+
 /** 이 행이 실제로 지사에 배정됐는가 */
 export function isAssignedRecord(record: AssignmentRecord): boolean {
   return !NOT_ASSIGNED.has(String(record.assignedTo ?? '').trim());
@@ -90,12 +103,14 @@ function isSameCustomer(a: AssignmentRecord, b: AssignmentRecord): boolean {
 
 /**
  * @param target 이번에 빠진 행. receivedAt 이 이번 신청일이다
- * @param past   과거 기록 (기간은 부르는 쪽 책임)
+ * @param past   과거 기록 (기간은 부르는 쪽 책임). 이미 중복·블랙리스트 판정을
+ *               거쳐 배정에서 빠진 행만 여기로 온다 — "이게 중복인가"는 여기서
+ *               다시 묻지 않는다.
  * @returns 직전 배정. 없으면 null — 그때는 알림을 만들지 않는다.
  *
- * **이번보다 앞서 신청된 건만 본다.** 같은 날짜면 다시 신청한 게 아니라
- * 같은 신청서가 두 번 들어온 것이다. 같은 파일을 두 번 올리면 그런 행이
- * 통째로 생기는데, 그걸 "또 신청했다"고 지사에 알리면 잘못된 정보다.
+ * **이번보다 나중에 신청된 건만 뺀다.** 접수일자가 같아도 서로 다른 업로드
+ * 건이면 실제로 두 번 신청한 것일 수 있다 — 접수일자만 보고 "같은 신청서가
+ * 두 번 들어온 것"이라 단정하면, 진짜 재신청인데도 지사에 알리지 않게 된다.
  */
 export function findLastAssignment(
   target: AssignmentRecord,
@@ -107,8 +122,8 @@ export function findLastAssignment(
   for (const record of past) {
     if (!isAssignedRecord(record)) continue;
     if (!isSameCustomer(target, record)) continue;
-    // 같은 날이거나 나중이면 이전 신청이 아니다.
-    if (whenApplied(record) >= 이번신청일) continue;
+    // 나중에 신청된 건만 뺀다. 날짜(연-월-일)만 보고 시각 오차는 무시한다.
+    if (dayOf(whenApplied(record)) > dayOf(이번신청일)) continue;
     // 가장 최근 것 하나만 남긴다. 정렬해서 찾으면 과거 전체를 훑을 때마다
     // 정렬 비용이 붙는데, 최댓값 하나를 고르는 데는 한 번 훑으면 된다.
     if (!best || whenApplied(record) > whenApplied(best)) best = record;

@@ -187,11 +187,10 @@ describe('알림 만들기', () => {
   });
 
   /**
-   * 같은 날짜면 다시 신청한 게 아니라 같은 신청서가 두 번 들어온 것이다.
-   * 같은 파일을 두 번 올리면 그런 행이 통째로 생기는데, 그걸 "또 신청했다"고
-   * 지사에 알리면 잘못된 정보다.
+   * 접수일자가 같아도 서로 다른 업로드 건일 수 있다 — 실제로 다시 신청한
+   * 것일 수 있으므로 알림을 만든다.
    */
-  it('이전 신청일이 이번과 같은 날이면 알림을 안 만든다', async () => {
+  it('이전 신청일이 이번과 같은 날이어도 알림을 만든다', async () => {
     const { client, inserted } = fakeSupabase();
     const 같은날 = new Date(2026, 7, 11);
 
@@ -203,8 +202,8 @@ describe('알림 만들기', () => {
       now
     );
 
-    expect(r.saved).toBe(0);
-    expect(inserted).toHaveLength(0);
+    expect(r.saved).toBe(1);
+    expect(inserted).toHaveLength(1);
   });
 
   it('이전 신청일이 이번보다 나중이면 알림을 안 만든다', async () => {
