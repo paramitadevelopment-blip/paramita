@@ -206,10 +206,15 @@ describe('파일 업로드 → 배포 → 명단 등록', () => {
   });
 
   /**
-   * 실제 파일에서 났던 일이다 — 이름도 생년월일도 다른 두 사람이 번호를 공유해
-   * 3회가 됐다. 각자 한 줄씩 오르되, 저장된 이름은 그 행에 적힌 이름이어야 한다.
+   * 실제 파일에서 났던 일이다 — 이름도 생년월일도 다른 행들이 번호를 공유해
+   * 3회가 됐다.
+   *
+   * **한 줄로 오른다.** 판정(isSamePerson)이 상품+번호만 보고 생년월일을 안 보므로,
+   * 이들은 규칙상 같은 사람이다. 예전에는 등록할 때만 생년월일까지 묶음에 넣어
+   * 두 줄로 올랐는데, 그러면 막을 때는 한 사람인데 명단에는 둘이라 신청 건이
+   * 양쪽에 나뉘어 붙고 횟수가 중복된다.
    */
-  it('번호를 공유한 다른 이름도 각각 한 줄로 오른다', async () => {
+  it('번호를 공유하면 이름·생년월일이 달라도 한 줄로 오른다', async () => {
     const 여울찬 = row({ name: '여울찬', order: 'A1' });
     const 여울찬2 = row({ name: '여울찬', order: 'A2' });
     const 테스트 = row({
@@ -221,10 +226,19 @@ describe('파일 업로드 → 배포 → 명단 등록', () => {
 
     const got = await deploy([여울찬, 여울찬2, 테스트]);
 
-    expect(got.rows).toHaveLength(2);
-    expect(got.rows.map((r) => r.customer_name).sort()).toEqual(['여울찬', '테스트']);
-    expect(got.rows.every((r) => r.registered_by === 'system')).toBe(true);
-    expect(got.rows.every((r) => r.request_count === 3)).toBe(true);
+    expect(got.rows).toHaveLength(1);
+    expect(got.rows[0].registered_by).toBe('system');
+  });
+
+  /** 한쪽에만 있던 번호도 명단 줄에 담겨야 다음 배포에서 어느 칸으로 와도 걸린다. */
+  it('묶인 사람의 번호를 모두 담는다', async () => {
+    const 여울찬 = row({ name: '여울찬', order: 'A1' });
+    const 여울찬2 = row({ name: '여울찬', order: 'A2' });
+    const 테스트 = row({ name: '테스트', order: 'A3', tel2: '010-1234-1234' });
+
+    const got = await deploy([여울찬, 여울찬2, 테스트]);
+
+    expect(got.rows[0].phone_keys.sort()).toEqual(['01012341234', '01059380726']);
   });
 
   it('같은 주문번호가 두 줄이면 한 번으로 센다 — 3회에 못 미쳐 안 오른다', async () => {

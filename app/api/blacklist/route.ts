@@ -6,7 +6,7 @@ import { parsePagination } from '@/lib/pagination';
 import { normalizeProductName, normalizePhone, normalizeBirth } from '@/lib/insurance';
 import { maskJumin } from '@/lib/columnAliases';
 import type { BlacklistKey } from '@/lib/blacklist';
-import { attachSourceFiles, type SourceFile } from '@/lib/blacklistFiles';
+import { attachSourceFiles, type SourceFile, type SourceFileHit } from '@/lib/blacklistFiles';
 import { recordBlacklistHistory } from '@/lib/blacklistStore';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -114,6 +114,47 @@ export async function GET(request: NextRequest) {
     const totalRecords = count ?? 0;
     const records = data ?? [];
 
+    /*
+     * 출처 목록은 저장해 둔 신청 건에서 만든다.
+     *
+     * 예전에는 조회할 때마다 최근 60일 파일을 훑어 만들었다. 그러면 파일을
+     * 지우거나 60일이 지났을 때 목록에서 사라지는데, 명단은 영구 보관이라
+     * '3회' 옆에 두 줄만 뜨는 일이 생긴다. 신청횟수도 이 표의 줄 수라
+     * 둘이 같은 자리에서 나온다.
+     */
+    const applicationsByRecord = new Map<number, SourceFileHit[]>();
+    if (records.length > 0) {
+      const { data: applications, error: appError } = await supabase
+        .from('blacklist_applications')
+        .select('blacklist_id, order_key, customer_name, product_name, source_file_id, source_file_name, applied_at')
+        .in('blacklist_id', records.map((r) => r.id))
+        .order('applied_at', { ascending: false, nullsFirst: false });
+
+      if (appError) {
+        // 목록을 못 만들어도 명단 자체는 보여줘야 한다. 다만 조용히 넘기면
+        // 이 기능이 죽어 있는 걸 아무도 모른다.
+        console.error('Blacklist application lookup failed:', appError);
+      }
+
+      for (const row of applications ?? []) {
+        const id = Number(row.blacklist_id);
+        const hit: SourceFileHit = {
+          id: row.source_file_id ?? null,
+          // 파일을 지워도 이름은 남는다. 이름이 있으면 파일 삭제 히스토리에서
+          // 그 파일을 되짚을 수 있다.
+          name: row.source_file_name || '-',
+          orderNo: row.order_key ?? '',
+          customerName: row.customer_name ?? '',
+          product: row.product_name ?? '',
+        };
+
+        const bucket = applicationsByRecord.get(id);
+        if (bucket) bucket.push(hit);
+        else applicationsByRecord.set(id, [hit]);
+      }
+    }
+
+    // 아직 신청 건이 없는 줄(옛 데이터·관리자 수동 등록)은 파일을 훑어 채운다.
     // 60일치 파일을 한 번만 읽어 행 키로 바꿔 둔다. 예전에는 이 조회가 명단
     // 한 줄마다 돌아서, 10줄이면 같은 파일을 열 번 퍼 올려 열 번 파싱했다.
     const sixtyDaysAgo = new Date();
@@ -162,6 +203,10 @@ export async function GET(request: NextRequest) {
 
     // 사람마다 신청 건별 출처 목록을 붙인다. 행은 쪼개지 않는다 —
     // 한 사람이 표에서 한 줄이어야 신청횟수·해제 버튼이 그 사람 것으로 읽힌다.
+    //
+    // 저장해 둔 신청 건이 있으면 그걸 쓰고, 없는 줄만 파일을 훑어 채운다.
+    // 옛 데이터는 아직 신청 건이 없어서, 그 줄까지 빈칸으로 두면 지금 보이던
+    // 출처가 갑자기 사라진다.
     const expandedData = attachSourceFiles(
       records,
       (record): BlacklistKey => ({
@@ -171,7 +216,10 @@ export async function GET(request: NextRequest) {
         tel2: record.tel2 || '',
       }),
       fileKeys
-    );
+    ).map((record) => {
+      const stored = applicationsByRecord.get(record.id);
+      return stored && stored.length > 0 ? { ...record, source_files: stored } : record;
+    });
 
     // 이력도 한 번에 읽는다. 전개하면 같은 id가 여러 줄이 되므로 id로 묶어 둔다.
     const historyByRecord = new Map<number, unknown[]>();

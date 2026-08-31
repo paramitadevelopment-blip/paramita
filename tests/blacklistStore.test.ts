@@ -59,12 +59,21 @@ describe('명단 읽기', () => {
 
   it('판정에 쓸 네 값으로 바꿔 준다', async () => {
     const { client } = fakeSupabase([
-      { product_name: '동양생명', birth: '5801011', tel1: '01011112222', tel2: null },
+      { id: 7, product_name: '동양생명', birth: '5801011', tel1: '01011112222', tel2: null },
     ]);
 
     expect(await loadBlacklist(client)).toEqual([
-      { product: '동양생명', birth: '5801011', tel1: '01011112222', tel2: '' },
+      { id: 7, product: '동양생명', birth: '5801011', tel1: '01011112222', tel2: '' },
     ]);
+  });
+
+  /** 신청 건을 어느 줄에 달지 정하려면 id가 있어야 한다. */
+  it('id를 함께 돌려준다', async () => {
+    const { client } = fakeSupabase([
+      { id: 12, product_name: '동양생명', birth: '5801011', tel1: '01011112222', tel2: null },
+    ]);
+
+    expect((await loadBlacklist(client))[0].id).toBe(12);
   });
 });
 

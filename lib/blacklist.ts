@@ -72,6 +72,32 @@ function isSamePersonIgnoringProduct(a: BlacklistKey, b: BlacklistKey): boolean 
   return phonesOf(b).some((p) => mine.has(p));
 }
 
+/**
+ * 명단에서 이 사람에 해당하는 줄을 찾는다.
+ *
+ * `splitAlreadyListed`가 "막을까"를 정한다면 이건 "누구로 막았나"를 돌려준다.
+ * 신청 건을 그 사람 밑에 달아 두려면 어느 줄에 걸렸는지 알아야 한다.
+ * 판정은 같은 기준을 쓴다 — 여기서만 다르면 막힌 줄과 기록되는 줄이 갈린다.
+ */
+export function findListed<L extends BlacklistKey>(
+  key: BlacklistKey,
+  listed: L[]
+): L | null {
+  if (!isJudgeable(key)) return null;
+
+  for (const entry of listed) {
+    // 상품이 있는 줄은 배포가 올린 것, 없는 줄은 관리자가 손으로 올린 것이다.
+    // 후자는 "어느 상품으로 와도 막아라"라서 번호만 본다.
+    const matched = normalizeProductName(entry.product)
+      ? isSamePerson(key, entry)
+      : isSamePersonIgnoringProduct(key, entry);
+
+    if (matched) return entry;
+  }
+
+  return null;
+}
+
 /** 상품+생년월일로 묶어둔 후보 목록. 번호 겹침은 이 안에서만 훑으면 된다. */
 function bucketize(keys: BlacklistKey[]): Map<string, BlacklistKey[]> {
   const map = new Map<string, BlacklistKey[]>();

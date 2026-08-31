@@ -43,8 +43,13 @@ import { normalizeSheet } from '@/lib/columnAliases';
 import { dedupeAgainstHistory } from '@/lib/historyDedupe';
 import { resolveAddresses } from '@/lib/addressFix';
 import { loadRecentKeys, withinDays, toDedupeKeys, toBlacklistKeys } from '@/lib/historyLookup';
-import { splitAlreadyListed, splitOverThreshold } from '@/lib/blacklist';
-import { loadBlacklist, registerBlacklist, type BlacklistEntry } from '@/lib/blacklistStore';
+import { splitAlreadyListed, splitOverThreshold, findListed } from '@/lib/blacklist';
+import {
+  loadBlacklist,
+  registerBlacklist,
+  recordApplications,
+  type BlacklistEntry,
+} from '@/lib/blacklistStore';
 import { recordReapplyNotices, type ReapplyCandidate } from '@/lib/reapplyStore';
 import * as XLSX from 'xlsx';
 import { v4 as uuidv4 } from 'uuid';
@@ -174,6 +179,8 @@ export async function POST(request: NextRequest) {
     // 이번 배포에서 새로 명단에 올릴 사람들. 배포가 다 끝난 뒤에 한 번에 넣는다 —
     // 중간에 실패하면 배정도 안 됐는데 명단만 남는다.
     const pendingBlacklist: BlacklistEntry[] = [];
+    // 이미 명단에 있는 사람이 또 신청한 건. 명단 줄은 그대로 두고 신청만 덧붙인다.
+    const pendingApplications: Array<{ blacklistId: number; entry: BlacklistEntry }> = [];
     // 배정에서 빠진 건을 직전에 받았던 지사에게 알린다. 배포가 끝난 뒤 한 번에 넣는다.
     const pendingReapply: ReapplyCandidate[] = [];
 
@@ -518,19 +525,41 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 명단에 남길 한 건. 신청 하나가 한 줄이라 주문번호·접수일자까지 들고 간다.
+      const toBlacklistEntry = (item: any[], reason: string, count: number): BlacklistEntry => ({
+        product: String(item[productIdx] ?? ''),
+        birth: String(item[juminIdx] ?? ''),
+        tel1: tel1Idx >= 0 ? String(item[tel1Idx] ?? '') : '',
+        tel2: String(item[phoneIdx] ?? ''),
+        customerName: String(item[nameIdx] ?? ''),
+        reason,
+        count,
+        sourceFileId: originalFiles[fileIdx].id,
+        sourceFileName: originalFile.name,
+        orderNo: String(item[orderIdx] ?? ''),
+        appliedAt: receiptIdx >= 0 ? parseDateCell(item[receiptIdx]) : null,
+      });
+
       // 이번에 걸린 사람을 명단에 올린다. 미리보기에서는 하지 않는다 —
       // 올려보기만 하고 배포를 안 했는데 영구 차단되면 안 된다.
       for (const { item, count } of blacklistNew) {
-        pendingBlacklist.push({
-          product: String(item[productIdx] ?? ''),
-          birth: String(item[juminIdx] ?? ''),
-          tel1: tel1Idx >= 0 ? String(item[tel1Idx] ?? '') : '',
-          tel2: String(item[phoneIdx] ?? ''),
-          customerName: String(item[nameIdx] ?? ''),
-          reason: BLACKLIST_REASON_NEW,
-          count,
-          sourceFileId: originalFiles[fileIdx].id,
-          sourceFileName: originalFile.name,
+        pendingBlacklist.push(toBlacklistEntry(item, BLACKLIST_REASON_NEW, count));
+      }
+
+      /*
+       * 이미 명단에 있는 사람이 또 신청했다.
+       *
+       * 명단에 줄을 새로 만들지는 않는다 — 이미 있으니까. 다만 이번 신청도
+       * 있었던 일이라 그 사람 밑에 신청 건으로 붙인다. 안 붙이면 신청횟수가
+       * 등록 시점 값에 굳어, 화면의 '3회' 옆에 출처가 네 줄 뜨게 된다.
+       */
+      for (const item of blacklistListed) {
+        const listed = findListed(toBlKey(item), blacklistKeys);
+        if (!listed) continue;
+
+        pendingApplications.push({
+          blacklistId: listed.id,
+          entry: toBlacklistEntry(item, BLACKLIST_REASON_LISTED, 0),
         });
       }
 
@@ -783,6 +812,10 @@ export async function POST(request: NextRequest) {
     // 명단만 남아 영구히 막히는 사람이 생긴다.
     // 실패해도 배포는 되돌리지 않는다 — 이번 건은 이미 빠졌고, 다음에 다시 걸린다.
     const blacklistedCount = await registerBlacklist(supabase, pendingBlacklist);
+
+    // 이미 명단에 있던 사람의 이번 신청을 덧붙이고 횟수를 다시 센다.
+    // 같은 파일을 두 번 올려도 주문번호가 같아 한 건으로 남는다.
+    await recordApplications(supabase, pendingApplications);
 
     /*
      * 재신청 알림을 쌓는다.
