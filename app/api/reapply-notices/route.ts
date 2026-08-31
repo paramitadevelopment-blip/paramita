@@ -18,7 +18,17 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * 조건을 건다 — 요청을 직접 만들면 남의 고객 개인정보를 그대로 받아 갈 수 있다.
  */
 
-const SORTABLE = ['applied_at', 'customer_name', 'previous_applied_at', 'reason', 'assigned_dept'];
+const SORTABLE = [
+  'applied_at',
+  'customer_name',
+  'birth',
+  'tel1',
+  'tel2',
+  'previous_applied_at',
+  'assigned_dept',
+  'reason',
+  'read_at',
+];
 
 /**
  * 이 사용자의 소속.
@@ -35,7 +45,7 @@ const LIST_COLUMNS =
   'id, customer_name, birth, tel1, tel2, product_name, reason, order_no, ' +
   'source_file_id, source_file_name, applied_at, ' +
   'assigned_dept, assigned_group, previous_applied_at, assigned_file_id, assigned_file_name, ' +
-  'read_at, created_at';
+  'read_at, read_by, created_at';
 
 export async function GET(request: NextRequest) {
   try {
@@ -95,9 +105,38 @@ export async function GET(request: NextRequest) {
     }
 
     const totalRecords = count ?? 0;
+    const records = (data ?? []) as any[];
+
+    /*
+     * 누가 확인했는지 이름을 붙인다.
+     *
+     * read_by에는 사용자 id만 들어 있다. 지사는 자기들끼리 누가 봤는지 알아야
+     * 두 사람이 같은 고객에게 또 연락하는 일이 없고, 관리자는 어느 지사의 누가
+     * 언제 봤는지 확인할 수 있어야 한다.
+     *
+     * users를 참조하는 외래키가 없어 조인이 안 되므로 id를 모아 한 번에 읽는다.
+     * 알림 한 줄마다 물으면 20줄에 20번 왕복한다.
+     */
+    const readerIds = [...new Set(records.map((r) => r.read_by).filter(Boolean))];
+    const nameById = new Map<number, string>();
+
+    if (readerIds.length > 0) {
+      const { data: readers } = await supabase
+        .from('users')
+        .select('id, name, username')
+        .in('id', readerIds);
+
+      for (const reader of readers ?? []) {
+        nameById.set(Number(reader.id), String(reader.name || reader.username || ''));
+      }
+    }
 
     return NextResponse.json({
-      data: data ?? [],
+      data: records.map((record) => ({
+        ...record,
+        // 계정을 지웠으면 이름이 없다. 그래도 '확인함'과 시각은 남아야 한다.
+        read_by_name: record.read_by ? (nameById.get(Number(record.read_by)) ?? null) : null,
+      })),
       pagination: {
         page,
         limit,

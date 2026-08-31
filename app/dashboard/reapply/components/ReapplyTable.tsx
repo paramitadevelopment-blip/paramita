@@ -111,8 +111,20 @@ const ReapplyTable = memo(function ReapplyTableComponent({
               sortOrder={sortOrder}
               onSort={onSort}
             />
-            <th>생년월일</th>
-            <th>전화번호</th>
+            <SortableHeader
+              label="생년월일"
+              column="birth"
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={onSort}
+            />
+            <SortableHeader
+              label="전화번호"
+              column="tel1"
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={onSort}
+            />
             <SortableHeader
               label="이전 배정된 날"
               column="previous_applied_at"
@@ -120,7 +132,15 @@ const ReapplyTable = memo(function ReapplyTableComponent({
               sortOrder={sortOrder}
               onSort={onSort}
             />
-            {showGroup && <th>배정 소속</th>}
+            {showGroup && (
+              <SortableHeader
+                label="배정 소속"
+                column="assigned_dept"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={onSort}
+              />
+            )}
             <SortableHeader
               label="다시 신청한 날"
               column="applied_at"
@@ -135,7 +155,13 @@ const ReapplyTable = memo(function ReapplyTableComponent({
               sortOrder={sortOrder}
               onSort={onSort}
             />
-            <th>확인</th>
+            <SortableHeader
+              label="확인"
+              column="read_at"
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={onSort}
+            />
           </tr>
         </thead>
         <tbody>
@@ -160,9 +186,16 @@ const ReapplyTable = memo(function ReapplyTableComponent({
               </td>
               <td>
                 {notice.read_at ? (
-                  <span className={styles.readAt} title={formatDate(notice.read_at)}>
-                    확인함
-                  </span>
+                  // 언제 봤는지는 마우스를 올려야 보이면 소용이 없다. 두 사람이
+                  // 같은 고객에게 또 연락하는 걸 막으려면 바로 보여야 한다.
+                  <div className={styles.readCell}>
+                    <span className={styles.readAt}>확인함</span>
+                    <span className={styles.readMeta}>{formatDate(notice.read_at)}</span>
+                    {/* 관리자는 어느 지사의 누가 봤는지까지 알아야 한다. */}
+                    {showGroup && notice.read_by_name && (
+                      <span className={styles.readMeta}>{notice.read_by_name}</span>
+                    )}
+                  </div>
                 ) : (
                   <button
                     className={styles.readBtn}

@@ -60,7 +60,11 @@ const ReapplySection = memo(function ReapplySectionComponent() {
           <option value="applied_at">다시 신청한 날순</option>
           <option value="previous_applied_at">이전 배정된 날순</option>
           <option value="customer_name">고객명순</option>
+          <option value="birth">생년월일순</option>
+          <option value="tel1">전화번호순</option>
+          {isAdmin && <option value="assigned_dept">배정 소속순</option>}
           <option value="reason">결과순</option>
+          <option value="read_at">확인순</option>
         </select>
 
         <select

@@ -148,6 +148,8 @@ const BlacklistSection = memo(function BlacklistSectionComponent({
         >
           <option value="registered_at">등록일순</option>
           <option value="customer_name">고객명순</option>
+          <option value="birth">생년월일순</option>
+          <option value="tel2">전화번호순</option>
           <option value="request_count">신청횟수순</option>
           <option value="registered_by">등록경로순</option>
         </select>

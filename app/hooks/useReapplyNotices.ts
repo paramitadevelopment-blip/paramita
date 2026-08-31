@@ -30,6 +30,8 @@ export interface ReapplyNotice {
   assigned_file_id: string | null;
   assigned_file_name: string | null;
   read_at: string | null;
+  /** 확인한 사람. 계정을 지웠으면 이름이 없고 시각만 남는다. */
+  read_by_name: string | null;
   created_at: string;
 }
 

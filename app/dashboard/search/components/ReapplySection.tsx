@@ -87,6 +87,8 @@ function ReapplySection({ searchQuery, formatDateTime }: ReapplySectionProps) {
       if (typeof aVal === 'string' && typeof bVal === 'string') {
         return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
       }
+      if (!aVal && bVal) return sortOrder === 'asc' ? 1 : -1;
+      if (aVal && !bVal) return sortOrder === 'asc' ? -1 : 1;
       return 0;
     });
     return sorted;
@@ -102,11 +104,12 @@ function ReapplySection({ searchQuery, formatDateTime }: ReapplySectionProps) {
   const columns: Array<[string, string]> = [
     ['customer_name', '고객명'],
     ['birth', '생년월일'],
-    ['tel2', '전화번호'],
+    ['tel1', '전화번호'],
     ['previous_applied_at', '이전 배정된 날'],
     ['assigned_dept', '배정 소속'],
     ['applied_at', '다시 신청한 날'],
     ['reason', '결과'],
+    ['read_at', '확인'],
   ];
 
   return (
@@ -133,7 +136,6 @@ function ReapplySection({ searchQuery, formatDateTime }: ReapplySectionProps) {
                     </div>
                   </th>
                 ))}
-                <th>확인</th>
               </tr>
             </thead>
             <tbody>
