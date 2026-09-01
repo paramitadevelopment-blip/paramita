@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     // 다운로드 로그는 전 사용자의 기록이라 관리자 전용이다.
     // 사이드바에서 링크를 숨기는 건 UX일 뿐이고, 실제 차단은 여기서 한다.
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Only admin can view download history' }, { status: 403 });
     }
 

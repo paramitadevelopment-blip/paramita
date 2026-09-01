@@ -73,6 +73,64 @@ describe('지사 사용자가 못 들어가는 화면', () => {
   });
 });
 
+describe('DB담당자가 들어갈 수 있는 화면', () => {
+  it('파일전달', async () => {
+    expect(await visit('/dashboard/file-transfer', 'staff')).toBeNull();
+  });
+});
+
+describe('DB담당자가 못 들어가는 화면', () => {
+  const 나머지 = [
+    '/dashboard/download',
+    '/dashboard/reapply',
+    '/dashboard/users',
+    // 분류·배포는 관리자만 한다. DB담당자는 원본만 넘긴다 — 파일 업로드
+    // 화면 자체에 못 들어간다.
+    '/dashboard/files',
+    '/dashboard/blacklist',
+    '/dashboard/search',
+    '/dashboard/download-history',
+    '/dashboard/download-approval',
+    '/dashboard/original-files',
+  ];
+
+  for (const path of 나머지) {
+    it(`${path} 는 파일전달 화면으로 되돌려진다`, async () => {
+      expect(await visit(path, 'staff')).toBe('/dashboard/file-transfer');
+    });
+  }
+
+  /** 지사용 화이트리스트가 아니라 DB담당자 전용 화이트리스트를 봐야 한다. */
+  it('지사가 들어갈 수 있는 다운로드·재신청도 DB담당자는 못 들어간다', async () => {
+    expect(await visit('/dashboard/download', 'staff')).toBe('/dashboard/file-transfer');
+    expect(await visit('/dashboard/reapply', 'staff')).toBe('/dashboard/file-transfer');
+  });
+});
+
+describe('서브관리자(subadmin)의 화면 접근', () => {
+  const 허용화면 = [
+    '/dashboard',
+    '/dashboard/files',
+    '/dashboard/file-transfer',
+    '/dashboard/blacklist',
+    '/dashboard/search',
+    '/dashboard/download-history',
+    '/dashboard/download-approval',
+    '/dashboard/original-files',
+    '/dashboard/reapply',
+  ];
+
+  for (const path of 허용화면) {
+    it(`서브관리자는 ${path}에 접근할 수 있다`, async () => {
+      expect(await visit(path, 'subadmin')).toBeNull();
+    });
+  }
+
+  it('서브관리자는 사용자 관리(/dashboard/users)에 접근할 수 없고 대시보드로 튕긴다', async () => {
+    expect(await visit('/dashboard/users', 'subadmin')).toBe('/dashboard');
+  });
+});
+
 describe('관리자는 전부 들어간다', () => {
   for (const path of ['/dashboard/users', '/dashboard/blacklist', '/dashboard/reapply']) {
     it(path, async () => {
@@ -90,8 +148,16 @@ describe('루트 경로', () => {
     expect(await visit('/', 'admin')).toBe('/dashboard');
   });
 
+  it('서브관리자는 대시보드로', async () => {
+    expect(await visit('/', 'subadmin')).toBe('/dashboard');
+  });
+
   it('일반 사용자는 파일 다운로드로', async () => {
     expect(await visit('/', 'user')).toBe('/dashboard/download');
+  });
+
+  it('DB담당자는 파일전달로', async () => {
+    expect(await visit('/', 'staff')).toBe('/dashboard/file-transfer');
   });
 
   it('토큰을 못 읽으면 로그인으로', async () => {
@@ -100,7 +166,7 @@ describe('루트 경로', () => {
 
   /** 보내는 곳이 그 사람이 들어갈 수 있는 화면이어야 한다. 아니면 또 튕긴다. */
   it('보낸 곳에서 다시 튕기지 않는다', async () => {
-    for (const role of ['admin', 'user']) {
+    for (const role of ['admin', 'subadmin', 'user', 'staff']) {
       const 목적지 = await visit('/', role);
       expect(await visit(목적지!, role)).toBeNull();
     }

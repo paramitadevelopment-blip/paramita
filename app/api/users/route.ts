@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
-import { isAssignableGroup } from '@/lib/departments';
+import { isAssignableGroup, STAFF_DEPARTMENT, ADMIN_DEPARTMENT } from '@/lib/departments';
 import { parsePagination } from '@/lib/pagination';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -162,10 +162,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only admin can create users' }, { status: 403 });
     }
 
-    const { username, password, name, department, employee_id } = await request.json();
+    const { username, password, name, department: requestedDepartment, employee_id, role: requestedRole } = await request.json();
 
-    if (!username || !password || !name || !department) {
+    if (!username || !password || !name) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    /*
+     * 이 화면으로는 지사·서브관리자·DB담당자까지만 만들 수 있다. 관리자는 여기로 못 만든다 —
+     * 요청자가 이미 admin인 것과 별개로, 이 엔드포인트 자체가 admin을 찍어낼
+     * 수단이 되면 안 된다. 값을 안 보내면 기존과 같이 지사로 만든다.
+     */
+    const ASSIGNABLE_ROLES = ['user', 'staff', 'subadmin'];
+    const role = requestedRole ?? 'user';
+    if (!ASSIGNABLE_ROLES.includes(role)) {
+      return NextResponse.json({ error: '지정할 수 없는 역할입니다.' }, { status: 400 });
+    }
+
+    /*
+     * DB담당자의 소속은 'DB담당자', 서브관리자의 소속은 '관리자'로 고정한다.
+     * 관리자 계정 소속이 '관리자'인 것과 같은 자리다 — 화면에서 고를 필요도 없고,
+     * 요청으로 다른 값을 보내도 무시한다. 지사는 소속이 없으면 어느 지사 사람인지
+     * 알 방법이 없어 그대로 필수다.
+     */
+    const department =
+      role === 'staff'
+        ? STAFF_DEPARTMENT
+        : role === 'subadmin'
+          ? ADMIN_DEPARTMENT
+          : requestedDepartment;
+
+    if (role !== 'staff' && role !== 'subadmin' && !department) {
+      return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
     }
 
     // 입력값 길이 및 형식 검증
@@ -198,39 +226,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name must be 2-10 characters' }, { status: 400 });
     }
 
-    if (!department.trim()) {
-      return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
-    }
+    // DB담당자, 서브관리자는 서버가 직접 채운 고정값이라 이 검사를 안 거친다
+    if (role !== 'staff' && role !== 'subadmin') {
+      if (!department.trim()) {
+        return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
+      }
 
-    if (department.trim().length > 50) {
-      return NextResponse.json({ error: 'Department name must be less than 50 characters' }, { status: 400 });
-    }
+      if (department.trim().length > 50) {
+        return NextResponse.json({ error: 'Department name must be less than 50 characters' }, { status: 400 });
+      }
 
-    // 화면에서 고를 수 없게 해둔 소속이 요청으로 직접 올 수 있다. 여기서도 막는다.
-    if (!isAssignableGroup(department.trim())) {
-      return NextResponse.json(
-        { error: '해당 소속은 사용자에게 배정할 수 없습니다.' },
-        { status: 400 }
-      );
-    }
+      // 화면에서 고를 수 없게 해둔 소속이 요청으로 직접 올 수 있다. 여기서도 막는다.
+      if (!isAssignableGroup(department.trim())) {
+        return NextResponse.json(
+          { error: '해당 소속은 사용자에게 배정할 수 없습니다.' },
+          { status: 400 }
+        );
+      }
 
-    // department 존재 확인.
-    // 사용자가 속하는 건 조직('파라인슈')이지 배정 분류('파라인슈1')가 아니다.
-    // 한 조직이 여러 분류로 나뉘면 group_name이 여러 행에 걸리므로 개수로 본다.
-    const { count: deptCount } = await supabase
-      .from('departments')
-      .select('id', { count: 'exact', head: true })
-      .eq('group_name', department.trim());
+      // department 존재 확인.
+      // 사용자가 속하는 건 조직('파라인슈')이지 배정 분류('파라인슈1')가 아니다.
+      // 한 조직이 여러 분류로 나뉘면 group_name이 여러 행에 걸리므로 개수로 본다.
+      const { count: deptCount } = await supabase
+        .from('departments')
+        .select('id', { count: 'exact', head: true })
+        .eq('group_name', department.trim());
 
-    if (!deptCount) {
-      return NextResponse.json({ error: '존재하지 않는 소속입니다.' }, { status: 400 });
+      if (!deptCount) {
+        return NextResponse.json({ error: '존재하지 않는 소속입니다.' }, { status: 400 });
+      }
     }
 
     const bcrypt = require('bcryptjs');
     const password_hash = await bcrypt.hash(password, 10);
 
     const { data, error } = await supabase.from('users').insert([
-      { username, password_hash, name, department, role: 'user', employee_id },
+      { username, password_hash, name, department, role, employee_id },
     ]);
 
     if (error) {
@@ -258,7 +289,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
     }
 
-    const { id, username, name, department, password, employee_id } = await request.json();
+    const { id, username, name, department, password, employee_id, role } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -283,7 +314,7 @@ export async function PUT(request: NextRequest) {
     // Admin 사용자 수정 방지
     const { data: targetUser, error: fetchError } = await supabase
       .from('users')
-      .select('username, department')
+      .select('username, department, role')
       .eq('id', userId)
       .single();
 
@@ -295,18 +326,50 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Cannot modify admin user' }, { status: 403 });
     }
 
+    /*
+     * 역할은 본인이 스스로 못 바꾼다.
+     *
+     * 위의 "본인 수정 허용"은 이름·소속·비밀번호 같은 자기 정보에 대한 것이다.
+     * 역할까지 여기 얹으면 지사·DB담당자 계정이 자기 요청에 role을 실어 보내
+     * 스스로 권한을 올릴 수 있다. admin만 남의 역할을 바꿀 수 있게 한다.
+     */
+    if (role !== undefined) {
+      if (user.role !== 'admin') {
+        return NextResponse.json({ error: 'Only admin can change role' }, { status: 403 });
+      }
+      if (!['user', 'staff', 'subadmin'].includes(role)) {
+        return NextResponse.json({ error: '지정할 수 없는 역할입니다.' }, { status: 400 });
+      }
+    }
+
     // 필수 필드 검증
     if (name && !name.trim()) {
       return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
     }
 
-    if (department && !department.trim()) {
-      return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
+    /*
+     * 이번 요청이 끝난 뒤의 역할. role을 안 보냈으면 지금 역할 그대로다.
+     * DB담당자로 (바뀌거나 이미 DB담당자로) 남으면 소속은 'DB담당자'로 고정한다.
+     * 서브관리자로 남으면 소속은 '관리자'로 고정한다.
+     */
+    const nextRole = role !== undefined ? role : targetUser.role;
+    let resolvedDepartment: string | undefined = department;
+
+    if (nextRole === 'staff') {
+      resolvedDepartment = STAFF_DEPARTMENT;
+    } else if (nextRole === 'subadmin') {
+      resolvedDepartment = ADMIN_DEPARTMENT;
+    } else if ((targetUser.role === 'staff' || targetUser.role === 'subadmin') && !department) {
+      return NextResponse.json({ error: '소속을 선택해주세요.' }, { status: 400 });
     }
 
     // department 존재 확인 (수정하려는 경우). 생성 때와 같은 기준으로 본다.
-    if (department) {
-      if (!isAssignableGroup(department.trim())) {
+    if (resolvedDepartment && nextRole !== 'staff' && nextRole !== 'subadmin') {
+      if (!resolvedDepartment.trim()) {
+        return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
+      }
+
+      if (!isAssignableGroup(resolvedDepartment.trim())) {
         return NextResponse.json(
           { error: '해당 소속은 사용자에게 배정할 수 없습니다.' },
           { status: 400 }
@@ -316,7 +379,7 @@ export async function PUT(request: NextRequest) {
       const { count: deptCount } = await supabase
         .from('departments')
         .select('id', { count: 'exact', head: true })
-        .eq('group_name', department.trim());
+        .eq('group_name', resolvedDepartment.trim());
 
       if (!deptCount) {
         return NextResponse.json({ error: '존재하지 않는 소속입니다.' }, { status: 400 });
@@ -325,8 +388,9 @@ export async function PUT(request: NextRequest) {
 
     const updateData: any = {};
     if (name) updateData.name = name;
-    if (department) updateData.department = department;
+    if (resolvedDepartment) updateData.department = resolvedDepartment;
     if (employee_id !== undefined) updateData.employee_id = employee_id;
+    if (role !== undefined) updateData.role = role;
 
     if (password) {
       const bcrypt = require('bcryptjs');
@@ -342,15 +406,19 @@ export async function PUT(request: NextRequest) {
     if (error) throw error;
 
     // 소속이 실제로 바뀐 경우에만 이력을 남긴다. 실패해도 수정 자체는 성공 처리한다.
-    if (department && department.trim() !== targetUser.department) {
+    // 실제로 쓴 값(resolvedDepartment)을 남긴다 — DB담당자로 바뀌면 요청에 실린
+    // department는 무시되고 'DB담당자'가 들어가는데, 이력에는 요청 값이 아니라
+    // 실제로 적용된 값이 남아야 나중에 대조할 수 있다.
+    if (resolvedDepartment && resolvedDepartment.trim() !== targetUser.department) {
       const { error: logError } = await supabase.from('department_change_logs').insert({
         user_id: userId,
         from_department: targetUser.department,
-        to_department: department.trim(),
+        to_department: resolvedDepartment.trim(),
         reason: 'manual_edit',
         changed_by: user.username,
       });
 
+      if (logError) console.error('Failed to record department change log:', logError);
     }
 
     return NextResponse.json({ data });

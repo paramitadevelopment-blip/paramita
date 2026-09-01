@@ -3,7 +3,7 @@ export interface UserRow {
   username: string;
   name: string;
   department: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'subadmin' | 'user' | 'staff';
   employee_id?: string;
   created_at: string;
 }
@@ -14,6 +14,7 @@ export interface UserForm {
   name: string;
   password?: string;
   department: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'subadmin' | 'user' | 'staff';
   employee_id?: string;
 }
+

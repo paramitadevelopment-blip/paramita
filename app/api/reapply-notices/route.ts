@@ -67,8 +67,8 @@ export async function GET(request: NextRequest) {
 
     let query = supabase.from('reapply_notices').select(LIST_COLUMNS, { count: 'exact' });
 
-    // 관리자는 전체를 보고 소속으로 걸러 볼 수 있다. 그 외에는 자기 소속만.
-    if (user.role === 'admin') {
+    // 관리자/서브관리자는 전체를 보고 소속으로 걸러 볼 수 있다. 그 외에는 자기 소속만.
+    if (user.role === 'admin' || user.role === 'subadmin') {
       const group = (searchParams.get('group') || '').trim();
       if (group) query = query.eq('assigned_group', group);
     } else {
@@ -180,7 +180,7 @@ export async function PATCH(request: NextRequest) {
       // 이미 확인한 건은 그대로 둔다. 처음 본 시각이 덮이면 추적이 안 된다.
       .is('read_at', null);
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       const department = await departmentOf(user.id);
       if (!department) return NextResponse.json({ error: '소속을 확인할 수 없습니다.' }, { status: 403 });
       query = query.eq('assigned_group', department);

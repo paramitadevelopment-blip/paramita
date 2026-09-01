@@ -11,6 +11,7 @@ interface FileRow {
   uploaded_at: string;
   download_count: number;
   departments: { name: string } | null;
+  uploaded_by_name?: string | null;
   formattedDate: string;
   myDownloadStatus?: 'available' | 'downloaded' | 'pending_request' | 'rejected';
   myLastRejectReason?: string | null;
@@ -35,12 +36,12 @@ interface FileTableProps {
   onDelete: (fileId: string, fileName: string) => void;
 }
 
-const FileTable = memo(function FileTable({
+const FileTable = memo(function FileTableComponent({
   files,
   selectedFileIds,
   sortBy,
   sortOrder,
-  userRole = 'user',
+  userRole,
   onSelectAll,
   onSelectFile,
   onSort,
@@ -51,6 +52,10 @@ const FileTable = memo(function FileTable({
   onViewLogs,
   onDelete,
 }: FileTableProps) {
+  const isAdmin = userRole === 'admin' || userRole === 'subadmin';
+  const allSelected = files.length > 0 && files.every((f) => selectedFileIds.has(f.id));
+  const someSelected = files.some((f) => selectedFileIds.has(f.id));
+
   return (
     <div className={styles.tableContainer}>
       <table className={styles.table}>
@@ -59,7 +64,10 @@ const FileTable = memo(function FileTable({
             <th className={styles.colCheckbox}>
               <input
                 type="checkbox"
-                checked={selectedFileIds.size === files.length && files.length > 0}
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected && !allSelected;
+                }}
                 onChange={onSelectAll}
                 className={styles.checkbox}
               />
@@ -94,7 +102,19 @@ const FileTable = memo(function FileTable({
                 )}
               </div>
             </th>
-            {userRole === 'admin' && (
+            {isAdmin && (
+              <th className={styles.sortable} onClick={() => onSort('uploaded_by_name')}>
+                <div className={styles.headerContent}>
+                  <span>업로드한 사람</span>
+                  {sortBy === 'uploaded_by_name' && (
+                    <span className={styles.sortIcon}>
+                      {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                    </span>
+                  )}
+                </div>
+              </th>
+            )}
+            {isAdmin && (
               <th className={styles.sortable} onClick={() => onSort('download_count')}>
                 <div className={styles.headerContent}>
                   <span>다운로드수</span>
@@ -116,7 +136,7 @@ const FileTable = memo(function FileTable({
                 )}
               </div>
             </th>
-            {userRole !== 'admin' && (
+            {!isAdmin && (
               <th className={`${styles.sortable} ${styles.colRejectCount}`} onClick={() => onSort('myRejectCount')}>
                 <div className={styles.headerContent}>
                   <span>거부 횟수</span>
@@ -152,16 +172,17 @@ const FileTable = memo(function FileTable({
                 />
               </td>
               <td
-                className={userRole === 'admin' ? styles.fileNameCell : undefined}
+                className={isAdmin ? styles.fileNameCell : undefined}
                 onClick={() => {
-                  if (userRole === 'admin') onPreview(file.id, file.name);
+                  if (isAdmin) onPreview(file.id, file.name);
                 }}
               >
                 {file.name}
               </td>
               <td>{(file.size / (1024 * 1024)).toFixed(2)} MB</td>
               <td>{file.departments?.name || '-'}</td>
-              {userRole === 'admin' && (
+              {isAdmin && <td>{file.uploaded_by_name || '-'}</td>}
+              {isAdmin && (
                 <td
                   className={styles.downloadCountCell}
                   onClick={() => onViewLogs(file.id, file.name)}
@@ -170,7 +191,7 @@ const FileTable = memo(function FileTable({
                 </td>
               )}
               <td>{file.formattedDate}</td>
-              {userRole !== 'admin' && (
+              {!isAdmin && (
                 <td>
                   <span
                     className={`${styles.rejectCount} ${(file.myRejectCount ?? 0) > 0 ? styles.rejectCountWarn : ''}`}
@@ -181,7 +202,7 @@ const FileTable = memo(function FileTable({
               )}
               <td className={styles.colActions}>
                 <div className={styles.actions}>
-                  {userRole === 'admin' ? (
+                  {isAdmin ? (
                     <button
                       className={styles.iconBtn}
                       onClick={() => onDownload(file.id, file.name)}
@@ -227,7 +248,7 @@ const FileTable = memo(function FileTable({
                       <span>요청됨</span>
                     </button>
                   )}
-                  {userRole !== 'admin' && (file.myRequestCount ?? 0) > 0 && (
+                  {!isAdmin && (file.myRequestCount ?? 0) > 0 && (
                     <button
                       className={styles.historyBtn}
                       onClick={() => onViewHistory?.(file.id, file.name)}
@@ -239,7 +260,7 @@ const FileTable = memo(function FileTable({
                       )}
                     </button>
                   )}
-                  {userRole === 'admin' && (
+                  {isAdmin && (
                     <button
                       className={`${styles.iconBtn} ${styles.delete}`}
                       onClick={() => onDelete(file.id, file.name)}

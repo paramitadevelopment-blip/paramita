@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 삭제 흐름에서만 쓰이므로 관리자만 조회한다.
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

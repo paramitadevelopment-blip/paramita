@@ -32,6 +32,8 @@ interface UploadedFile {
   size: number;
   uploaded_at: string;
   uploaded_by: string;
+  /** 계정을 지워도 남는 이름. 관리자 화면에만 보여준다. */
+  uploaded_by_name?: string | null;
   download_count: number;
   departments: {
     name: string;
@@ -53,6 +55,7 @@ const REASON_MAX_LENGTH = 500;
 
 const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter = true, showOriginal = false }: FilesSectionProps) {
   const user = useAuthStore((state) => state.user);
+  const isAdmin = user?.role === 'admin' || user?.role === 'subadmin';
   const logout = useAuthStore((state) => state.logout);
   const queryClient = useQueryClient();
   const { showAlert } = useAlert();
@@ -61,7 +64,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
   const redownloadRequestMutation = useRedownloadRequest();
   const deleteFilesMutation = useDeleteFiles();
   // 소속 필터는 관리자에게만 보인다. 일반 사용자까지 부서 목록을 받아올 이유가 없다.
-  const { data: departmentsData } = useDepartments(user?.role === 'admin' && showDepartmentFilter);
+  const { data: departmentsData } = useDepartments(isAdmin && showDepartmentFilter);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -467,7 +470,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
           <option value="name">파일명순</option>
           <option value="size">크기순</option>
           <option value="uploaded_at">업로드 날짜순</option>
-          {user?.role !== 'admin' && !showOriginal && (
+          {!isAdmin && !showOriginal && (
             <option value="myDownloadStatus">다운로드 상태순</option>
           )}
         </select>
@@ -487,7 +490,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         </select>
       </div>
 
-      {user?.role !== 'admin' && !showOriginal && (
+      {!isAdmin && !showOriginal && (
       <div className={styles.departmentsFilter}>
         <button
           className={`${styles.departmentBtn} ${selectedStatus === '' ? styles.active : ''}`}
@@ -537,7 +540,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
       </div>
       )}
 
-      {user?.role === 'admin' && showDepartmentFilter && (
+      {isAdmin && showDepartmentFilter && (
         <>
           <div className={styles.departmentsFilter}>
             <button
@@ -580,7 +583,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         </>
       )}
 
-      {user?.role === 'admin' && (
+      {isAdmin && (
         <div className={styles.adminActions}>
           <button
             className={styles.bulkDeleteBtn}

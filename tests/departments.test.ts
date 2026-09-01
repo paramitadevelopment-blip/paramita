@@ -4,6 +4,7 @@ import {
   toAssignableDepartmentGroups,
   getSubDepartments,
   isAssignableGroup,
+  isHiddenDepartment,
   getUndeletableReason,
 } from '@/lib/departments';
 import { parsePagination } from '@/lib/pagination';
@@ -23,6 +24,7 @@ const DEPARTMENTS = [
   { id: 30, name: '한울부원', group_name: '한울부원' },
   { id: 31, name: '파라인슈1', group_name: '파라인슈' },
   { id: 32, name: '파라인슈2', group_name: '파라인슈' },
+  { id: 40, name: 'DB담당자', group_name: 'DB담당자' },
 ];
 
 describe('소속을 조직 단위로 접기', () => {
@@ -42,6 +44,11 @@ describe('소속을 조직 단위로 접기', () => {
 
   it('관리자는 소속이 아니라 계정 구분이라 뺀다', () => {
     expect(toDepartmentGroups(DEPARTMENTS)).not.toContain('관리자');
+  });
+
+  /** DB담당자도 관리자와 같은 이유로 뺀다 — 그 역할 전용 소속이지 조직이 아니다. */
+  it('DB담당자도 소속이 아니라 계정 구분이라 뺀다', () => {
+    expect(toDepartmentGroups(DEPARTMENTS)).not.toContain('DB담당자');
   });
 
   it('중복이 없다', () => {
@@ -86,6 +93,32 @@ describe('사람에게 배정 가능한 소속', () => {
       expect.arrayContaining(['파라인슈', '한울부원', '경기', '굿모닝제너럴'])
     );
     expect(isAssignableGroup('파라인슈')).toBe(true);
+  });
+
+  /**
+   * '관리자'·'DB담당자'는 그 역할 전용 소속이다. 지사 계정에 API로 직접
+   * 붙이려는 시도까지 막아야 한다 — 화면에서 안 보인다고 서버가 안 막으면
+   * 요청을 손으로 만들어 지사 계정을 그 소속으로 만들 수 있다.
+   */
+  it('관리자·DB담당자 소속은 지사 계정에 배정할 수 없다', () => {
+    expect(isAssignableGroup('관리자')).toBe(false);
+    expect(isAssignableGroup('DB담당자')).toBe(false);
+  });
+});
+
+/**
+ * 소속 관리 화면·삭제 API가 감춰야 하는 소속.
+ * 관리자는 is_admin 플래그로, DB담당자는 그런 플래그가 없어 이름으로 가린다.
+ */
+describe('소속 관리 화면·삭제 API에서 감추는 소속', () => {
+  it('관리자·DB담당자는 감춘다', () => {
+    expect(isHiddenDepartment('관리자')).toBe(true);
+    expect(isHiddenDepartment('DB담당자')).toBe(true);
+  });
+
+  it('나머지 소속은 안 감춘다', () => {
+    expect(isHiddenDepartment('파라인슈')).toBe(false);
+    expect(isHiddenDepartment('경기')).toBe(false);
   });
 
   it('배정 목록은 필터 목록에서 이외지역만 빠진 것이다', () => {

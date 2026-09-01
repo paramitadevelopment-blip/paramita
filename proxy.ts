@@ -11,6 +11,11 @@ const publicApiRoutes = ['/api/auth/login'];
 // 거르므로, 여기서는 화면에 들어올 수 있게만 열어 준다.
 const userAllowedRoutes = ['/dashboard/download', '/dashboard/reapply'];
 
+// DB담당자는 파일전달 화면만 쓴다. 원본을 올리기만 하고, 분류·배포는 관리자
+// 몫이라 파일 업로드 화면에는 못 들어간다. 지사와 다른 화이트리스트를 따로
+// 둔다 — 하나로 합치면 지사가 파일전달을, DB담당자가 다운로드를 볼 수 있게 된다.
+const staffAllowedRoutes = ['/dashboard/file-transfer'];
+
 // 다른 곳(lib/jwt, lib/csrf, 로그인)은 시크릿이 없으면 전부 throw한다.
 // 여기만 기본값으로 넘어가면, 설정이 빠진 배포에서 누구나 알 수 있는 키로 서명한
 // 토큰이 이 관문을 통과한다. 관문이 가장 먼저 막아야 할 상황이므로 같은 기준을 쓴다.
@@ -56,8 +61,8 @@ export async function proxy(request: NextRequest) {
   /*
    * 루트로 들어오면 각자 첫 화면으로 보낸다.
    *
-   * 관리자는 대시보드, 그 외에는 파일 다운로드다. 일반 사용자는 대시보드에
-   * 들어갈 수 없어서, 한 곳으로만 보내면 곧바로 한 번 더 튕긴다.
+   * 관리자는 대시보드, DB담당자는 파일전달, 그 외(지사)는 파일 다운로드다.
+   * 한 곳으로만 보내면 접근 못 하는 역할은 곧바로 한 번 더 튕긴다.
    */
   if (pathname === '/') {
     let role: string | undefined;
@@ -69,7 +74,12 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    const target = role === 'admin' ? '/dashboard' : '/dashboard/download';
+    const target =
+      role === 'admin' || role === 'subadmin'
+        ? '/dashboard'
+        : role === 'staff'
+          ? '/dashboard/file-transfer'
+          : '/dashboard/download';
     return NextResponse.redirect(new URL(target, request.url));
   }
 
@@ -85,14 +95,23 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    if (role !== 'admin') {
-      const isAllowed = userAllowedRoutes.some(
+    if (role === 'subadmin') {
+      // 서브관리자는 사용자 관리 화면만 접근 불가
+      if (pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/')) {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      }
+    } else if (role !== 'admin') {
+      // DB담당자는 파일전달 화면만, 그 외(지사)는 기존 화이트리스트를 그대로 쓴다.
+      const allowedRoutes = role === 'staff' ? staffAllowedRoutes : userAllowedRoutes;
+      const fallback = role === 'staff' ? '/dashboard/file-transfer' : '/dashboard/download';
+
+      const isAllowed = allowedRoutes.some(
         (route) => pathname === route || pathname.startsWith(route + '/')
       );
 
-      // 허용 목록에 없으면 파일 다운로드 페이지로 (무한 리다이렉트 방지)
+      // 허용 목록에 없으면 각자의 기본 화면으로 (무한 리다이렉트 방지)
       if (!isAllowed) {
-        return NextResponse.redirect(new URL('/dashboard/download', request.url));
+        return NextResponse.redirect(new URL(fallback, request.url));
       }
     }
   }

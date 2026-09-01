@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
-import { getUndeletableReason } from '@/lib/departments';
+import { getUndeletableReason, isHiddenDepartment } from '@/lib/departments';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -135,6 +135,15 @@ export async function DELETE(request: NextRequest) {
     if (deptToDelete.is_admin) {
       return NextResponse.json(
         { error: '관리자 소속은 삭제할 수 없습니다. 업로드한 원본 파일이 이 소속에 들어갑니다.' },
+        { status: 400 }
+      );
+    }
+
+    // DB담당자 소속도 같은 이유로 막는다. is_admin과 달리 전용 플래그가 없어
+    // 이름으로 본다 — 목록에서 숨기는 것만으로는 API를 직접 부르는 걸 막지 못한다.
+    if (isHiddenDepartment(deptToDelete.name)) {
+      return NextResponse.json(
+        { error: 'DB담당자 소속은 삭제할 수 없습니다. DB담당자 계정이 이 소속에 속합니다.' },
         { status: 400 }
       );
     }

@@ -21,7 +21,7 @@ import styles from '../page.module.css';
  */
 const ReapplySection = memo(function ReapplySectionComponent() {
   const user = useAuthStore((state) => state.user);
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'subadmin';
   const notices = useReapplyNotices();
   // 소속 목록은 관리자만 쓴다. 지사는 자기 것만 보므로 조회할 필요가 없다.
   const { data: departments } = useDepartments(isAdmin);

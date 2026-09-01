@@ -69,8 +69,20 @@ export default function LoginPage() {
         localStorage.removeItem('rememberMe');
       }
 
-      // 쿠키는 서버에서 Set-Cookie로 이미 저장됨 (httpOnly)
-      const targetPath = data.user.role === 'admin' ? '/dashboard' : '/dashboard/download';
+      /*
+       * 쿠키는 서버에서 Set-Cookie로 이미 저장됨 (httpOnly).
+       *
+       * proxy.ts의 역할별 첫 화면과 반드시 같아야 한다. 여기서 다른 곳으로
+       * 보내면 미들웨어가 그 자리에서 다시 튕기는데, 그 과정에서 이미 시작된
+       * RSC 스트림이 중간에 끊겨 서버에 "Cannot write to a CLOSED writable
+       * stream" 에러가 남는다.
+       */
+      const targetPath =
+        data.user.role === 'admin' || data.user.role === 'subadmin'
+          ? '/dashboard'
+          : data.user.role === 'staff'
+            ? '/dashboard/file-transfer'
+            : '/dashboard/download';
       router.push(targetPath);
     },
     onError: (error: Error) => {

@@ -46,6 +46,7 @@ const DownloadHistorySection = memo(function DownloadHistorySectionComponent() {
   const { showAlert } = useAlert();
   const { data: departmentsData } = useDepartments();
   const user = useAuthStore((state) => state.user);
+  const isAdmin = user?.role === 'admin' || user?.role === 'subadmin';
   const { deleteMutation, getAllRecordsMutation } = useDownloadHistoryDelete();
   const previewMutation = usePreviewFile();
 
@@ -315,7 +316,7 @@ const DownloadHistorySection = memo(function DownloadHistorySectionComponent() {
         ))}
       </div>
 
-      {user?.role === 'admin' && (
+      {isAdmin && (
         <div style={{ marginBottom: '20px', display: 'flex', gap: '12px' }}>
           <button
             className={styles.bulkDeleteBtn}
@@ -347,7 +348,7 @@ const DownloadHistorySection = memo(function DownloadHistorySectionComponent() {
           selectedRecordIds={selectedRecordIds}
           onSelectAll={handleSelectAll}
           onSelectRecord={handleSelectRecord}
-          isAdmin={user?.role === 'admin' || false}
+          isAdmin={isAdmin}
           onFileNameClick={handleOpenExcelPreview}
           onRecordClick={handleOpenDownloadRecord}
         />

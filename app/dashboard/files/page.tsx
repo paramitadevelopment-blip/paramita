@@ -2,10 +2,12 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { MdCloudUpload, MdCloudDownload } from 'react-icons/md';
 import { useAuthStore } from '@/app/store/authStore';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { useAlert } from '@/app/components/Alert/Alert';
 import FileUploadZone from './components/FileUploadZone';
+import TransferredFileSelect from './components/TransferredFileSelect';
 import SelectedFilesList from './components/SelectedFilesList';
 import ClassificationProgressModal from './components/ClassificationProgressModal';
 import ClassificationResultModal from './components/ClassificationResultModal';
@@ -38,6 +40,7 @@ function wait(ms: number) {
 function FilesPage() {
   const queryClient = useQueryClient();
   const { showAlert } = useAlert();
+  const [uploadMode, setUploadMode] = useState<'local' | 'transfer'>('local');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDistributing, setIsDistributing] = useState(false);
   const [distributionStats, setDistributionStats] = useState<Record<number, DistributionStat>>({});
@@ -188,11 +191,39 @@ function FilesPage() {
       </div>
 
       <div className={styles.contentWrapper}>
-        <FileUploadZone
-          onFileSelect={addFiles}
-          onDrop={addFiles}
-          fileInputRef={fileInputRef}
-        />
+        <div className={styles.uploadModeTabs}>
+          <button
+            type="button"
+            className={`${styles.uploadModeTab} ${uploadMode === 'local' ? styles.uploadModeTabActive : ''}`}
+            onClick={() => setUploadMode('local')}
+            disabled={isDistributing || isClassificationComplete}
+          >
+            <MdCloudUpload className={styles.uploadModeIcon} />
+            <span>PC 파일 직접 업로드</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.uploadModeTab} ${uploadMode === 'transfer' ? styles.uploadModeTabActive : ''}`}
+            onClick={() => setUploadMode('transfer')}
+            disabled={isDistributing || isClassificationComplete}
+          >
+            <MdCloudDownload className={styles.uploadModeIcon} />
+            <span>파일 전달에서 가져오기 (최근 5건)</span>
+          </button>
+        </div>
+
+        {uploadMode === 'local' ? (
+          <FileUploadZone
+            onFileSelect={addFiles}
+            onDrop={addFiles}
+            fileInputRef={fileInputRef}
+          />
+        ) : (
+          <TransferredFileSelect
+            onFileSelect={addFiles}
+            disabled={isDistributing || isClassificationComplete}
+          />
+        )}
 
         <MemoRuleOption
           checked={memoRule}

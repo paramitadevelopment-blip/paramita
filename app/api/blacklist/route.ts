@@ -45,9 +45,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 명단은 전 고객의 개인정보라 관리자 전용이다.
-    // 사이드바에서 링크를 숨기는 건 UX일 뿐이고, 실제 차단은 여기서 한다.
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Only admin can view blacklist' }, { status: 403 });
     }
 
@@ -271,7 +269,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Only admin can register blacklist' }, { status: 403 });
     }
 
@@ -371,7 +369,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Only admin can delete blacklist' }, { status: 403 });
     }
 

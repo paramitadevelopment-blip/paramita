@@ -14,9 +14,7 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    // Admin만 히스토리 조회 가능
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Only admin can view file history' }, { status: 403 });
     }
 

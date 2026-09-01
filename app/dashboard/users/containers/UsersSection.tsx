@@ -117,7 +117,9 @@ const UsersSection = memo(function UsersSectionComponent({
         return;
       }
 
-      if (!formData.department?.trim()) {
+      // DB담당자는 소속이 없어도 된다. 화면 전체가 파일 업로드 하나뿐이라 어느
+      // 소속인지 볼 일이 없다. 그 외(지사)는 소속이 있어야 한다.
+      if (formData.role !== 'staff' && !formData.department?.trim()) {
         showAlert({ type: 'error', title: '입력 오류', message: '소속을 선택해주세요.' });
         return;
       }
@@ -128,15 +130,11 @@ const UsersSection = memo(function UsersSectionComponent({
           return;
         }
 
-        if (!formData.department?.trim()) {
-          showAlert({ type: 'error', title: '입력 오류', message: '소속을 선택해주세요.' });
-          return;
-        }
-
         const hasChanges =
           formData.name !== selectedUser.name ||
           formData.department !== selectedUser.department ||
           formData.employee_id !== selectedUser.employee_id ||
+          formData.role !== selectedUser.role ||
           formData.password?.trim();
 
         if (!hasChanges) {
@@ -160,6 +158,7 @@ const UsersSection = memo(function UsersSectionComponent({
             name: formData.name,
             department: formData.department,
             employee_id: formData.employee_id,
+            role: formData.role,
           });
           showAlert({ type: 'success', title: '완료', message: '사용자가 추가되었습니다.' });
         }

@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
-      return NextResponse.json({ error: 'Only admin can access this' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
+      return NextResponse.json({ error: 'Only admin can view download history' }, { status: 403 });
     }
 
     // 전체 삭제용 id 목록이다. 상한에 잘리면 그만큼만 지워져 "전체 삭제"가 전체가 아니게 된다.

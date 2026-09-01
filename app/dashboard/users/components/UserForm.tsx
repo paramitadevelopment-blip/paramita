@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
+import { MdExpandMore } from 'react-icons/md';
 import { useCheckUsername } from '@/app/hooks/useCheckUsername';
 import { useCheckEmployeeId } from '@/app/hooks/useCheckEmployeeId';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { UserForm as UserFormType } from '../types';
+import { STAFF_DEPARTMENT, ADMIN_DEPARTMENT } from '@/lib/departments';
 import DepartmentSelect from './DepartmentSelect';
 import styles from './UserForm.module.css';
 
@@ -158,7 +160,7 @@ const UserForm = memo(function UserForm({
         result.password = '비밀번호는 6~10자여야 합니다.';
       }
     }
-    if (!formData.department) {
+    if (formData.role !== 'staff' && formData.role !== 'subadmin' && !formData.department) {
       result.department = '소속을 선택해주세요.';
     }
     return result;
@@ -298,16 +300,65 @@ const UserForm = memo(function UserForm({
       </div>
 
       <div className={styles.formGroup}>
+        <label htmlFor="role">역할 <span className={styles.required}>*</span></label>
+        {/* 관리자는 여기서 못 만든다 — 서버도 허용된 값만 받는다. */}
+        <div className={styles.selectWrapper}>
+          <select
+            id="role"
+            name="role"
+            value={formData.role}
+            onChange={(e) => {
+              const role = e.target.value as UserFormType['role'];
+              setFormData((prev) => ({
+                ...prev,
+                role,
+                department:
+                  role === 'staff'
+                    ? STAFF_DEPARTMENT
+                    : role === 'subadmin'
+                      ? ADMIN_DEPARTMENT
+                      : prev.department === STAFF_DEPARTMENT || prev.department === ADMIN_DEPARTMENT
+                        ? ''
+                        : prev.department,
+              }));
+            }}
+            className={styles.select}
+          >
+            <option value="user">지사</option>
+            <option value="subadmin">서브관리자</option>
+            <option value="staff">DB담당자 (파일 업로드만 가능)</option>
+          </select>
+          <MdExpandMore className={styles.selectIcon} />
+        </div>
+      </div>
+
+      <div className={styles.formGroup}>
         <label htmlFor="department">소속 <span className={styles.required}>*</span></label>
-        <DepartmentSelect
-          value={formData.department || ''}
-          onChange={(value) =>
-            setFormData((prev) => ({
-              ...prev,
-              department: value,
-            }))
-          }
-        />
+        {formData.role === 'staff' ? (
+          <div className={styles.selectWrapper}>
+            <select id="department" className={styles.select} value={STAFF_DEPARTMENT} disabled>
+              <option value={STAFF_DEPARTMENT}>DB담당자 (자동 지정)</option>
+            </select>
+            <MdExpandMore className={styles.selectIcon} />
+          </div>
+        ) : formData.role === 'subadmin' ? (
+          <div className={styles.selectWrapper}>
+            <select id="department" className={styles.select} value={ADMIN_DEPARTMENT} disabled>
+              <option value={ADMIN_DEPARTMENT}>관리자 (자동 지정)</option>
+            </select>
+            <MdExpandMore className={styles.selectIcon} />
+          </div>
+        ) : (
+          <DepartmentSelect
+            value={formData.department || ''}
+            onChange={(value) =>
+              setFormData((prev) => ({
+                ...prev,
+                department: value,
+              }))
+            }
+          />
+        )}
       </div>
 
       <div className={styles.formActions}>

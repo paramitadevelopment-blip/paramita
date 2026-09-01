@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     // file_content도 함께 읽어서 삭제 히스토리에 저장한다.
     const { data: allFiles, error: allFilesError } = await supabase
       .from('files')
-      .select('id, name, size, storage_path, department_id, is_original, original_file_id, mime_type, uploaded_by, uploaded_at, file_content')
+      .select('id, name, size, storage_path, department_id, is_original, original_file_id, mime_type, uploaded_by, uploaded_by_name, uploaded_at, file_content')
       .in('id', allFilesToDelete);
 
     if (allFilesError) {
@@ -141,15 +141,17 @@ export async function POST(request: NextRequest) {
       mime_type: f.mime_type,
       // files 쪽이 NOT NULL이라 복구할 때 되돌리려면 반드시 보존해야 한다.
       uploaded_by: f.uploaded_by,
+      uploaded_by_name: f.uploaded_by_name,
       uploaded_at: f.uploaded_at,
       deletion_event_id: eventData.id,
       file_content: f.file_content || [],
+      restored_at: null,
     }));
 
     if (deletedFilesRecords.length > 0) {
       const { error: historyError } = await supabase
         .from('deleted_files')
-        .insert(deletedFilesRecords);
+        .upsert(deletedFilesRecords, { onConflict: 'id' });
 
       if (historyError) {
         console.error('Failed to save deletion history:', historyError);

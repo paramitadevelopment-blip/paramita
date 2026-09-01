@@ -39,6 +39,9 @@ export function useUploadFiles() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       invalidateDashboard(queryClient);
+      // 관리자에게는 해당 없는 쿼리라 그냥 무시된다. DB담당자가 방금 전달한
+      // 파일이 파일전달 화면 목록에 새로고침 없이 바로 보이게 한다.
+      queryClient.invalidateQueries({ queryKey: ['myUploads'] });
     },
   });
 }

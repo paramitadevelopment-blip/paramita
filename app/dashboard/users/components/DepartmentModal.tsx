@@ -4,7 +4,7 @@ import React, { memo, useCallback, useState } from 'react';
 import { MdClose, MdDelete } from 'react-icons/md';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { useDeleteDepartment } from '@/app/hooks/useDepartments';
-import { getUndeletableReason } from '@/lib/departments';
+import { getUndeletableReason, isHiddenDepartment } from '@/lib/departments';
 import DepartmentForm from './DepartmentForm';
 import Pagination from '@/app/components/Pagination/Pagination';
 import styles from './DepartmentModal.module.css';
@@ -104,7 +104,8 @@ const DepartmentModal = memo(function DepartmentModal({
     [deleteDepMutation, showAlert, onDelete]
   );
 
-  const filteredDepartments = departments?.filter((dept) => !dept.is_admin) || [];
+  const filteredDepartments =
+    departments?.filter((dept) => !dept.is_admin && !isHiddenDepartment(dept.name)) || [];
   const totalPages = filteredDepartments ? Math.ceil(filteredDepartments.length / itemsPerPage) : 1;
   const startIndex = (page - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;

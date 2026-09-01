@@ -36,16 +36,18 @@ export async function GET(request: NextRequest) {
       'name',
       'size',
       'uploaded_at',
+      'uploaded_by_name',
       'download_count',
       'department_id',
       'myDownloadStatus',
       'myRejectCount',
     ];
     const sortBy = SORTABLE.includes(sortByParam) ? sortByParam : 'uploaded_at';
+    const isAdmin = user.role === 'admin' || user.role === 'subadmin';
 
     // 일반 사용자는 본인 소속 파일만 볼 수 있음
     let userDepartment: string | null = null;
-    if (user.role !== 'admin') {
+    if (!isAdmin) {
       const { data: userData } = await supabase
         .from('users')
         .select('department')
@@ -61,8 +63,8 @@ export async function GET(request: NextRequest) {
     let departmentIds: number[] = [];
 
     // 비관리자는 본인 조직 전체를 본다. 관리자는 하위 분류 하나를 콕 집을 수도 있다.
-    const filterName = user.role === 'admin' ? department : '';
-    const filterGroup = user.role === 'admin' ? departmentGroup : userDepartment;
+    const filterName = isAdmin ? department : '';
+    const filterGroup = isAdmin ? departmentGroup : userDepartment;
 
     if (filterName) {
       const { data: dept } = await supabase
@@ -83,7 +85,7 @@ export async function GET(request: NextRequest) {
 
     // 비관리자는 소속이 확정돼야만 조회할 수 있다. 소속을 못 가리는데 그냥 넘어가면
     // 아래 필터가 안 걸려 전체 파일이 나간다. 막는 쪽이 기본이어야 한다.
-    if (user.role !== 'admin' && departmentIds.length === 0) {
+    if (!isAdmin && departmentIds.length === 0) {
       return NextResponse.json({
         data: [],
         pagination: { page, limit, total: 0, totalPages: 0 },
@@ -104,13 +106,13 @@ export async function GET(request: NextRequest) {
       let fileQuery = supabase
         .from('files')
         .select(
-          'id, name, size, uploaded_at, uploaded_by, download_count, departments(name), is_original, original_file_id, file_content',
+          'id, name, size, uploaded_at, uploaded_by, uploaded_by_name, download_count, departments(name), is_original, original_file_id, file_content',
           { count: 'exact' }
         );
 
       // 원본 파일은 관리자 전용이다. 지금은 원본이 관리자 소속(15)이라 아래 소속
       // 필터에 우연히 걸리지만, 규칙을 우연에 기대면 소속이 바뀌는 순간 열린다.
-      if (user.role !== 'admin') {
+      if (!isAdmin) {
         fileQuery = fileQuery.eq('is_original', false);
       } else if (searchParams.has('showOriginal')) {
         fileQuery = fileQuery.eq('is_original', showOriginal);
@@ -147,7 +149,7 @@ export async function GET(request: NextRequest) {
     let files = allFiles || [];
     if (search) {
       const searchLower = search.toLowerCase();
-      const searchContent = user.role === 'admin';
+      const searchContent = isAdmin;
 
       files = files.filter((file) => {
         if (file.name.toLowerCase().includes(searchLower)) return true;
@@ -169,7 +171,7 @@ export async function GET(request: NextRequest) {
 
     // 비관리자용 다운로드 상태 계산: 각 파일에 대해 이 유저가 지금 받을 수 있는지 판단.
     // 상태 필터·정렬과 총 건수가 서로 맞으려면 페이지를 자르기 "전에" 전체를 대상으로 계산해야 한다.
-    if (user.role !== 'admin' && userDepartment) {
+    if (!isAdmin && userDepartment) {
       const fileIds = data.map((f: any) => f.id);
 
       if (fileIds.length > 0) {

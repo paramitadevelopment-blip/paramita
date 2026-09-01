@@ -35,8 +35,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
-      return NextResponse.json({ error: 'Only admin can view requests' }, { status: 403 });
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
+      return NextResponse.json({ error: 'Only admin can view download requests' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role === 'admin') {
+    if (user.role === 'admin' || user.role === 'subadmin') {
       return NextResponse.json(
         { error: 'Admin users do not need to request re-downloads' },
         { status: 400 }

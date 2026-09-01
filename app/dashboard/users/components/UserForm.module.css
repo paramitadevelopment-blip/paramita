@@ -93,6 +93,37 @@
   color: #999;
 }
 
+/* 소속(DepartmentSelect)과 같은 모양의 화살표. 브라우저 기본 화살표를 지우고
+   Material 아이콘을 오른쪽에 겹쳐 그린다 — 두 select가 다르게 보이지 않게 한다. */
+.selectWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select {
+  width: 100%;
+  padding-right: 40px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.select:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.selectIcon {
+  position: absolute;
+  right: 12px;
+  font-size: 20px;
+  color: #666;
+  pointer-events: none;
+}
+
 .formActions {
   display: flex;
   gap: 12px;

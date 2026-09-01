@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
+import { canUploadFiles } from '@/lib/roles';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { formatCellValue } from '@/lib/excelCell';
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
+    if (!canUploadFiles(user.role)) {
       return NextResponse.json({ error: 'Only admin can upload files' }, { status: 403 });
     }
 
@@ -183,6 +184,9 @@ export async function POST(request: NextRequest) {
         mime_type: file.type || 'application/octet-stream',
         storage_path: finalFilePath,
         uploaded_by: user.id,
+        // uploaded_by는 계정을 지우면 NULL이 된다. 그때 이름이 사라지지
+        // 않게 지금 값을 그대로 같이 남긴다.
+        uploaded_by_name: user.name,
         uploaded_at: timestamp,
         is_original: true,
         department_id: adminDept.id,

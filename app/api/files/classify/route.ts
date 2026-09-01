@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
+    // 분류·배포는 관리자(admin, subadmin)만 한다. DB담당자는 원본만 넘긴다 — 파일전달 화면 참고.
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

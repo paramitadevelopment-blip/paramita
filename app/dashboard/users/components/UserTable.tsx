@@ -7,6 +7,20 @@ import { UserRow } from '../types';
 import DepartmentLogsModal from './DepartmentLogsModal';
 import styles from './UserTable.module.css';
 
+/** 역할값 → 화면에 보일 이름과 배지 색 클래스 */
+const ROLE_LABEL: Record<string, string> = {
+  admin: '관리자',
+  subadmin: '서브관리자',
+  user: '지사',
+  staff: 'DB담당자',
+};
+const ROLE_BADGE_CLASS: Record<string, string> = {
+  admin: 'admin',
+  subadmin: 'subadmin',
+  user: 'user',
+  staff: 'staff',
+};
+
 interface UserTableProps {
   users: UserRow[];
   isLoading: boolean;
@@ -141,6 +155,11 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
             </th>
             <th>
               <div className={styles.headerContent}>
+                <span>역할</span>
+              </div>
+            </th>
+            <th>
+              <div className={styles.headerContent}>
                 <span>사번</span>
               </div>
             </th>
@@ -173,6 +192,11 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
               <td>{user.username}</td>
               <td>{user.name || '-'}</td>
               <td>{user.department || '-'}</td>
+              <td>
+                <span className={`${styles.badge} ${styles[ROLE_BADGE_CLASS[user.role] ?? 'user']}`}>
+                  {ROLE_LABEL[user.role] ?? user.role}
+                </span>
+              </td>
               <td>{user.employee_id || '-'}</td>
               <td>{new Date(user.created_at).toLocaleDateString('ko-KR').slice(0, -1)}</td>
               <td className={styles.actions}>
@@ -180,8 +204,15 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
                   className={`${styles.iconBtn} ${styles.history}`}
                   onClick={() => setLogsTarget(user)}
                   title="소속 변경 이력"
-                  style={{ visibility: user.role === 'admin' ? 'hidden' : 'visible' }}
-                  disabled={user.role === 'admin'}
+                  style={{
+                    visibility:
+                      user.role === 'admin' || user.role === 'subadmin' || user.role === 'staff'
+                        ? 'hidden'
+                        : 'visible',
+                  }}
+                  disabled={
+                    user.role === 'admin' || user.role === 'subadmin' || user.role === 'staff'
+                  }
                 >
                   <MdHistory />
                   <span>소속로그</span>

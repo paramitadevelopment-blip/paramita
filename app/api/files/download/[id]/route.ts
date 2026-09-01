@@ -97,8 +97,8 @@ export async function GET(
     }
 
     // 일반 사용자의 파일 접근 제한: 본인 부서 파일만 다운로드 가능
-    if (user.role !== 'admin') {
-      // 원본 파일은 admin만 접근 가능
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
+      // 원본 파일은 admin/subadmin만 접근 가능
       if (file.is_original) {
         return NextResponse.json({ error: 'Forbidden: is_original' }, { status: 403 });
       }
@@ -270,7 +270,8 @@ export async function GET(
           // 값은 배포할 때 file_content에 저장해 뒀다 (엑셀 파일에는 없다).
           const content = storedContent;
           const showAssignedBy =
-            user.role === 'admin' && content.some((r: any) => r?.[ASSIGNED_BY_COLUMN]);
+            (user.role === 'admin' || user.role === 'subadmin') &&
+            content.some((r: any) => r?.[ASSIGNED_BY_COLUMN]);
 
           const numberedData = [
             ['번호', ...headers, ...(showAssignedBy ? [ASSIGNED_BY_COLUMN] : []), '배정날짜'],
@@ -304,7 +305,7 @@ export async function GET(
 
     // 다운로드 기록은 위에서 이미 선점해 뒀다. 여기서는 집계만 올린다.
     // 읽은 값에 +1을 써 넣으면 동시 요청 중 한쪽 증가분이 덮여 사라지므로 DB에서 더한다.
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       const { error: incrementError } = await supabase.rpc('increment_file_download_count', {
         p_file_id: fileId,
       });

@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Admin만 복구 가능
-    if (user.role !== 'admin') {
+    // Admin 및 Subadmin 복구 가능
+    if (user.role !== 'admin' && user.role !== 'subadmin') {
       return NextResponse.json({ error: 'Only admin can restore files' }, { status: 403 });
     }
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     // 복구할 파일 목록 조회
     let query = supabase
       .from('deleted_files')
-      .select('id, name, size, storage_path, department_id, is_original, original_file_id, mime_type, uploaded_by, uploaded_at')
+      .select('id, name, size, storage_path, department_id, is_original, original_file_id, mime_type, uploaded_by, uploaded_by_name, uploaded_at')
       .eq('deletion_event_id', eventId)
       // 이미 복구된 파일은 기록만 남아 있으므로 다시 넣지 않는다.
       .is('restored_at', null);
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
       mime_type: f.mime_type,
       // 삭제 시점에 보존해 둔 원래 업로더 정보를 그대로 되돌린다.
       uploaded_by: f.uploaded_by,
+      uploaded_by_name: f.uploaded_by_name,
       uploaded_at: f.uploaded_at,
       download_count: 0,
       created_at: f.uploaded_at,

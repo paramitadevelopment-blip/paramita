@@ -1,0 +1,15 @@
+.sectionTitle {
+  font-size: 22px;
+  font-weight: 700;
+  color: #db1a62;
+  margin: 24px 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #ffe0ec;
+}
+
+.fileNameCell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}

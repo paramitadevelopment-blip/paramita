@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/app/store/authStore';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { MdAdd } from 'react-icons/md';
@@ -9,7 +10,15 @@ import DepartmentsSection from './containers/DepartmentsSection';
 import styles from './page.module.css';
 
 function UsersPage() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
+
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
+
   const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const { data: departmentsData } = useDepartments();

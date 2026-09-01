@@ -54,6 +54,7 @@ export function useCreateUser() {
       name: string;
       department: string;
       employee_id?: string;
+      role?: string;
     }) => {
       const csrfToken = getCsrfToken();
       const response = await fetch('/api/users', {
