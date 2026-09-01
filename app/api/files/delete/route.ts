@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     // file_content도 함께 읽어서 삭제 히스토리에 저장한다.
     const { data: allFiles, error: allFilesError } = await supabase
       .from('files')
-      .select('id, name, size, storage_path, department_id, is_original, original_file_id, mime_type, uploaded_by, uploaded_by_name, uploaded_at, file_content')
+      .select('id, name, size, storage_path, department_id, is_original, original_file_id, mime_type, uploaded_by, uploaded_by_name, uploaded_at, file_content, source')
       .in('id', allFilesToDelete);
 
     if (allFilesError) {
@@ -145,6 +145,8 @@ export async function POST(request: NextRequest) {
       uploaded_at: f.uploaded_at,
       deletion_event_id: eventData.id,
       file_content: f.file_content || [],
+      // 복구하면 files로 되돌아가므로 출처도 같이 보존한다.
+      source: f.source,
       restored_at: null,
     }));
 

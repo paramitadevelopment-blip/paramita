@@ -35,7 +35,8 @@ const FileTransferSection = memo(function FileTransferSectionComponent() {
   const limit = 10;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const uploadMutation = useUploadFiles();
+  // 파일전달로 올린 원본은 원본파일 관리와 섞이면 안 된다. 출처를 함께 보낸다.
+  const uploadMutation = useUploadFiles('file_transfer');
   const { data, isLoading } = useMyUploads(page, limit);
   const uploads = data?.data ?? [];
   const previewMutation = usePreviewMyUpload();

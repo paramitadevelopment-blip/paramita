@@ -118,6 +118,19 @@ export async function GET(request: NextRequest) {
         fileQuery = fileQuery.eq('is_original', showOriginal);
       }
 
+      /*
+       * 원본파일 관리에는 파일전달 대기열을 섞지 않는다.
+       *
+       * 둘은 같은 files 표를 쓰지만 다른 화면, 다른 개념이다. 파일전달은 아직
+       * 관리자가 손대지 않은 접수함이고, 원본파일 관리는 관리자가 올려 처리한
+       * 원본의 이력이다. 걸러내지 않으면 파일전달에 올린 순간 배포 전인데도
+       * 원본파일 관리에 뜨고, 한쪽에서 지우면 다른 쪽에서도 사라진다.
+       * 배포본(is_original=false)은 애초에 파일전달과 무관하다.
+       */
+      if (showOriginal) {
+        fileQuery = fileQuery.eq('source', 'direct');
+      }
+
       if (departmentIds.length > 0) {
         fileQuery = fileQuery.in('department_id', departmentIds);
       }

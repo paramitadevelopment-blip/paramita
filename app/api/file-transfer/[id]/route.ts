@@ -31,10 +31,14 @@ async function loadQueuedUpload(fileId: string) {
   return supabase
     .from('files')
     .select(
-      'id, name, size, storage_path, mime_type, department_id, is_original, original_file_id, uploaded_by, uploaded_by_name, uploaded_at, file_content'
+      'id, name, size, storage_path, mime_type, department_id, is_original, original_file_id, uploaded_by, uploaded_by_name, uploaded_at, file_content, source'
     )
     .eq('id', fileId)
     .eq('is_original', true)
+    // 파일전달 대기열 것만 다룬다. 관리자가 파일업로드에서 직접 올린 원본은
+    // 원본파일 관리 쪽 규칙(삭제 사유·배포본 연결 끊기 등)을 따라야 하므로
+    // 이 라우트로는 건드릴 수 없어야 한다.
+    .eq('source', 'file_transfer')
     .single();
 }
 
@@ -186,6 +190,9 @@ export async function DELETE(
       uploaded_at: file.uploaded_at,
       deletion_event_id: eventData.id,
       file_content: file.file_content || [],
+      // 복구하면 files로 되돌아간다. 출처를 안 남기면 파일전달에서 지운 파일이
+      // 복구될 때 원본파일 관리 쪽으로 넘어가 버린다.
+      source: file.source,
       restored_at: null,
     },
     { onConflict: 'id' }
@@ -236,7 +243,8 @@ export async function DELETE(
     .from('files')
     .delete()
     .eq('id', fileId)
-    .eq('is_original', true);
+    .eq('is_original', true)
+    .eq('source', 'file_transfer');
 
   if (deleteError) {
     console.error('File-transfer delete error:', deleteError);

@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     // 복구할 파일 목록 조회
     let query = supabase
       .from('deleted_files')
-      .select('id, name, size, storage_path, department_id, is_original, original_file_id, mime_type, uploaded_by, uploaded_by_name, uploaded_at')
+      .select('id, name, size, storage_path, department_id, is_original, original_file_id, mime_type, uploaded_by, uploaded_by_name, uploaded_at, source')
       .eq('deletion_event_id', eventId)
       // 이미 복구된 파일은 기록만 남아 있으므로 다시 넣지 않는다.
       .is('restored_at', null);
@@ -91,6 +91,9 @@ export async function POST(request: NextRequest) {
       uploaded_by: f.uploaded_by,
       uploaded_by_name: f.uploaded_by_name,
       uploaded_at: f.uploaded_at,
+      // 어느 화면 것이었는지도 되돌린다. 안 넘기면 기본값 'direct'가 붙어
+      // 파일전달에서 지운 파일이 원본파일 관리 쪽으로 옮겨간다.
+      source: f.source,
       download_count: 0,
       created_at: f.uploaded_at,
       updated_at: new Date().toISOString(),

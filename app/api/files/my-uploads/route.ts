@@ -34,31 +34,15 @@ export async function GET(request: NextRequest) {
       searchParams.get('limit')
     );
 
-    // 이미 배포된 원본은 큐에서 뺀다. 배포되면 부서별 사본이 생기면서
-    // original_file_id로 이 원본을 가리킨다 — 그 자식이 있으면 이미 처리를
-    // 끝낸 원본이다. 관리자가 PC에서 직접 올려 바로 배포한 파일도 내부적으로는
-    // 여기와 같은 is_original 행을 거치므로, 이 필터가 없으면 배포 끝난 파일이
-    // "아직 분류 안 된 대기열"에 섞여 보인다.
-    const { data: deployedRows } = await supabase
-      .from('files')
-      .select('original_file_id')
-      .eq('is_original', false)
-      .not('original_file_id', 'is', null);
-
-    const deployedOriginalIds = Array.from(
-      new Set((deployedRows ?? []).map((r) => r.original_file_id).filter(Boolean))
-    );
-
-    let query = supabase
+    // 파일전달로 들어온 원본만 본다. 관리자가 파일업로드에서 직접 올린 원본은
+    // 원본파일 관리 쪽 것이라 여기 섞이면 안 된다 — 두 화면이 같은 행을 보고
+    // 있었기 때문에, 한쪽에 올리면 다른 쪽에도 뜨고 한쪽에서 지우면 양쪽에서
+    // 사라졌다.
+    const { data: filesData, error, count } = await supabase
       .from('files')
       .select('id, name, size, uploaded_at, uploaded_by, uploaded_by_name', { count: 'exact' })
-      .eq('is_original', true);
-
-    if (deployedOriginalIds.length > 0) {
-      query = query.not('id', 'in', `(${deployedOriginalIds.join(',')})`);
-    }
-
-    const { data: filesData, error, count } = await query
+      .eq('is_original', true)
+      .eq('source', 'file_transfer')
       .order('uploaded_at', { ascending: false })
       .range(offset, offset + limit - 1);
 

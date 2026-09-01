@@ -60,6 +60,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    /*
+     * 이 원본이 어느 화면에서 들어왔는가.
+     *
+     * 파일전달로 들어온 것과 관리자가 파일업로드에서 직접 올린 것은 보는 화면이
+     * 다르다. 같은 표에 섞여 있으면 파일전달에 올린 것이 배포 전인데도 원본파일
+     * 관리에 뜨고, 한쪽에서 지우면 다른 쪽에서도 사라진다.
+     *
+     * DB담당자는 파일전달 화면밖에 못 쓰므로 무엇을 보내든 file_transfer로 굳힌다.
+     * 화면에서 값을 정하게 두면 그 계정이 원본파일 관리 쪽으로 밀어 넣을 수 있다.
+     */
+    const requestedSource = formData.get('source');
+    const source =
+      user.role === 'staff'
+        ? 'file_transfer'
+        : requestedSource === 'file_transfer'
+          ? 'file_transfer'
+          : 'direct';
+
     // 파일 크기 검증 (0바이트도 거부)
     if (file.size === 0) {
       return NextResponse.json({ error: 'Empty file' }, { status: 400 });
@@ -192,6 +210,7 @@ export async function POST(request: NextRequest) {
         department_id: adminDept.id,
         file_content: fileContent,
         insurer_type: insurerType,
+        source,
       },
     ]);
 

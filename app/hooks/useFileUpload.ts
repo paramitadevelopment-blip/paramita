@@ -7,7 +7,14 @@ interface UploadedFile {
   name: string;
 }
 
-export function useUploadFiles() {
+/**
+ * 원본을 어느 화면에서 올리는가. 파일전달로 들어온 것과 관리자가 파일업로드에서
+ * 직접 올린 것은 보는 화면이 갈리므로 서버에 함께 알려준다.
+ * 서버도 다시 판단한다 — DB담당자는 무엇을 보내든 file_transfer로 굳힌다.
+ */
+type UploadSource = 'direct' | 'file_transfer';
+
+export function useUploadFiles(source: UploadSource = 'direct') {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -17,6 +24,7 @@ export function useUploadFiles() {
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('source', source);
 
         const response = await fetch('/api/files/upload', {
           method: 'POST',

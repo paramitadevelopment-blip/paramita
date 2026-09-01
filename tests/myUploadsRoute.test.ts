@@ -106,32 +106,23 @@ describe('전체 대기열을 조회한다 — 올린 사람으로 거르지 않
   });
 });
 
-describe('이미 배포된 원본은 큐에서 뺀다', () => {
-  it('자식이 생긴 원본 id는 not-in으로 제외한다', async () => {
-    deployedRows = [{ original_file_id: 'orig-1' }, { original_file_id: 'orig-2' }];
-
+describe('파일전달로 들어온 원본만 본다', () => {
+  /**
+   * 관리자가 파일업로드에서 직접 올린 원본은 원본파일 관리 쪽 것이다. 출처로
+   * 가르지 않으면 두 화면이 같은 행을 보게 되어, 한쪽에 올리면 다른 쪽에도 뜨고
+   * 한쪽에서 지우면 양쪽에서 사라진다.
+   */
+  it("source가 'file_transfer'인 것만 거른다", async () => {
     await GET(req());
 
-    expect(notCalls).toContainEqual(['id', 'in', '(orig-1,orig-2)']);
+    expect(eqCalls).toContainEqual(['is_original', true]);
+    expect(eqCalls).toContainEqual(['source', 'file_transfer']);
   });
 
-  it('중복된 자식(같은 원본이 여러 부서로 배포됨)은 한 번만 넣는다', async () => {
-    deployedRows = [
-      { original_file_id: 'orig-1' },
-      { original_file_id: 'orig-1' },
-      { original_file_id: 'orig-1' },
-    ];
-
+  it('관리자가 조회해도 같은 필터를 쓴다', async () => {
+    currentUser = { id: 1, role: 'admin' };
     await GET(req());
 
-    expect(notCalls).toContainEqual(['id', 'in', '(orig-1)']);
-  });
-
-  it('배포된 게 하나도 없으면 not-in 자체를 걸지 않는다', async () => {
-    deployedRows = [];
-
-    await GET(req());
-
-    expect(notCalls.some(([col, op]) => col === 'id' && op === 'in')).toBe(false);
+    expect(eqCalls).toContainEqual(['source', 'file_transfer']);
   });
 });

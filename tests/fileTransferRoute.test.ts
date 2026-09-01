@@ -205,6 +205,12 @@ describe('GET 미리보기·다운로드', () => {
     expect(queryEqCalls.some(([col]) => col === 'uploaded_by')).toBe(false);
   });
 
+  /** 관리자가 파일업로드에서 직접 올린 원본은 이 라우트로 건드릴 수 없어야 한다. */
+  it('파일전달 대기열(source=file_transfer)만 연다', async () => {
+    await GET(req('GET'), ctx);
+    expect(queryEqCalls).toContainEqual(['source', 'file_transfer']);
+  });
+
   it('원본이 아니거나 없는 파일이면 404', async () => {
     fileRow = null;
     expect((await GET(req('GET'), ctx)).status).toBe(404);
