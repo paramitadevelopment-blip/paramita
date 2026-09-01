@@ -94,7 +94,12 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
         })
       : otherUsers;
 
-    return adminUser ? [adminUser, ...sortedOtherUsers] : sortedOtherUsers;
+    // 관리자 다음은 서브관리자 묶음, 그다음이 나머지다. filter는 순서를 그대로
+    // 두므로 위에서 이미 적용한 정렬 결과가 각 묶음 안에서도 유지된다.
+    const subadmins = sortedOtherUsers.filter((u) => u.role === 'subadmin');
+    const rest = sortedOtherUsers.filter((u) => u.role !== 'subadmin');
+
+    return adminUser ? [adminUser, ...subadmins, ...rest] : [...subadmins, ...rest];
   }, [users, sortBy, sortOrder]);
 
   if (isLoading) {
@@ -153,14 +158,24 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
                 )}
               </div>
             </th>
-            <th>
+            <th className={styles.sortableHeader} onClick={() => onSort('role')}>
               <div className={styles.headerContent}>
                 <span>역할</span>
+                {sortBy === 'role' && (
+                  <span className={styles.sortIcon}>
+                    {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                  </span>
+                )}
               </div>
             </th>
-            <th>
+            <th className={styles.sortableHeader} onClick={() => onSort('employee_id')}>
               <div className={styles.headerContent}>
                 <span>사번</span>
+                {sortBy === 'employee_id' && (
+                  <span className={styles.sortIcon}>
+                    {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                  </span>
+                )}
               </div>
             </th>
             <th className={styles.sortableHeader} onClick={() => onSort('created_at')}>

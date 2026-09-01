@@ -331,6 +331,8 @@ const UsersSection = memo(function UsersSectionComponent({
           <option value="username">아이디순</option>
           <option value="name">이름순</option>
           <option value="department">소속순</option>
+          <option value="role">역할순</option>
+          <option value="employee_id">사번순</option>
           <option value="created_at">가입일순</option>
         </select>
 
