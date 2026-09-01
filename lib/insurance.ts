@@ -705,7 +705,7 @@ export function autoDistributePending(
  * 화면과 서버가 반드시 같은 판정을 써야 한다. 서버가 느슨하면 화면이 거부한
  * 파일이 API로는 들어와, 보험사를 못 가려 배포에서 막힐 파일이 이미 저장된 뒤다.
  */
-const UPLOAD_FILE_NAME_PATTERN = /^\d{8}[_\s]*(동양생명|흥국생명|한화생명)/;
+const UPLOAD_FILE_NAME_PATTERN = /^\d{8}[_\s]*(동양생명|흥국화재|한화생명)/;
 
 export function isValidUploadFileName(fileName: unknown): boolean {
   return UPLOAD_FILE_NAME_PATTERN.test(String(fileName ?? ''));
@@ -713,7 +713,7 @@ export function isValidUploadFileName(fileName: unknown): boolean {
 
 /** 파일명 규칙을 어겼을 때 보여줄 문구. 화면과 서버가 같은 말을 하도록 모아 둔다. */
 export const UPLOAD_FILE_NAME_HINT =
-  '파일명은 YYYYMMDD 회사명 형식이어야 합니다. (예: 20260815_동양생명.xlsx, 20260815 동양생명.xlsx / 흥국생명, 한화생명도 가능)';
+  '파일명은 YYYYMMDD 회사명 형식이어야 합니다. (예: 20260815_동양생명.xlsx, 20260815 동양생명.xlsx / 흥국화재, 한화생명도 가능)';
 
 /**
  * 배정방식 — 그 행이 어떻게 소속을 얻었는지.

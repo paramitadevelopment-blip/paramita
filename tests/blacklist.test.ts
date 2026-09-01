@@ -74,7 +74,7 @@ describe('수동 등록 명단 (상품 없음)', () => {
     key({ product: '', ...o });
 
   it('상품이 달라도 생년월일·번호가 맞으면 막는다', () => {
-    const result = run([key({ product: '흥국생명 암보험' })], [수동()], []);
+    const result = run([key({ product: '흥국화재 암보험' })], [수동()], []);
 
     expect(result.registered).toHaveLength(1);
     expect(result.items).toHaveLength(0);

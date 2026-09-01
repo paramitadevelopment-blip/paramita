@@ -248,7 +248,7 @@ describe('이미 명단에 오른 사람', () => {
 
   /** 관리자가 손으로 올린 명단은 상품이 없다 — "어느 상품으로 와도 막아라" */
   it('수동 등록은 상품이 달라도 막는다', () => {
-    const r = upload([row({ 상품명: '흥국생명 암보험' })], [명단({ product: '' })], []);
+    const r = upload([row({ 상품명: '흥국화재 암보험' })], [명단({ product: '' })], []);
 
     expect(r.registered).toHaveLength(1);
     expect(r.assignable).toHaveLength(0);

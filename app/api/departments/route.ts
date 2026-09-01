@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { getUndeletableReason, isHiddenDepartment } from '@/lib/departments';
+import { isAdminRole } from '@/lib/roles';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -15,9 +16,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 소속 목록은 조직 전체 구조다. 이걸 쓰는 화면(소속 필터·사용자 관리)이 전부
-    // 관리자 전용이므로 API도 같은 기준으로 막는다.
-    if (user.role !== 'admin') {
+    // 소속 목록 조회는 사용자 관리뿐 아니라 파일 업로드(분류·배포)·소속 필터
+    // 등 관리자급 화면 전반에서 쓴다. 서브관리자는 사용자 관리만 못 할 뿐
+    // 나머지는 관리자와 동일해야 하므로 조회는 막지 않는다. 생성·삭제(소속
+    // 관리 자체)는 사용자 관리 화면에 속하니 admin 전용으로 아래에 남긴다.
+    if (!isAdminRole(user.role)) {
       return NextResponse.json({ error: 'Only admin can view departments' }, { status: 403 });
     }
 

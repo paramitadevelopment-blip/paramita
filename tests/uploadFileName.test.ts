@@ -11,7 +11,7 @@ describe('업로드 파일명', () => {
     expect(isValidUploadFileName('20260815_동양생명.xlsx')).toBe(true);
     expect(isValidUploadFileName('20260815 동양생명.xlsx')).toBe(true);
     expect(isValidUploadFileName('20260815동양생명.xlsx')).toBe(true);
-    expect(isValidUploadFileName('20260815_흥국생명.xlsx')).toBe(true);
+    expect(isValidUploadFileName('20260815_흥국화재.xlsx')).toBe(true);
     expect(isValidUploadFileName('20260815_한화생명.xlsx')).toBe(true);
   });
 

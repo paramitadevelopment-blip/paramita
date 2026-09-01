@@ -405,7 +405,7 @@ describe('보험사구분 값', () => {
 
   it('신규 양식에 흥국이 오면 흥국2가 된다 — 양식과 보험사는 별개다', () => {
     const row = [...NEW_ROW];
-    row[0] = '흥국생명(PA-01간병)보관에프';
+    row[0] = '흥국화재(PA-01간병)보관에프';
     const out = normalizeSheet(NEW_HEADERS, [row], NOW);
     const cols = findRequiredColumns(out.headers) as any;
     const idx = out.headers.indexOf(cols.productCol);
