@@ -1,6 +1,7 @@
 'use client';
 
 import { memo } from 'react';
+import { isHiddenDepartment } from '@/lib/departments';
 import styles from '../page.module.css';
 
 interface Department {
@@ -42,7 +43,7 @@ const DeptResultGrids = memo(function DeptResultGridsComponent({
           <div className={styles.deptResultTitle}>규칙 배정</div>
           <div className={styles.departmentResults}>
             {departments
-              .filter((dept) => !dept.is_admin)
+              .filter((dept) => !dept.is_admin && !isHiddenDepartment(dept.name))
               .map((dept) => {
                 const count = classificationByDeptId[dept.id] || 0;
                 const deptRows = rowsByDeptId[dept.id] ?? [];
@@ -74,7 +75,7 @@ const DeptResultGrids = memo(function DeptResultGridsComponent({
           </div>
           <div className={styles.departmentResults}>
             {departments
-              .filter((dept) => !dept.is_admin)
+              .filter((dept) => !dept.is_admin && !isHiddenDepartment(dept.name))
               .map((dept) => {
                 const added = addedRowsByDept?.[dept.name] ?? [];
                 const ruleRows = rowsByDeptId[dept.id] ?? [];

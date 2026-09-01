@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { isAdminRole } from '@/lib/roles';
+import { isHiddenDepartment } from '@/lib/departments';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -44,13 +45,17 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(5);
 
-    // 5. 소속별 사용자 수 및 파일 업로드 수 (관리자 제외)
+    // 5. 소속별 사용자 수 및 파일 업로드 수 (관리자·DB담당자 제외)
     // 참고: 파일 테이블이 없으므로 임시로 0으로 반환 (나중에 파일 테이블 추가 시 수정)
-    const { data: departments } = await supabase
+    const { data: allDepartments } = await supabase
       .from('departments')
       .select('id, name, group_name')
       .eq('is_admin', false)
       .order('group_name', { ascending: true });
+
+    // is_admin은 '관리자' 소속만 표시한다. 'DB담당자'는 실제 조직이 아니라
+    // 계정 구분용 소속이라 is_admin=false이지만 여기서도 걸러야 한다.
+    const departments = (allDepartments || []).filter((dept) => !isHiddenDepartment(dept.name));
 
     // 사용자 소속은 조직 단위('파라인슈')로 저장된다. 배정 분류('파라인슈1')별로 세면
     // 어느 쪽도 사람이 잡히지 않아 0명짜리 줄만 늘어난다. 조직 단위로 접어서 센다.

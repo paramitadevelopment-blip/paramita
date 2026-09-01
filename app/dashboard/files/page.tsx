@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MdCloudUpload, MdCloudDownload } from 'react-icons/md';
 import { useAuthStore } from '@/app/store/authStore';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { useAlert } from '@/app/components/Alert/Alert';
+import { isHiddenDepartment } from '@/lib/departments';
 import FileUploadZone from './components/FileUploadZone';
 import TransferredFileSelect from './components/TransferredFileSelect';
 import SelectedFilesList from './components/SelectedFilesList';
@@ -52,10 +53,19 @@ function FilesPage() {
   // 끄고 돌리려면 분류 전에 체크를 풀어야 한다.
   const [memoRule, setMemoRule] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // 파일전달 탭의 체크 상태는 그 컴포넌트 안에서만 갖고 있다. 선택 목록을
+  // 밖(전체 삭제·분류 완료)에서 통째로 비울 때 체크도 같이 풀리게 하려면
+  // key를 바꿔 다시 마운트시키는 수밖에 없다 — 내부 상태를 직접 건드릴 방법이 없다.
+  const [transferResetKey, setTransferResetKey] = useState(0);
 
   const user = useAuthStore((state) => state.user);
   const { data: departmentsData = [] } = useDepartments();
-  const departments = departmentsData;
+  // 관리자('관리자')·DB담당자('DB담당자') 소속은 원본이 들어가는 자리일 뿐
+  // 배정 대상이 아니다. 걸러내지 않으면 분류 진행률·결과 화면에 빈 항목으로 뜬다.
+  const departments = useMemo(
+    () => departmentsData.filter((d) => !d.is_admin && !isHiddenDepartment(d.name)),
+    [departmentsData]
+  );
 
   // 클릭으로 고르든 끌어다 놓든 같은 검사를 거쳐야 한다.
   // 두 벌로 두면 한쪽만 고쳐져 동작이 갈린다.
@@ -82,8 +92,15 @@ function FilesPage() {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  // 파일전달 체크를 해제했을 때, 그 체크로 가져왔던 파일만 골라 뺀다.
+  // File은 값이 아니라 참조라 방금 가져온 그 객체와 같은지로 정확히 짚을 수 있다.
+  const handleRemoveTransferredFile = useCallback((file: File) => {
+    setSelectedFiles((prev) => prev.filter((f) => f !== file));
+  }, []);
+
   const handleRemoveAll = useCallback(() => {
     setSelectedFiles([]);
+    setTransferResetKey((k) => k + 1);
   }, []);
 
   const resetClassificationState = useCallback(() => {
@@ -93,6 +110,7 @@ function FilesPage() {
     setClassificationResults({});
     setTotalFiles(0);
     setCurrentFileIndex(0);
+    setTransferResetKey((k) => k + 1);
   }, []);
 
   // "분류"는 미리보기 단계라 서버/Supabase에 아무것도 쓰지 않는다.
@@ -220,7 +238,9 @@ function FilesPage() {
           />
         ) : (
           <TransferredFileSelect
+            key={transferResetKey}
             onFileSelect={addFiles}
+            onFileRemove={handleRemoveTransferredFile}
             disabled={isDistributing || isClassificationComplete}
           />
         )}

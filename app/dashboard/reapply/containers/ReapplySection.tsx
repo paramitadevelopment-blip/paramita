@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { useAuthStore } from '@/app/store/authStore';
 import { useReapplyNotices } from '@/app/hooks/useReapplyNotices';
 import { useDepartments } from '@/app/hooks/useDepartments';
+import { isHiddenDepartment } from '@/lib/departments';
 import Spinner from '@/app/components/Spinner/Spinner';
 import SearchBar from '@/app/components/SearchBar';
 import Pagination from '@/app/components/Pagination/Pagination';
@@ -33,7 +34,11 @@ const ReapplySection = memo(function ReapplySectionComponent() {
    * 하나다. 분류로 나눠 놓으면 같은 지사 사람이 자기 건을 두 군데서 찾아야 한다.
    */
   const groups = Array.from(
-    new Set((departments ?? []).filter((d) => !d.is_admin).map((d) => d.group_name))
+    new Set(
+      (departments ?? [])
+        .filter((d) => !d.is_admin && !isHiddenDepartment(d.name))
+        .map((d) => d.group_name)
+    )
   );
 
   return (

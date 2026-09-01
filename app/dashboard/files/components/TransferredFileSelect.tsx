@@ -5,10 +5,8 @@ import {
   MdInsertDriveFile,
   MdPerson,
   MdAccessTime,
-  MdArrowForward,
   MdCheckCircle,
   MdOutlineCheckBoxOutlineBlank,
-  MdDownload,
   MdVisibility,
 } from 'react-icons/md';
 import { useMyUploads, type MyUpload } from '@/app/hooks/useMyUploads';
@@ -21,6 +19,8 @@ import styles from '../page.module.css';
 
 interface TransferredFileSelectProps {
   onFileSelect: (files: File[]) => void;
+  /** 체크 해제로 뺄 때, 그 체크로 가져왔던 File을 그대로 돌려준다. */
+  onFileRemove: (file: File) => void;
   disabled?: boolean;
 }
 
@@ -47,23 +47,19 @@ function formatDate(dateString: string): string {
 
 const TransferredFileSelect = memo(function TransferredFileSelectComponent({
   onFileSelect,
+  onFileRemove,
   disabled = false,
 }: TransferredFileSelectProps) {
   const { showAlert } = useAlert();
   const { data, isLoading, error } = useMyUploads(1, 5);
   const previewMutation = usePreviewMyUpload();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // 체크 해제됐을 때 어느 File을 빼야 하는지 알아야 한다. upload.id → 그때 가져온 File.
+  const [importedFiles, setImportedFiles] = useState<Map<string, File>>(new Map());
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
 
   const uploads = data?.data ?? [];
-
-  // 개별 체크박스 토글
-  const handleToggleSelect = useCallback((fileId: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
-    );
-  }, []);
 
   // 미리보기 열기
   const handlePreview = useCallback(
@@ -101,52 +97,21 @@ const TransferredFileSelect = memo(function TransferredFileSelectComponent({
     });
   };
 
-  // 선택된 여러 파일 일괄 가져오기
-  const handleFetchSelected = useCallback(async () => {
-    if (selectedIds.length === 0) {
-      showAlert({ type: 'warning', title: '알림', message: '가져올 파일을 체크해주세요.' });
-      return;
-    }
-
-    const targetFiles = uploads.filter((f) => selectedIds.includes(f.id));
-    if (targetFiles.length === 0) return;
-
-    setIsLoadingFile(true);
-    try {
-      const fetchedFiles = await Promise.all(targetFiles.map((f) => downloadSingleFile(f)));
-      onFileSelect(fetchedFiles);
-      setSelectedIds([]);
-      showAlert({
-        type: 'success',
-        title: '완료',
-        message: `${fetchedFiles.length}개의 파일을 가져왔습니다.`,
-      });
-    } catch (err) {
-      console.error('Failed to load selected files:', err);
-      showAlert({
-        type: 'error',
-        title: '오류',
-        message: err instanceof Error ? err.message : '파일을 불러오는 중 문제가 발생했습니다.',
-      });
-    } finally {
-      setIsLoadingFile(false);
-    }
-  }, [selectedIds, uploads, onFileSelect, showAlert]);
-
-  // 개별 파일 즉시 1개 가져오기
-  const handleFetchSingle = useCallback(
+  // 체크하면 바로 가져와 선택 목록에 더한다. 체크하고 나서 또 다른 버튼을
+  // 눌러야 분류 버튼이 나오면 뎁스가 한 단 더 생긴다.
+  const importFile = useCallback(
     async (fileInfo: MyUpload) => {
       setIsLoadingFile(true);
       try {
         const file = await downloadSingleFile(fileInfo);
         onFileSelect([file]);
-        showAlert({
-          type: 'success',
-          title: '완료',
-          message: `'${fileInfo.name}' 파일을 가져왔습니다.`,
-        });
+        setImportedFiles((prev) => new Map(prev).set(fileInfo.id, file));
+        setSelectedIds((prev) => (prev.includes(fileInfo.id) ? prev : [...prev, fileInfo.id]));
+        // 체크할 때마다 뜨는 확인 모달은 없앤다 — 체크 표시·아래 선택된 파일
+        // 목록에 바로 나타나므로 그것으로 충분하다. 여러 개 연달아 체크하면
+        // 모달을 그만큼 눌러 닫아야 해서 오히려 방해가 된다.
       } catch (err) {
-        console.error('Failed to load single file:', err);
+        console.error('Failed to load file:', err);
         showAlert({
           type: 'error',
           title: '오류',
@@ -157,6 +122,28 @@ const TransferredFileSelect = memo(function TransferredFileSelectComponent({
       }
     },
     [onFileSelect, showAlert]
+  );
+
+  // 체크 해제하면 그 체크로 가져왔던 File을 정확히 짚어 선택 목록에서도 뺀다.
+  // 표시만 지우고 실제로는 안 빠지면, 체크가 풀린 걸 보고도 여전히 배포 대상에
+  // 남아 있는 상태가 된다.
+  const handleToggleSelect = useCallback(
+    (fileInfo: MyUpload) => {
+      if (disabled || isLoadingFile) return;
+      if (selectedIds.includes(fileInfo.id)) {
+        const file = importedFiles.get(fileInfo.id);
+        if (file) onFileRemove(file);
+        setImportedFiles((prev) => {
+          const next = new Map(prev);
+          next.delete(fileInfo.id);
+          return next;
+        });
+        setSelectedIds((prev) => prev.filter((id) => id !== fileInfo.id));
+        return;
+      }
+      importFile(fileInfo);
+    },
+    [disabled, isLoadingFile, selectedIds, importedFiles, onFileRemove, importFile]
   );
 
   if (isLoading) {
@@ -193,26 +180,10 @@ const TransferredFileSelect = memo(function TransferredFileSelectComponent({
           <span className={styles.transferToolbarTitle}>최근 전달된 파일 목록</span>
           {selectedIds.length > 0 && (
             <span className={styles.transferSelectedBadge}>
-              {selectedIds.length}개 선택됨
+              {selectedIds.length}개 가져옴
             </span>
           )}
         </div>
-
-        <button
-          type="button"
-          className={styles.transferBulkFetchBtn}
-          onClick={handleFetchSelected}
-          disabled={selectedIds.length === 0 || disabled || isLoadingFile}
-        >
-          <MdDownload />
-          <span>
-            {isLoadingFile
-              ? '가져오는 중...'
-              : selectedIds.length > 0
-              ? `선택한 파일 가져오기 (${selectedIds.length}개)`
-              : '가져올 파일을 체크해주세요'}
-          </span>
-        </button>
       </div>
 
       <div className={styles.transferCardList}>
@@ -222,23 +193,19 @@ const TransferredFileSelect = memo(function TransferredFileSelectComponent({
             <div
               key={file.id}
               className={`${styles.transferCardItem} ${isChecked ? styles.transferCardItemChecked : ''}`}
-              onClick={() => {
-                if (!disabled && !isLoadingFile) {
-                  handleToggleSelect(file.id);
-                }
-              }}
+              onClick={() => handleToggleSelect(file)}
             >
               <div
                 className={styles.transferCardCheckbox}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleToggleSelect(file.id);
+                  handleToggleSelect(file);
                 }}
               >
                 <input
                   type="checkbox"
                   checked={isChecked}
-                  onChange={() => handleToggleSelect(file.id)}
+                  onChange={() => handleToggleSelect(file)}
                   disabled={disabled || isLoadingFile}
                   className={styles.transferHiddenCheckbox}
                 />
@@ -282,20 +249,6 @@ const TransferredFileSelect = memo(function TransferredFileSelectComponent({
                   <span className={styles.transferMetaSize}>{formatFileSize(file.size)}</span>
                 </div>
               </div>
-
-              <button
-                type="button"
-                className={styles.transferCardBtn}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleFetchSingle(file);
-                }}
-                disabled={disabled || isLoadingFile}
-                title="이 파일 바로 가져오기"
-              >
-                <span>가져오기</span>
-                <MdArrowForward />
-              </button>
             </div>
           );
         })}
