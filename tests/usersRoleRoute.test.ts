@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { STAFF_DEPARTMENT } from '@/lib/departments';
 
 /**
  * 역할(role) 변경 권한.
@@ -149,14 +150,14 @@ describe('DB담당자/서브관리자로 바뀌면 소속도 같이 바뀐다', 
     const res = await PUT(putReq({ id: 7, role: 'staff' }));
 
     expect(res.status).toBe(200);
-    expect(updatePatch).toMatchObject({ role: 'staff', department: 'DB담당자' });
+    expect(updatePatch).toMatchObject({ role: 'staff', department: STAFF_DEPARTMENT });
   });
 
   it('다른 소속을 같이 보내도 무시하고 DB담당자로 채운다', async () => {
     const res = await PUT(putReq({ id: 7, role: 'staff', department: '경기' }));
 
     expect(res.status).toBe(200);
-    expect(updatePatch).toMatchObject({ department: 'DB담당자' });
+    expect(updatePatch).toMatchObject({ department: STAFF_DEPARTMENT });
   });
 
   it("지사를 서브관리자로 올리면 소속이 '관리자'로 채워진다", async () => {
@@ -177,7 +178,7 @@ describe('DB담당자/서브관리자로 바뀌면 소속도 같이 바뀐다', 
 /** DB담당자에서 지사로 내려올 때는 새 소속을 반드시 받아야 한다. */
 describe('DB담당자를 지사로 내리려면 소속을 새로 받아야 한다', () => {
   it('소속 없이 role만 지사로 보내면 400', async () => {
-    targetUser = { username: 'branch_staff', department: 'DB담당자', role: 'staff' };
+    targetUser = { username: 'branch_staff', department: STAFF_DEPARTMENT, role: 'staff' };
 
     const res = await PUT(putReq({ id: 7, role: 'user' }));
 
@@ -186,7 +187,7 @@ describe('DB담당자를 지사로 내리려면 소속을 새로 받아야 한�
   });
 
   it('소속을 같이 보내면 통과한다', async () => {
-    targetUser = { username: 'branch_staff', department: 'DB담당자', role: 'staff' };
+    targetUser = { username: 'branch_staff', department: STAFF_DEPARTMENT, role: 'staff' };
 
     const res = await PUT(putReq({ id: 7, role: 'user', department: '경기' }));
 

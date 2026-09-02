@@ -142,11 +142,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // DB담당자 소속도 같은 이유로 막는다. is_admin과 달리 전용 플래그가 없어
+    // '담당자' 소속도 같은 이유로 막는다. is_admin과 달리 전용 플래그가 없어
     // 이름으로 본다 — 목록에서 숨기는 것만으로는 API를 직접 부르는 걸 막지 못한다.
     if (isHiddenDepartment(deptToDelete.name)) {
       return NextResponse.json(
-        { error: 'DB담당자 소속은 삭제할 수 없습니다. DB담당자 계정이 이 소속에 속합니다.' },
+        { error: `'${deptToDelete.name}' 소속은 삭제할 수 없습니다. 그 역할의 계정이 이 소속에 속합니다.` },
         { status: 400 }
       );
     }

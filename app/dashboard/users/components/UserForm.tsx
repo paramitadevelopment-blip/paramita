@@ -337,7 +337,7 @@ const UserForm = memo(function UserForm({
         {formData.role === 'staff' ? (
           <div className={styles.selectWrapper}>
             <select id="department" className={styles.select} value={STAFF_DEPARTMENT} disabled>
-              <option value={STAFF_DEPARTMENT}>DB담당자 (자동 지정)</option>
+              <option value={STAFF_DEPARTMENT}>{STAFF_DEPARTMENT} (자동 지정)</option>
             </select>
             <MdExpandMore className={styles.selectIcon} />
           </div>

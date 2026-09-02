@@ -15,12 +15,16 @@ export interface DepartmentLike {
 /**
  * 소속이 아니라 계정 구분용이라 소속 필터에 노출하지 않는다.
  *
- * 관리자는 소속이 '관리자', DB담당자는 소속이 'DB담당자'다 — 둘 다 실제 조직이
- * 아니라 그 역할 전용으로 예약해 둔 소속 이름이라, 지사 계정을 만들 때
- * 고를 수 있는 목록에는 안 보여야 한다.
+ * 관리자(admin)·서브관리자(subadmin)는 소속이 '관리자', DB담당자(staff)는 소속이
+ * '담당자'다 — 둘 다 실제 조직이 아니라 그 역할들이 공통으로 쓰는 자리라,
+ * 지사 계정을 만들 때 고를 수 있는 목록에는 안 보여야 한다.
+ *
+ * 소속 이름을 역할 이름('DB담당자')과 일부러 다르게 둔다. 담당자 유형이 앞으로
+ * 늘어나도(민원담당자 등) 역할만 추가하면 되고 소속 행·숨김 목록은 그대로다.
+ * 관리자와 서브관리자가 역할만 다르고 소속은 하나인 것과 같은 구조다.
  */
 export const ADMIN_DEPARTMENT = '관리자';
-export const STAFF_DEPARTMENT = 'DB담당자';
+export const STAFF_DEPARTMENT = '담당자';
 const HIDDEN_DEPARTMENTS = [ADMIN_DEPARTMENT, STAFF_DEPARTMENT];
 
 /**
@@ -50,7 +54,7 @@ export function toDepartmentGroups(departments: DepartmentLike[] | undefined): s
 /**
  * 사람에게 배정할 수 있는 소속인지. 화면에서 감춘 값이 API로 직접 오는 걸 막는다.
  *
- * '관리자'·'DB담당자'는 그 역할 전용이라 지사 계정에는 못 붙인다 — 서버가 그
+ * '관리자'·'담당자'는 그 역할들 전용이라 지사 계정에는 못 붙인다 — 서버가 그
  * 값을 붙일 때(관리자 시드, DB담당자 생성)는 이 검사를 거치지 않고 직접 넣는다.
  */
 export function isAssignableGroup(group: string): boolean {
@@ -60,7 +64,7 @@ export function isAssignableGroup(group: string): boolean {
 /**
  * 소속 관리 화면·삭제 API에서 감춰야 하는 이름인가.
  *
- * '관리자'는 지금까지 departments.is_admin 플래그로 가렸다. 'DB담당자'는 그런
+ * '관리자'는 지금까지 departments.is_admin 플래그로 가렸다. '담당자'는 그런
  * 전용 플래그가 없어서(is_admin을 재사용하면 "관리자 소속이 둘"이 되어 그
  * 플래그를 보는 다른 코드가 깨진다) 이름으로 가린다.
  */

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { STAFF_DEPARTMENT } from '@/lib/departments';
 
 /**
  * 계정 생성 시 소속 필수 여부.
@@ -48,7 +49,7 @@ describe('DB담당자는 소속을 고르지 않는다', () => {
     const res = await POST(postReq({ ...base, role: 'staff' }));
 
     expect(res.status).toBe(201);
-    expect(insertedRows[0]).toMatchObject({ role: 'staff', department: 'DB담당자' });
+    expect(insertedRows[0]).toMatchObject({ role: 'staff', department: STAFF_DEPARTMENT });
   });
 
   /** 관리자 계정 소속이 '관리자'인 것과 같은 자리라, 다른 값을 보내도 서버가 덮어쓴다. */
@@ -56,7 +57,7 @@ describe('DB담당자는 소속을 고르지 않는다', () => {
     const res = await POST(postReq({ ...base, role: 'staff', department: '파라인슈' }));
 
     expect(res.status).toBe(201);
-    expect(insertedRows[0]).toMatchObject({ department: 'DB담당자' });
+    expect(insertedRows[0]).toMatchObject({ department: STAFF_DEPARTMENT });
   });
 });
 

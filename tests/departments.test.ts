@@ -6,6 +6,7 @@ import {
   isAssignableGroup,
   isHiddenDepartment,
   getUndeletableReason,
+  STAFF_DEPARTMENT,
 } from '@/lib/departments';
 import { parsePagination } from '@/lib/pagination';
 
@@ -24,7 +25,7 @@ const DEPARTMENTS = [
   { id: 30, name: '한울부원', group_name: '한울부원' },
   { id: 31, name: '파라인슈1', group_name: '파라인슈' },
   { id: 32, name: '파라인슈2', group_name: '파라인슈' },
-  { id: 40, name: 'DB담당자', group_name: 'DB담당자' },
+  { id: 40, name: STAFF_DEPARTMENT, group_name: STAFF_DEPARTMENT },
 ];
 
 describe('소속을 조직 단위로 접기', () => {
@@ -48,7 +49,7 @@ describe('소속을 조직 단위로 접기', () => {
 
   /** DB담당자도 관리자와 같은 이유로 뺀다 — 그 역할 전용 소속이지 조직이 아니다. */
   it('DB담당자도 소속이 아니라 계정 구분이라 뺀다', () => {
-    expect(toDepartmentGroups(DEPARTMENTS)).not.toContain('DB담당자');
+    expect(toDepartmentGroups(DEPARTMENTS)).not.toContain(STAFF_DEPARTMENT);
   });
 
   it('중복이 없다', () => {
@@ -102,7 +103,7 @@ describe('사람에게 배정 가능한 소속', () => {
    */
   it('관리자·DB담당자 소속은 지사 계정에 배정할 수 없다', () => {
     expect(isAssignableGroup('관리자')).toBe(false);
-    expect(isAssignableGroup('DB담당자')).toBe(false);
+    expect(isAssignableGroup(STAFF_DEPARTMENT)).toBe(false);
   });
 });
 
@@ -113,7 +114,7 @@ describe('사람에게 배정 가능한 소속', () => {
 describe('소속 관리 화면·삭제 API에서 감추는 소속', () => {
   it('관리자·DB담당자는 감춘다', () => {
     expect(isHiddenDepartment('관리자')).toBe(true);
-    expect(isHiddenDepartment('DB담당자')).toBe(true);
+    expect(isHiddenDepartment(STAFF_DEPARTMENT)).toBe(true);
   });
 
   it('나머지 소속은 안 감춘다', () => {
