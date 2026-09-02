@@ -16,7 +16,10 @@ export interface DeletedFile {
 export interface DeletionEvent {
   id: number;
   deleted_at: string;
+  /** 삭제한 사람의 로그인 아이디 */
   deleted_by: string;
+  /** 삭제한 사람의 실명. 조회할 때 users에서 찾아 붙인다 — 계정이 지워졌으면 null */
+  deleted_by_name: string | null;
   total_count: number;
   reason: string;
   restored_at: string | null;

@@ -6,13 +6,16 @@ import { getCsrfToken } from '@/app/store/authStore';
 import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import Pagination from '@/app/components/Pagination/Pagination';
 import { FILE_SOURCE_LABEL } from '@/lib/fileSource';
+import { formatUserLabel } from '@/lib/userLabel';
 import styles from '../page.module.css';
 
 interface DeletionHistory {
   id: string;
   file_id: string;
   file_name: string;
+  /** 삭제 히스토리 화면과 같은 모양(아이디(이름))으로 보여주려고 둘 다 들고 있는다 */
   deleted_by: string;
+  deleted_by_name: string | null;
   deleted_at: string;
   source: string;
 }
@@ -60,6 +63,7 @@ function DeletionHistorySection({
       file_id: file.id,
       file_name: file.name,
       deleted_by: event.deleted_by,
+      deleted_by_name: event.deleted_by_name,
       deleted_at: event.deleted_at,
       source: file.source,
     }))
@@ -164,7 +168,7 @@ function DeletionHistorySection({
                   >
                     {history.file_name}
                   </td>
-                  <td>{history.deleted_by}</td>
+                  <td>{formatUserLabel(history.deleted_by, history.deleted_by_name)}</td>
                   <td>{formatDateTime(history.deleted_at)}</td>
                   <td>{FILE_SOURCE_LABEL[history.source] || history.source}</td>
                 </tr>

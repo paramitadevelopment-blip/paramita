@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { MdArrowDropUp, MdArrowDropDown, MdNotes, MdUndo } from 'react-icons/md';
 import { DeletionEvent } from '@/app/hooks/useDeletionHistory';
 import { FILE_SOURCE_LABEL } from '@/lib/fileSource';
+import { formatUserLabel } from '@/lib/userLabel';
 import styles from '../page.module.css';
 
 /**
@@ -128,7 +129,7 @@ const DeletionHistoryTable = memo(function DeletionHistoryTableComponent({
                   {seqById.get(event.id)}
                 </td>
                 <td className={styles.nowrap}>{formatDateTime(event.deleted_at)}</td>
-                <td>{event.deleted_by}</td>
+                <td>{formatUserLabel(event.deleted_by, event.deleted_by_name)}</td>
                 <td
                   style={originalCount > 0 ? countCellStyle : undefined}
                   onClick={(e) => {

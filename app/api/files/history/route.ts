@@ -38,14 +38,31 @@ export async function GET(request: NextRequest) {
     let matchedFileIds: Set<string> | null = null;
     if (search.trim()) {
       const searchLower = search.toLowerCase();
+
+      // 이벤트에는 아이디만 남아 있어 실명으로는 못 찾는다. 이름이 걸리는
+      // 계정을 먼저 찾아 그 아이디로 이벤트를 집는다 — 화면에 아이디(이름)으로
+      // 보이는데 이름으로 검색이 안 되면 보이는 대로 찾을 수가 없다.
+      const { data: matchedUsers } = await supabase
+        .from('users')
+        .select('username')
+        .ilike('name', `%${search}%`);
+      const matchedUsernames = (matchedUsers || []).map((u) => u.username);
+
       // 파일명·내용뿐 아니라 "누가 지웠는지"로도 찾을 수 있어야 한다.
       // deleted_by는 파일이 아니라 이벤트 쪽 컬럼이라 따로 조회한다.
-      const [{ data: allDeletedFiles }, { data: matchingEvents }] = await Promise.all([
-        supabase.from('deleted_files').select('id, deletion_event_id, name, file_content'),
-        supabase.from('file_deletion_events').select('id').ilike('deleted_by', `%${search}%`),
-      ]);
+      const [{ data: allDeletedFiles }, { data: eventsByLoginId }, { data: eventsByName }] =
+        await Promise.all([
+          supabase.from('deleted_files').select('id, deletion_event_id, name, file_content'),
+          supabase.from('file_deletion_events').select('id').ilike('deleted_by', `%${search}%`),
+          matchedUsernames.length > 0
+            ? supabase.from('file_deletion_events').select('id').in('deleted_by', matchedUsernames)
+            : Promise.resolve({ data: [] as Array<{ id: number }> }),
+        ]);
 
-      const matchedEventIds = new Set<number>((matchingEvents || []).map((e) => e.id));
+      const matchedEventIds = new Set<number>([
+        ...(eventsByLoginId || []).map((e) => e.id),
+        ...(eventsByName || []).map((e) => e.id),
+      ]);
       const fileIds = new Set<string>();
 
       (allDeletedFiles || []).forEach((file) => {
@@ -152,9 +169,34 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    /*
+     * 삭제한 사람의 실명.
+     *
+     * 이벤트에는 아이디(deleted_by)만 남아 있어 화면에서 누구인지 바로 안 보인다.
+     * 삭제 시점에 이름을 같이 저장하는 방법도 있지만, 그러면 그 전에 쌓인 이력은
+     * 끝내 아이디만 남는다. 조회할 때 users에서 찾아 붙이면 예전 기록에도 이름이
+     * 보인다. 계정이 지워졌으면 찾을 게 없으므로 이름 없이 아이디만 내보낸다.
+     */
+    const deleterUsernames = Array.from(
+      new Set((events || []).map((e) => e.deleted_by).filter(Boolean))
+    );
+    const nameByUsername = new Map<string, string>();
+
+    if (deleterUsernames.length > 0) {
+      const { data: deleters } = await supabase
+        .from('users')
+        .select('username, name')
+        .in('username', deleterUsernames);
+
+      (deleters || []).forEach((u) => {
+        if (u.name) nameByUsername.set(u.username, u.name);
+      });
+    }
+
     // 이벤트와 파일을 함께 반환
     const eventsWithFiles = (events || []).map((event) => ({
       ...event,
+      deleted_by_name: nameByUsername.get(event.deleted_by) || null,
       files: filesByEvent[event.id] || [],
     }));
 
