@@ -269,6 +269,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
+    // 화면에는 자세한 사정을 안 내보내지만(계정 존재 여부 등이 새어 나간다),
+    // 서버에는 남겨야 한다 — 안 남기면 500이 떠도 무엇이 터졌는지 알 방법이 없다.
+    console.error('User create error:', error);
     return NextResponse.json({ error: '요청을 처리할 수 없습니다.' }, { status: 500 });
   }
 }
