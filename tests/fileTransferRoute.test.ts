@@ -218,7 +218,7 @@ describe('GET 미리보기·다운로드', () => {
     expect((await GET(req('GET'), ctx)).status).toBe(404);
   });
 
-  it('intent=download이면 다운로드 로그(download_records)에 한 줄 남긴다', async () => {
+  it('DB담당자가 intent=download로 받으면 다운로드 로그에 한 줄 남긴다', async () => {
     await GET(downloadReq(), ctx);
     expect(downloadRecordInserts).toHaveLength(1);
     expect(downloadRecordInserts[0]).toMatchObject({
@@ -231,6 +231,22 @@ describe('GET 미리보기·다운로드', () => {
   });
 
   /**
+   * 관리자가 원본을 받는 건 분류·배포하려고 내용을 확인하는 과정이다.
+   * 파일 다운로드·원본파일 관리 화면에서 관리자 기록을 남기지 않는 것과 같은
+   * 기준으로, 여기서도 남기지 않는다. 남기면 관리자의 확인 과정이 로그를 덮어
+   * 정작 봐야 할 지사·DB담당자의 기록이 묻힌다.
+   */
+  it('관리자·서브관리자가 받으면 다운로드 로그에 남기지 않는다', async () => {
+    currentUser = { id: 1, role: 'admin', username: 'admin' };
+    await GET(downloadReq(), ctx);
+    expect(downloadRecordInserts).toHaveLength(0);
+
+    currentUser = { id: 2, role: 'subadmin', username: 'sub' };
+    await GET(downloadReq(), ctx);
+    expect(downloadRecordInserts).toHaveLength(0);
+  });
+
+  /**
    * 이 라우트는 파일전달 화면의 미리보기·다운로드뿐 아니라 파일업로드 화면의
    * "파일전달에서 가져오기"에서도 그대로 쓰인다. 가져오기는 분류·배포에 쓸
    * 원본을 내부적으로 읽어오는 것뿐 사람이 파일을 받아간 게 아닌데, intent
@@ -239,6 +255,12 @@ describe('GET 미리보기·다운로드', () => {
   it('intent=download이 없으면(미리보기·가져오기) 다운로드 로그에 남기지 않는다', async () => {
     await GET(req('GET'), ctx);
     expect(downloadRecordInserts).toHaveLength(0);
+  });
+
+  /** 기록을 안 남길 뿐, 관리자도 파일 자체는 그대로 받아야 한다. */
+  it('관리자도 파일은 정상적으로 받는다', async () => {
+    currentUser = { id: 1, role: 'admin', username: 'admin' };
+    expect((await GET(downloadReq(), ctx)).status).toBe(200);
   });
 });
 

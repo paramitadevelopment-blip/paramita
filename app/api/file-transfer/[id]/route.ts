@@ -77,8 +77,14 @@ export async function GET(
    * 읽어오는 것뿐, 사람이 파일을 받아간 게 아니다). 구분 없이 다 남기면
    * 미리보기·가져오기가 다운로드 로그에 실제 다운로드처럼 찍힌다.
    * 진짜 "다운로드" 버튼만 intent=download를 붙여 보내 그때만 남긴다.
+   *
+   * 관리자는 그 버튼을 눌러도 남기지 않는다. 관리자가 원본을 받는 건 분류·배포하려고
+   * 내용을 확인하는 과정이라, 파일 다운로드·원본파일 관리 화면에서 관리자 기록을
+   * 남기지 않는 것과 같은 기준이다. DB담당자는 자기가 넘긴 원본을 도로 받아가는
+   * 것이므로 그대로 남긴다.
    */
-  if (new URL(request.url).searchParams.get('intent') === 'download') {
+  const isRealDownload = new URL(request.url).searchParams.get('intent') === 'download';
+  if (isRealDownload && user.role === 'staff') {
     // 다운로드 로그는 표시용 기록이라 실패해도 파일은 그대로 내보낸다.
     // 한도가 없는 화면이라 attempt_no는 정보용일 뿐, 검사에는 안 쓴다.
     try {
