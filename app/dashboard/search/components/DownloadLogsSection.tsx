@@ -6,6 +6,7 @@ import { getCsrfToken } from '@/app/store/authStore';
 import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import Pagination from '@/app/components/Pagination/Pagination';
 import RequesterInfoModal, { type RequesterInfo } from './RequesterInfoModal';
+import { FILE_SOURCE_LABEL } from '@/lib/fileSource';
 import styles from '../page.module.css';
 
 interface DownloadLog {
@@ -21,6 +22,7 @@ interface DownloadLog {
   device_type: string | null;
   os_name: string | null;
   browser_name: string | null;
+  source: string;
 }
 
 interface DownloadLogsSectionProps {
@@ -73,6 +75,7 @@ function DownloadLogsSection({
     device_type: record.device_type,
     os_name: record.os_name,
     browser_name: record.browser_name,
+    source: record.source,
   }));
 
   const handleSort = useCallback((column: string) => {
@@ -191,6 +194,16 @@ function DownloadLogsSection({
                     )}
                   </div>
                 </th>
+                <th className={styles.sortable} onClick={() => handleSort('source')}>
+                  <div className={styles.headerContent}>
+                    <span>받은 곳</span>
+                    {sortBy === 'source' && (
+                      <span className={styles.sortIcon}>
+                        {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                      </span>
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -236,6 +249,7 @@ function DownloadLogsSection({
                   <td>{log.os_name || '-'}</td>
                   <td>{log.browser_name || '-'}</td>
                   <td>{formatDateTime(log.downloaded_at)}</td>
+                  <td>{FILE_SOURCE_LABEL[log.source] || log.source}</td>
                 </tr>
               ))}
             </tbody>

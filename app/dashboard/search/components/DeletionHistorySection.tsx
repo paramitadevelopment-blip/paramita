@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
 import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import Pagination from '@/app/components/Pagination/Pagination';
+import { FILE_SOURCE_LABEL } from '@/lib/fileSource';
 import styles from '../page.module.css';
 
 interface DeletionHistory {
@@ -13,6 +14,7 @@ interface DeletionHistory {
   file_name: string;
   deleted_by: string;
   deleted_at: string;
+  source: string;
 }
 
 interface DeletionHistorySectionProps {
@@ -59,6 +61,7 @@ function DeletionHistorySection({
       file_name: file.name,
       deleted_by: event.deleted_by,
       deleted_at: event.deleted_at,
+      source: file.source,
     }))
   );
 
@@ -126,6 +129,16 @@ function DeletionHistorySection({
                     )}
                   </div>
                 </th>
+                <th className={styles.sortable} onClick={() => handleSort('source')}>
+                  <div className={styles.headerContent}>
+                    <span>출처</span>
+                    {sortBy === 'source' && (
+                      <span className={styles.sortIcon}>
+                        {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                      </span>
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -142,6 +155,7 @@ function DeletionHistorySection({
                     {history.file_name}
                   </td>
                   <td>{formatDateTime(history.deleted_at)}</td>
+                  <td>{FILE_SOURCE_LABEL[history.source] || history.source}</td>
                 </tr>
               ))}
             </tbody>

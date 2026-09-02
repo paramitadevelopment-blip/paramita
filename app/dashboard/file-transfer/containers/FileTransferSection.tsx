@@ -8,6 +8,7 @@ import { usePreviewMyUpload, useDownloadMyUpload, useDeleteMyUpload } from '@/ap
 import Spinner from '@/app/components/Spinner/Spinner';
 import Pagination from '@/app/components/Pagination/Pagination';
 import EmptyState from '@/app/components/EmptyState/EmptyState';
+import SearchBar from '@/app/components/SearchBar';
 import FileUploadZone from '../../files/components/FileUploadZone';
 import SelectedFilesList from '../components/SelectedFilesList';
 import MyUploadsTable from '../components/MyUploadsTable';
@@ -15,6 +16,9 @@ import ExcelPreviewModal from '../../download/components/ExcelPreviewModal';
 import DeleteReasonModal from '../components/DeleteReasonModal';
 import { isValidUploadFileName, UPLOAD_FILE_NAME_HINT } from '@/lib/insurance';
 import styles from '../page.module.css';
+// 검색창·전체 건수 표시는 원본파일 관리 화면과 같은 모양을 써야 한다 —
+// 표 스타일처럼 이 화면에만 새로 만들면 대시보드 안에서 화면마다 다르게 보인다.
+import sharedStyles from '../../download/page.module.css';
 
 // 원본파일 관리의 삭제 사유 글자수 제한과 같은 값이다 — 같은 삭제 히스토리에
 // 남는 사유라 화면마다 한도가 다르면 안 된다.
@@ -29,6 +33,9 @@ const FileTransferSection = memo(function FileTransferSectionComponent() {
   const { showAlert } = useAlert();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('uploaded_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [search, setSearch] = useState('');
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
@@ -37,7 +44,7 @@ const FileTransferSection = memo(function FileTransferSectionComponent() {
 
   // 파일전달로 올린 원본은 원본파일 관리와 섞이면 안 된다. 출처를 함께 보낸다.
   const uploadMutation = useUploadFiles('file_transfer');
-  const { data, isLoading } = useMyUploads(page, limit);
+  const { data, isLoading } = useMyUploads(page, limit, sortBy, sortOrder, search);
   const uploads = data?.data ?? [];
   const previewMutation = usePreviewMyUpload();
   const downloadMutation = useDownloadMyUpload();
@@ -96,6 +103,29 @@ const FileTransferSection = memo(function FileTransferSectionComponent() {
       }
     );
   }, [previewMutation, showAlert]);
+
+  const handleSort = useCallback(
+    (column: string) => {
+      if (sortBy === column) {
+        setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setSortBy(column);
+        setSortOrder('asc');
+      }
+      setPage(1);
+    },
+    [sortBy]
+  );
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, []);
+
+  const handleSearchReset = useCallback(() => {
+    setSearch('');
+    setPage(1);
+  }, []);
 
   const closePreview = useCallback(() => setPreviewFile(null), []);
 
@@ -158,12 +188,28 @@ const FileTransferSection = memo(function FileTransferSectionComponent() {
       />
 
       <h3 className={styles.sectionTitle}>업로드 내역</h3>
+
+      <div className={sharedStyles.searchSection}>
+        <div className={sharedStyles.totalCount}>
+          총 <span>{data?.pagination.totalRecords ?? 0}</span>건
+        </div>
+        <SearchBar
+          value={search}
+          onChange={handleSearchChange}
+          onReset={handleSearchReset}
+          placeholder="검색어를 입력해주세요."
+        />
+      </div>
+
       {isLoading ? null : uploads.length === 0 ? (
-        <EmptyState message="아직 전달한 파일이 없습니다." />
+        <EmptyState message={search ? '검색 결과가 없습니다.' : '아직 전달한 파일이 없습니다.'} />
       ) : (
         <>
           <MyUploadsTable
             uploads={uploads}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSort={handleSort}
             onPreview={handlePreview}
             onDownload={handleDownload}
             onDelete={handleDelete}

@@ -80,6 +80,13 @@ export function historyWindowStart(now: Date, days = HISTORY_DUP_DAYS): Date {
  * 원본 파일만 본다. 배포본은 원본을 소속별로 쪼갠 사본이라 같은 사람이
  * 여러 번 세어질 뿐이고, 원본에는 중복으로 빠진 행까지 들어 있어 더 넓게 잡는다.
  *
+ * source='file_transfer'는 뺀다. 그건 DB담당자가 올려놓고 관리자가 아직
+ * 분류·배포하지 않은 대기열이라 배정소속·중복사유가 비어 있다 — 실제로
+ * 처리된 적 없는 신청을 "이미 처리됨"으로 잘못 세게 된다. 더 심각한 건,
+ * 관리자가 그 파일을 내려받아 파일업로드 화면에 그대로 다시 올리면 이 대기열
+ * 행이 자기 자신과 완전히 같은 내용이라 전부 중복으로 걸린다. 파일전달과
+ * 파일업로드는 서로 다른 화면이므로 이 이력 조회에서도 겹치면 안 된다.
+ *
  * file_content는 파일당 수백 kB다. 30일치를 통째로 올리면 무겁지만, 비교에 쓰는
  * 네 값만 남기고 바로 버리므로 메모리에 남는 건 행 수에 비례하는 작은 배열이다.
  */
@@ -97,6 +104,7 @@ export async function loadRecentKeys(
     .from('files')
     .select('id, name, uploaded_at, file_content')
     .eq('is_original', true)
+    .eq('source', 'direct')
     .gte('uploaded_at', since.toISOString());
 
   const { data, error } = await query;

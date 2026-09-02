@@ -71,45 +71,55 @@ export async function GET(
     return NextResponse.json({ error: '파일을 불러올 수 없습니다.' }, { status: 500 });
   }
 
-  // 다운로드 로그는 표시용 기록이라 실패해도 파일은 그대로 내보낸다.
-  // 한도가 없는 화면이라 attempt_no는 정보용일 뿐, 검사에는 안 쓴다.
-  try {
-    const { data: downloader } = await supabase
-      .from('users')
-      .select('department, name, employee_id')
-      .eq('id', user.id)
-      .single();
+  /*
+   * 이 라우트는 세 곳에서 부른다: 파일전달 화면의 미리보기·다운로드, 그리고
+   * 파일업로드 화면의 "파일전달에서 가져오기"(분류·배포에 쓸 원본을 내부적으로
+   * 읽어오는 것뿐, 사람이 파일을 받아간 게 아니다). 구분 없이 다 남기면
+   * 미리보기·가져오기가 다운로드 로그에 실제 다운로드처럼 찍힌다.
+   * 진짜 "다운로드" 버튼만 intent=download를 붙여 보내 그때만 남긴다.
+   */
+  if (new URL(request.url).searchParams.get('intent') === 'download') {
+    // 다운로드 로그는 표시용 기록이라 실패해도 파일은 그대로 내보낸다.
+    // 한도가 없는 화면이라 attempt_no는 정보용일 뿐, 검사에는 안 쓴다.
+    try {
+      const { data: downloader } = await supabase
+        .from('users')
+        .select('department, name, employee_id')
+        .eq('id', user.id)
+        .single();
 
-    const { count: existingCountRaw } = await supabase
-      .from('download_records')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('file_id', fileId);
+      const { count: existingCountRaw } = await supabase
+        .from('download_records')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('file_id', fileId);
 
-    const deviceInfo = extractDeviceInfo(request);
+      const deviceInfo = extractDeviceInfo(request);
 
-    const { error: logError } = await supabase.from('download_records').insert({
-      file_id: fileId,
-      user_id: user.id,
-      attempt_no: (existingCountRaw || 0) + 1,
-      file_name: file.name,
-      downloaded_by: user.username,
-      user_name: downloader?.name || null,
-      user_employee_id: downloader?.employee_id || null,
-      user_department: downloader?.department || null,
-      downloaded_at: new Date().toISOString(),
-      file_content: file.file_content || [],
-      ip_address: deviceInfo.ip_address,
-      device_type: deviceInfo.device_type,
-      os_name: deviceInfo.os_name,
-      browser_name: deviceInfo.browser_name,
-    });
+      const { error: logError } = await supabase.from('download_records').insert({
+        file_id: fileId,
+        user_id: user.id,
+        attempt_no: (existingCountRaw || 0) + 1,
+        file_name: file.name,
+        downloaded_by: user.username,
+        user_name: downloader?.name || null,
+        user_employee_id: downloader?.employee_id || null,
+        user_department: downloader?.department || null,
+        downloaded_at: new Date().toISOString(),
+        file_content: file.file_content || [],
+        ip_address: deviceInfo.ip_address,
+        device_type: deviceInfo.device_type,
+        os_name: deviceInfo.os_name,
+        browser_name: deviceInfo.browser_name,
+        source: 'file_transfer',
+      });
 
-    if (logError) {
+      if (logError) {
+        console.error('File-transfer download log error:', logError);
+      }
+    } catch (logError) {
       console.error('File-transfer download log error:', logError);
     }
-  } catch (logError) {
-    console.error('File-transfer download log error:', logError);
   }
 
   const response = new NextResponse(fileData as any);

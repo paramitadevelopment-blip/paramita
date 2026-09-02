@@ -29,6 +29,7 @@ interface DownloadRecord {
   device_type: string;
   os_name: string | null;
   browser_name: string | null;
+  source: string;
 }
 
 interface DownloadHistoryResponse {

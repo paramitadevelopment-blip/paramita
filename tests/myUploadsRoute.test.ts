@@ -38,6 +38,8 @@ vi.mock('@supabase/supabase-js', () => ({
               return q;
             },
             order: () => q,
+            // fetchAllRows가 buildQuery().range(from, to)로 부른다. 이 큐는
+            // 한 번에 mainFilesRows 전체를 count와 같이 돌려주므로 한 번만 돈다.
             range: () =>
               Promise.resolve({ data: mainFilesRows, error: null, count: mainFilesRows.length }),
             // eq/not만 거치고 바로 await하는 자리(deployedRows 조회)를 위해 thenable로도 동작한다.
@@ -124,5 +126,91 @@ describe('파일전달로 들어온 원본만 본다', () => {
     await GET(req());
 
     expect(eqCalls).toContainEqual(['source', 'file_transfer']);
+  });
+});
+
+describe('검색어로 파일명·올린 사람·엑셀 내용을 거른다', () => {
+  beforeEach(() => {
+    mainFilesRows = [
+      {
+        id: 'f1',
+        name: '20260815_흥국화재.xlsx',
+        size: 100,
+        uploaded_at: '2026-08-15T00:00:00Z',
+        uploaded_by: 7,
+        uploaded_by_name: '김디비',
+        file_content: [{ 고객명: '홍길동', Tel1: '01011112222', 상품명: '무배당상품' }],
+      },
+      {
+        id: 'f2',
+        name: '20260816_동양생명.xlsx',
+        size: 200,
+        uploaded_at: '2026-08-16T00:00:00Z',
+        uploaded_by: 8,
+        uploaded_by_name: '박관리',
+        file_content: [{ 고객명: '이순신', Tel1: '01033334444', 상품명: '건강보험' }],
+      },
+    ];
+  });
+
+  it('검색어가 없으면 전체를 돌려준다', async () => {
+    const res = await GET(req());
+    const body = await res.json();
+
+    expect(body.data).toHaveLength(2);
+  });
+
+  it('파일명에 검색어가 있으면 걸린다', async () => {
+    const res = await GET(new Request('http://localhost/api/files/my-uploads?search=흥국화재') as any);
+    const body = await res.json();
+
+    expect(body.data.map((f: any) => f.id)).toEqual(['f1']);
+  });
+
+  it('올린 사람 이름에 검색어가 있으면 걸린다', async () => {
+    const res = await GET(new Request('http://localhost/api/files/my-uploads?search=박관리') as any);
+    const body = await res.json();
+
+    expect(body.data.map((f: any) => f.id)).toEqual(['f2']);
+  });
+
+  /**
+   * 파일전달 대기열은 아직 분류 전이라 파일명만으로는 어떤 신청 건이
+   * 들어 있는지 알 수 없다. 고객명·전화번호·상품명처럼 엑셀 내용까지
+   * 뒤질 수 있어야 특정 고객 건을 찾을 수 있다.
+   */
+  it('엑셀 내용(고객명)에 검색어가 있으면 걸린다', async () => {
+    const res = await GET(new Request('http://localhost/api/files/my-uploads?search=홍길동') as any);
+    const body = await res.json();
+
+    expect(body.data.map((f: any) => f.id)).toEqual(['f1']);
+  });
+
+  it('엑셀 내용(전화번호)에 검색어가 있으면 걸린다', async () => {
+    const res = await GET(new Request('http://localhost/api/files/my-uploads?search=01033334444') as any);
+    const body = await res.json();
+
+    expect(body.data.map((f: any) => f.id)).toEqual(['f2']);
+  });
+
+  it('엑셀 내용(상품명)에 검색어가 있으면 걸린다', async () => {
+    const res = await GET(new Request('http://localhost/api/files/my-uploads?search=건강보험') as any);
+    const body = await res.json();
+
+    expect(body.data.map((f: any) => f.id)).toEqual(['f2']);
+  });
+
+  it('응답에는 file_content를 실어 보내지 않는다', async () => {
+    const res = await GET(new Request('http://localhost/api/files/my-uploads?search=홍길동') as any);
+    const body = await res.json();
+
+    expect(body.data[0].file_content).toBeUndefined();
+  });
+
+  it('어디에도 없는 검색어면 빈 목록', async () => {
+    const res = await GET(new Request('http://localhost/api/files/my-uploads?search=존재하지않음') as any);
+    const body = await res.json();
+
+    expect(body.data).toHaveLength(0);
   });
 });

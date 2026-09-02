@@ -140,6 +140,8 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
 const { GET, DELETE } = await import('@/app/api/file-transfer/[id]/route');
 
 const req = (method: string) => new Request('http://localhost/api/file-transfer/file-1', { method }) as any;
+const downloadReq = () =>
+  new Request('http://localhost/api/file-transfer/file-1?intent=download', { method: 'GET' }) as any;
 const deleteReq = () =>
   new Request('http://localhost/api/file-transfer/file-1', {
     method: 'DELETE',
@@ -216,15 +218,27 @@ describe('GET 미리보기·다운로드', () => {
     expect((await GET(req('GET'), ctx)).status).toBe(404);
   });
 
-  it('다운로드 로그(download_records)에 한 줄 남긴다', async () => {
-    await GET(req('GET'), ctx);
+  it('intent=download이면 다운로드 로그(download_records)에 한 줄 남긴다', async () => {
+    await GET(downloadReq(), ctx);
     expect(downloadRecordInserts).toHaveLength(1);
     expect(downloadRecordInserts[0]).toMatchObject({
       file_id: 'file-1',
       user_id: 7,
       downloaded_by: 'staff7',
       file_name: 'test.xlsx',
+      source: 'file_transfer',
     });
+  });
+
+  /**
+   * 이 라우트는 파일전달 화면의 미리보기·다운로드뿐 아니라 파일업로드 화면의
+   * "파일전달에서 가져오기"에서도 그대로 쓰인다. 가져오기는 분류·배포에 쓸
+   * 원본을 내부적으로 읽어오는 것뿐 사람이 파일을 받아간 게 아닌데, intent
+   * 구분 없이 다 남기면 다운로드 로그에 실제 다운로드처럼 잘못 찍힌다.
+   */
+  it('intent=download이 없으면(미리보기·가져오기) 다운로드 로그에 남기지 않는다', async () => {
+    await GET(req('GET'), ctx);
+    expect(downloadRecordInserts).toHaveLength(0);
   });
 });
 

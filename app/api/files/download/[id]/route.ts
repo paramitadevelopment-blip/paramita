@@ -163,6 +163,7 @@ export async function GET(
           device_type: deviceInfo.device_type,
           os_name: deviceInfo.os_name,
           browser_name: deviceInfo.browser_name,
+          source: 'download',
         })
         .select('id')
         .single();

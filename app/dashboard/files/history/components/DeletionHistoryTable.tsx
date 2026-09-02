@@ -3,7 +3,20 @@
 import React, { memo } from 'react';
 import { MdArrowDropUp, MdArrowDropDown, MdNotes, MdUndo } from 'react-icons/md';
 import { DeletionEvent } from '@/app/hooks/useDeletionHistory';
+import { FILE_SOURCE_LABEL } from '@/lib/fileSource';
 import styles from '../page.module.css';
+
+/**
+ * 이벤트의 출처. 파일전달 삭제는 한 번에 한 건씩만 지우므로(총 1건),
+ * 이벤트 안 파일이 섞일 일이 없다 — 하나라도 파일전달이면 그 이벤트 전체가
+ * 파일전달에서 난 것이다.
+ */
+function eventSourceLabel(event: DeletionEvent): string {
+  const source = event.files.some((f) => f.source === 'file_transfer')
+    ? 'file_transfer'
+    : 'direct';
+  return FILE_SOURCE_LABEL[source];
+}
 
 interface DeletionHistoryTableProps {
   events: DeletionEvent[];
@@ -96,6 +109,11 @@ const DeletionHistoryTable = memo(function DeletionHistoryTableComponent({
                 <span>상태</span>
               </div>
             </th>
+            <th>
+              <div className={styles.headerContent}>
+                <span>출처</span>
+              </div>
+            </th>
             <th>작업</th>
           </tr>
         </thead>
@@ -138,6 +156,7 @@ const DeletionHistoryTable = memo(function DeletionHistoryTableComponent({
                     <span style={{ color: '#999' }}>삭제됨</span>
                   )}
                 </td>
+                <td>{eventSourceLabel(event)}</td>
                 <td>
                   <div className={styles.actions}>
                     <button className={styles.reasonBtn} onClick={() => onViewReason(event)}>

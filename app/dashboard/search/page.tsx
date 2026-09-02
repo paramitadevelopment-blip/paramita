@@ -6,6 +6,7 @@ import SearchBar from '@/app/components/SearchBar/SearchBar';
 import Spinner from '@/app/components/Spinner/Spinner';
 import ExcelPreviewModal from '@/app/dashboard/download/components/ExcelPreviewModal';
 import OriginalFilesSection from './components/OriginalFilesSection';
+import FileTransferSection from './components/FileTransferSection';
 import DownloadFilesSection from './components/DownloadFilesSection';
 import DownloadLogsSection from './components/DownloadLogsSection';
 import DownloadRequestsSection from './components/DownloadRequestsSection';
@@ -84,6 +85,10 @@ function SearchPage() {
               <OriginalFilesSection
                 searchQuery={searchQuery}
                 onPreview={handlePreview}
+                formatDateTime={formatDateTime}
+              />
+              <FileTransferSection
+                searchQuery={searchQuery}
                 formatDateTime={formatDateTime}
               />
               <DownloadFilesSection

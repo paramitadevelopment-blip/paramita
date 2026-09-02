@@ -2,6 +2,7 @@
 
 import React, { memo } from 'react';
 import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
+import { FILE_SOURCE_LABEL } from '@/lib/fileSource';
 import styles from '../page.module.css';
 
 interface DownloadRecord {
@@ -17,6 +18,7 @@ interface DownloadRecord {
   device_type: string;
   os_name: string | null;
   browser_name: string | null;
+  source: string;
 }
 
 interface DownloadHistoryTableProps {
@@ -139,6 +141,16 @@ const DownloadHistoryTable = memo(function DownloadHistoryTableComponent({
                 )}
               </div>
             </th>
+            <th style={{ cursor: 'pointer' }} onClick={() => onSort('source')}>
+              <div className={styles.headerContent}>
+                <span>받은 곳</span>
+                {sortBy === 'source' && (
+                  <span className={styles.sortIcon}>
+                    {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                  </span>
+                )}
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -186,6 +198,7 @@ const DownloadHistoryTable = memo(function DownloadHistoryTableComponent({
               <td>{record.os_name || '-'}</td>
               <td>{record.browser_name || '-'}</td>
               <td>{new Date(record.downloaded_at).toLocaleString('ko-KR')}</td>
+              <td>{FILE_SOURCE_LABEL[record.source] || record.source}</td>
             </tr>
           ))}
         </tbody>

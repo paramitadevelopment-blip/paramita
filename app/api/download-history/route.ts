@@ -44,13 +44,14 @@ export async function GET(request: NextRequest) {
       'device_type',
       'os_name',
       'browser_name',
+      'source',
     ];
     const sortBy = SORTABLE.includes(sortByParam) ? sortByParam : 'downloaded_at';
 
     // 화면에 내보내는 열. file_content는 여기 없다 — 엑셀 전체(고객명·연락처·주소)라
     // 응답에 실어 보내면 안 되고, 검색할 때만 서버에서 쓰고 버린다.
     const LIST_COLUMNS =
-      'id, file_id, file_name, downloaded_by, user_name, user_employee_id, user_department, downloaded_at, ip_address, device_type, os_name, browser_name';
+      'id, file_id, file_name, downloaded_by, user_name, user_employee_id, user_department, downloaded_at, ip_address, device_type, os_name, browser_name, source';
 
     // 공통 조건. 검색 여부와 상관없이 같은 필터가 걸려야 건수와 목록이 어긋나지 않는다.
     const applyFilters = (query: any) => {

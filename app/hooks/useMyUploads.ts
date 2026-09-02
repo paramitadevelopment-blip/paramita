@@ -17,11 +17,23 @@ interface MyUploadsResponse {
   pagination: { page: number; limit: number; totalRecords: number; totalPages: number };
 }
 
-export function useMyUploads(page: number, limit: number) {
+export function useMyUploads(
+  page: number,
+  limit: number,
+  sortBy: string = 'uploaded_at',
+  sortOrder: 'asc' | 'desc' = 'desc',
+  search: string = ''
+) {
   return useQuery({
-    queryKey: ['myUploads', page, limit],
+    queryKey: ['myUploads', page, limit, sortBy, sortOrder, search],
     queryFn: async (): Promise<MyUploadsResponse> => {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        sortBy,
+        sortOrder,
+        search,
+      });
       const response = await fetch(`/api/files/my-uploads?${params}`, { credentials: 'include' });
       if (!response.ok) throw new Error('업로드 목록을 불러올 수 없습니다.');
       return response.json();

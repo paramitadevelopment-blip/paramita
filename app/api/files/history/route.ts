@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
       const { data: files, error: filesError } = await supabase
         .from('deleted_files')
         .select(
-          'id, name, size, department_id, is_original, original_file_id, restored_at, deletion_event_id'
+          'id, name, size, department_id, is_original, original_file_id, restored_at, deletion_event_id, source'
         )
         .in('deletion_event_id', eventIds)
         .order('deletion_event_id', { ascending: false })

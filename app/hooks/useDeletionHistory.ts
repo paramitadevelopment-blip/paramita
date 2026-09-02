@@ -10,6 +10,7 @@ export interface DeletedFile {
   is_original: boolean;
   original_file_id: string | null;
   restored_at: string | null;
+  source: string;
 }
 
 export interface DeletionEvent {

@@ -26,7 +26,9 @@ export function usePreviewMyUpload() {
 export function useDownloadMyUpload() {
   return useMutation({
     mutationFn: async ({ fileId, fileName }: { fileId: string; fileName: string }) => {
-      const response = await fetch(`/api/file-transfer/${fileId}`, {
+      // intent=download가 있어야 다운로드 로그에 남는다. 미리보기·파일업로드의
+      // "가져오기"는 같은 라우트를 쓰지만 이 표시가 없어 로그에 안 남는다.
+      const response = await fetch(`/api/file-transfer/${fileId}?intent=download`, {
         credentials: 'include',
       });
 
