@@ -168,6 +168,10 @@ export async function GET(request: NextRequest) {
         if (file.name.toLowerCase().includes(searchLower)) return true;
         if (!searchContent) return false;
 
+        // 업로드한 사람 이름도 관리자에게만 보이는 값이라(FileTable의 admin 전용
+        // 열과 같은 기준) 내용 검색과 같이 관리자 전용으로 묶는다.
+        if (String(file.uploaded_by_name ?? '').toLowerCase().includes(searchLower)) return true;
+
         if (!Array.isArray(file.file_content)) return false;
         return file.file_content.some((row: any) => {
           if (typeof row !== 'object' || row === null) return false;

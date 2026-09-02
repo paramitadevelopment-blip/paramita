@@ -119,6 +119,16 @@ function DeletionHistorySection({
                     )}
                   </div>
                 </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('deleted_by')}>
+                  <div className={styles.headerContent}>
+                    <span>삭제한 사용자</span>
+                    {sortBy === 'deleted_by' && (
+                      <span className={styles.sortIcon}>
+                        {sortOrder === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />}
+                      </span>
+                    )}
+                  </div>
+                </th>
                 <th style={{ cursor: 'pointer' }} onClick={() => handleSort('deleted_at')}>
                   <div className={styles.headerContent}>
                     <span>삭제 날짜</span>
@@ -154,6 +164,7 @@ function DeletionHistorySection({
                   >
                     {history.file_name}
                   </td>
+                  <td>{history.deleted_by}</td>
                   <td>{formatDateTime(history.deleted_at)}</td>
                   <td>{FILE_SOURCE_LABEL[history.source] || history.source}</td>
                 </tr>

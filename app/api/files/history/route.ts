@@ -38,37 +38,45 @@ export async function GET(request: NextRequest) {
     let matchedFileIds: Set<string> | null = null;
     if (search.trim()) {
       const searchLower = search.toLowerCase();
-      const { data: allDeletedFiles } = await supabase
-        .from('deleted_files')
-        .select('id, deletion_event_id, name, file_content');
+      // 파일명·내용뿐 아니라 "누가 지웠는지"로도 찾을 수 있어야 한다.
+      // deleted_by는 파일이 아니라 이벤트 쪽 컬럼이라 따로 조회한다.
+      const [{ data: allDeletedFiles }, { data: matchingEvents }] = await Promise.all([
+        supabase.from('deleted_files').select('id, deletion_event_id, name, file_content'),
+        supabase.from('file_deletion_events').select('id').ilike('deleted_by', `%${search}%`),
+      ]);
 
-      if (allDeletedFiles && allDeletedFiles.length > 0) {
-        const matchedEventIds = new Set<number>();
-        const fileIds = new Set<string>();
+      const matchedEventIds = new Set<number>((matchingEvents || []).map((e) => e.id));
+      const fileIds = new Set<string>();
 
-        allDeletedFiles.forEach((file) => {
-          // 파일명 검색
-          let found = String(file.name || '').toLowerCase().includes(searchLower);
+      (allDeletedFiles || []).forEach((file) => {
+        // 삭제한 사람으로 이미 걸린 이벤트면, 그 안의 파일은 이름·내용과
+        // 무관하게 전부 matchedOnly(검색 화면)에 나와야 한다.
+        if (matchedEventIds.has(file.deletion_event_id)) {
+          fileIds.add(String(file.id));
+          return;
+        }
 
-          // 엑셀 내용(file_content) 검색
-          if (!found && Array.isArray(file.file_content)) {
-            found = file.file_content.some((row: any) => {
-              if (typeof row !== 'object' || row === null) return false;
-              return Object.values(row).some((value) =>
-                String(value || '').toLowerCase().includes(searchLower)
-              );
-            });
-          }
+        // 파일명 검색
+        let found = String(file.name || '').toLowerCase().includes(searchLower);
 
-          if (found) {
-            matchedEventIds.add(file.deletion_event_id);
-            fileIds.add(String(file.id));
-          }
-        });
+        // 엑셀 내용(file_content) 검색
+        if (!found && Array.isArray(file.file_content)) {
+          found = file.file_content.some((row: any) => {
+            if (typeof row !== 'object' || row === null) return false;
+            return Object.values(row).some((value) =>
+              String(value || '').toLowerCase().includes(searchLower)
+            );
+          });
+        }
 
-        eventIdsToShow = Array.from(matchedEventIds);
-        matchedFileIds = fileIds;
-      }
+        if (found) {
+          matchedEventIds.add(file.deletion_event_id);
+          fileIds.add(String(file.id));
+        }
+      });
+
+      eventIdsToShow = Array.from(matchedEventIds);
+      matchedFileIds = fileIds;
     }
 
     // 이벤트 목록 조회

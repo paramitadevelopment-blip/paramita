@@ -89,8 +89,14 @@ export async function GET(request: NextRequest) {
 
       const searchLower = search.toLowerCase();
       const matched = (data || []).filter((record: any) => {
-        if (record.file_name.toLowerCase().includes(searchLower) ||
-            record.downloaded_by.toLowerCase().includes(searchLower)) {
+        // downloaded_by는 로그인 아이디다. 실명(user_name)·사번으로 찾는 경우가
+        // 더 많은데 이 두 값이 빠져 있으면 아이디를 정확히 알 때만 걸린다.
+        if (
+          record.file_name.toLowerCase().includes(searchLower) ||
+          record.downloaded_by.toLowerCase().includes(searchLower) ||
+          String(record.user_name ?? '').toLowerCase().includes(searchLower) ||
+          String(record.user_employee_id ?? '').toLowerCase().includes(searchLower)
+        ) {
           return true;
         }
 
