@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canManageUsers } from '@/lib/roles';
 import { getUserFromRequest } from '@/lib/jwt';
 import { createClient } from '@supabase/supabase-js';
 
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // 프론트에서 admin에게만 버튼을 노출하더라도 여기서 다시 막는다.
     // 일반 사용자는 본인 이력만 조회할 수 있다.
-    if (user.role !== 'admin' && user.id !== userId) {
+    if (!canManageUsers(user.role) && user.id !== userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

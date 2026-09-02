@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
-import { canUploadFiles } from '@/lib/roles';
+import { canUploadFiles, isStaffRole } from '@/lib/roles';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { formatCellValue } from '@/lib/excelCell';
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
      */
     const requestedSource = formData.get('source');
     const source =
-      user.role === 'staff'
+      isStaffRole(user.role)
         ? 'file_transfer'
         : requestedSource === 'file_transfer'
           ? 'file_transfer'

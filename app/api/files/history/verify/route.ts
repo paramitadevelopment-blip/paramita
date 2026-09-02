@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canManageFiles } from '@/lib/roles';
 import { timingSafeEqual } from 'crypto';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (user.role !== 'admin' && user.role !== 'subadmin') {
+  if (!canManageFiles(user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'subadmin') {
+    if (!canManageFiles(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -77,7 +78,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'subadmin') {
+    if (!canManageFiles(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

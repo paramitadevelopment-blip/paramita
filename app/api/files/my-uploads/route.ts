@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canUseFileTransfer } from '@/lib/roles';
 import { createClient } from '@supabase/supabase-js';
 import { getUserFromRequest } from '@/lib/jwt';
 import { parsePagination } from '@/lib/pagination';
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'subadmin' && user.role !== 'staff') {
+    if (!canUseFileTransfer(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

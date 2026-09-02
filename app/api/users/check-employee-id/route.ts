@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { canManageUsers } from '@/lib/roles';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
+    if (!canManageUsers(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

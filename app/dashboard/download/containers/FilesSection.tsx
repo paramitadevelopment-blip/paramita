@@ -12,6 +12,7 @@ import { useFileModals } from '@/app/hooks/useFileModals';
 import { useFileSelection } from '@/app/hooks/useFileSelection';
 import { invalidateDashboard } from '@/app/hooks/useDashboardCache';
 import { useAlert } from '@/app/components/Alert/Alert';
+import { isAdminRole } from '@/lib/roles';
 import { toDepartmentGroups, getSubDepartments } from '@/lib/departments';
 import Spinner from '@/app/components/Spinner/Spinner';
 import Pagination from '@/app/components/Pagination/Pagination';
@@ -55,7 +56,7 @@ const REASON_MAX_LENGTH = 500;
 
 const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter = true, showOriginal = false }: FilesSectionProps) {
   const user = useAuthStore((state) => state.user);
-  const isAdmin = user?.role === 'admin' || user?.role === 'subadmin';
+  const isAdmin = isAdminRole(user?.role);
   const logout = useAuthStore((state) => state.logout);
   const queryClient = useQueryClient();
   const { showAlert } = useAlert();

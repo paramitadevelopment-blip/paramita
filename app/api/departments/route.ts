@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { getUndeletableReason, isHiddenDepartment } from '@/lib/departments';
-import { isAdminRole } from '@/lib/roles';
+import { canManageDepartments, isAdminRole } from '@/lib/roles';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Admin만 소속 생성 가능
-    if (user.role !== 'admin') {
+    if (!canManageDepartments(user.role)) {
       return NextResponse.json({ error: 'Only admin can create departments' }, { status: 403 });
     }
 
@@ -105,7 +105,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Admin만 소속 삭제 가능
-    if (user.role !== 'admin') {
+    if (!canManageDepartments(user.role)) {
       return NextResponse.json({ error: 'Only admin can delete departments' }, { status: 403 });
     }
 

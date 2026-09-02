@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
-import { isAssignableGroup, STAFF_DEPARTMENT, ADMIN_DEPARTMENT } from '@/lib/departments';
+import { isAssignableGroup, getFixedDepartment } from '@/lib/departments';
+import { canManageUsers, hasFixedDepartment } from '@/lib/roles';
 import { parsePagination } from '@/lib/pagination';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin') {
+    if (!canManageUsers(user.role)) {
       return NextResponse.json({ error: 'Only admin can view users' }, { status: 403 });
     }
 
@@ -158,7 +159,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Admin만 사용자 생성 가능
-    if (user.role !== 'admin') {
+    if (!canManageUsers(user.role)) {
       return NextResponse.json({ error: 'Only admin can create users' }, { status: 403 });
     }
 
@@ -185,14 +186,9 @@ export async function POST(request: NextRequest) {
      * 요청으로 다른 값을 보내도 무시한다. 지사는 소속이 없으면 어느 지사 사람인지
      * 알 방법이 없어 그대로 필수다.
      */
-    const department =
-      role === 'staff'
-        ? STAFF_DEPARTMENT
-        : role === 'subadmin'
-          ? ADMIN_DEPARTMENT
-          : requestedDepartment;
+    const department = getFixedDepartment(role) ?? requestedDepartment;
 
-    if (role !== 'staff' && role !== 'subadmin' && !department) {
+    if (!hasFixedDepartment(role) && !department) {
       return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
     }
 
@@ -227,7 +223,7 @@ export async function POST(request: NextRequest) {
     }
 
     // DB담당자, 서브관리자는 서버가 직접 채운 고정값이라 이 검사를 안 거친다
-    if (role !== 'staff' && role !== 'subadmin') {
+    if (!hasFixedDepartment(role)) {
       if (!department.trim()) {
         return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
       }
@@ -302,7 +298,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Admin이 아니면 자신의 정보만 수정 가능
-    if (user.role !== 'admin' && user.id !== userId) {
+    if (!canManageUsers(user.role) && user.id !== userId) {
       return NextResponse.json({ error: 'Cannot modify other users' }, { status: 403 });
     }
 
@@ -334,7 +330,7 @@ export async function PUT(request: NextRequest) {
      * 스스로 권한을 올릴 수 있다. admin만 남의 역할을 바꿀 수 있게 한다.
      */
     if (role !== undefined) {
-      if (user.role !== 'admin') {
+      if (!canManageUsers(user.role)) {
         return NextResponse.json({ error: 'Only admin can change role' }, { status: 403 });
       }
       if (!['user', 'staff', 'subadmin'].includes(role)) {
@@ -355,16 +351,15 @@ export async function PUT(request: NextRequest) {
     const nextRole = role !== undefined ? role : targetUser.role;
     let resolvedDepartment: string | undefined = department;
 
-    if (nextRole === 'staff') {
-      resolvedDepartment = STAFF_DEPARTMENT;
-    } else if (nextRole === 'subadmin') {
-      resolvedDepartment = ADMIN_DEPARTMENT;
-    } else if ((targetUser.role === 'staff' || targetUser.role === 'subadmin') && !department) {
+    const fixedDepartment = getFixedDepartment(nextRole);
+    if (fixedDepartment) {
+      resolvedDepartment = fixedDepartment;
+    } else if (hasFixedDepartment(targetUser.role) && !department) {
       return NextResponse.json({ error: '소속을 선택해주세요.' }, { status: 400 });
     }
 
     // department 존재 확인 (수정하려는 경우). 생성 때와 같은 기준으로 본다.
-    if (resolvedDepartment && nextRole !== 'staff' && nextRole !== 'subadmin') {
+    if (resolvedDepartment && !hasFixedDepartment(nextRole)) {
       if (!resolvedDepartment.trim()) {
         return NextResponse.json({ error: 'Department cannot be empty' }, { status: 400 });
       }
@@ -440,7 +435,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Admin만 삭제 가능
-    if (user.role !== 'admin') {
+    if (!canManageUsers(user.role)) {
       return NextResponse.json({ error: 'Only admin can delete users' }, { status: 403 });
     }
 

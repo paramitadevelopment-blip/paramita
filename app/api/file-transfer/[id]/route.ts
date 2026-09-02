@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canUseFileTransfer, isStaffRole } from '@/lib/roles';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { extractDeviceInfo } from '@/lib/deviceInfo';
@@ -51,7 +52,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (user.role !== 'admin' && user.role !== 'subadmin' && user.role !== 'staff') {
+  if (!canUseFileTransfer(user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -84,7 +85,7 @@ export async function GET(
    * 것이므로 그대로 남긴다.
    */
   const isRealDownload = new URL(request.url).searchParams.get('intent') === 'download';
-  if (isRealDownload && user.role === 'staff') {
+  if (isRealDownload && isStaffRole(user.role)) {
     // 다운로드 로그는 표시용 기록이라 실패해도 파일은 그대로 내보낸다.
     // 한도가 없는 화면이라 attempt_no는 정보용일 뿐, 검사에는 안 쓴다.
     try {
@@ -143,7 +144,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (user.role !== 'admin' && user.role !== 'subadmin' && user.role !== 'staff') {
+  if (!canUseFileTransfer(user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

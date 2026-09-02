@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
+import { isProtectedAccount } from '@/lib/roles';
 import { invalidateDashboard } from './useDashboardCache';
 
 interface UploadedFile {
@@ -122,7 +123,7 @@ export function useAllUsers() {
         }
 
         const nonAdminIds = users
-          .filter((u: any) => u.role !== 'admin')
+          .filter((u: any) => !isProtectedAccount(u.role))
           .map((u: any) => u.id);
 
         allUserIds.push(...nonAdminIds);

@@ -13,6 +13,7 @@ import UserModal from '../components/UserModal';
 import Pagination from '@/app/components/Pagination/Pagination';
 import { UserForm, UserRow } from '../types';
 import { toDepartmentGroups } from '@/lib/departments';
+import { canManageUsers, hasFixedDepartment } from '@/lib/roles';
 import styles from '../page.module.css';
 import { MdAdd } from 'react-icons/md';
 
@@ -77,7 +78,7 @@ const UsersSection = memo(function UsersSectionComponent({
 
   const handleDeleteClick = useCallback((userId: number, username: string) => {
     const user = data?.data.find(u => u.id === userId);
-    if (user?.role === 'admin') {
+    if (canManageUsers(user?.role)) {
       showAlert({ type: 'error', title: '오류', message: '관리자는 삭제할 수 없습니다.' });
       return;
     }
@@ -119,7 +120,7 @@ const UsersSection = memo(function UsersSectionComponent({
 
       // DB담당자는 소속이 없어도 된다. 화면 전체가 파일 업로드 하나뿐이라 어느
       // 소속인지 볼 일이 없다. 그 외(지사)는 소속이 있어야 한다.
-      if (formData.role !== 'staff' && !formData.department?.trim()) {
+      if (!hasFixedDepartment(formData.role) && !formData.department?.trim()) {
         showAlert({ type: 'error', title: '입력 오류', message: '소속을 선택해주세요.' });
         return;
       }
@@ -207,7 +208,7 @@ const UsersSection = memo(function UsersSectionComponent({
 
     const adminSelected = Array.from(selectedUserIds).some((userId) => {
       const user = data?.data.find(u => u.id === userId);
-      return user?.role === 'admin';
+      return canManageUsers(user?.role);
     });
 
     if (adminSelected) {

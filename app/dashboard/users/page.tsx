@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/app/store/authStore';
+import { canManageUsers } from '@/lib/roles';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { MdAdd } from 'react-icons/md';
 import UsersSection from './containers/UsersSection';
@@ -14,7 +15,7 @@ function UsersPage() {
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && !canManageUsers(user.role)) {
       router.replace('/dashboard');
     }
   }, [user, router]);

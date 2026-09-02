@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { useAuthStore, getCsrfToken } from '@/app/store/authStore';
+import { getLandingRoute } from '@/lib/roles';
 import styles from "./login.module.css";
 import Image from 'next/image';
 import { useAlert } from '@/app/components/Alert/Alert';
@@ -77,13 +78,7 @@ export default function LoginPage() {
        * RSC 스트림이 중간에 끊겨 서버에 "Cannot write to a CLOSED writable
        * stream" 에러가 남는다.
        */
-      const targetPath =
-        data.user.role === 'admin' || data.user.role === 'subadmin'
-          ? '/dashboard'
-          : data.user.role === 'staff'
-            ? '/dashboard/file-transfer'
-            : '/dashboard/download';
-      router.push(targetPath);
+      router.push(getLandingRoute(data.user.role));
     },
     onError: (error: Error) => {
       // 로그인 실패 시 아이디 저장 체크 상태에 따라 처리

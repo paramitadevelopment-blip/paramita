@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRole } from '@/lib/roles';
 import { getUserFromRequest } from '@/lib/jwt';
 import { createClient } from '@supabase/supabase-js';
 
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // 계정이 지워진 사람의 이력은 user_id가 NULL이라 id로는 찾을 수 없다.
     // 그때는 요청에 복사해 둔 아이디로 찾는다. 관리자만 쓸 수 있다.
-    const isAdmin = user.role === 'admin' || user.role === 'subadmin';
+    const isAdmin = isAdminRole(user.role);
     const deletedUsername = isAdmin ? searchParams.get('username') : null;
 
     let query = supabase

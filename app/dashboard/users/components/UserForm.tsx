@@ -6,7 +6,8 @@ import { useCheckUsername } from '@/app/hooks/useCheckUsername';
 import { useCheckEmployeeId } from '@/app/hooks/useCheckEmployeeId';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { UserForm as UserFormType } from '../types';
-import { STAFF_DEPARTMENT, ADMIN_DEPARTMENT } from '@/lib/departments';
+import { STAFF_DEPARTMENT, ADMIN_DEPARTMENT, getFixedDepartment } from '@/lib/departments';
+import { hasFixedDepartment } from '@/lib/roles';
 import DepartmentSelect from './DepartmentSelect';
 import styles from './UserForm.module.css';
 
@@ -127,6 +128,9 @@ const UserForm = memo(function UserForm({
   );
 
   // 서버 검증 규칙과 동일한 조건
+  // 소속이 역할로 정해지는 계정이면 그 값. 지사면 null(사람이 고른다).
+  const fixedDepartment = getFixedDepartment(formData.role);
+
   const errors = useMemo(() => {
     const result: { username?: string; name?: string; password?: string; department?: string; employee_id?: string } = {};
     const username = formData.username.trim();
@@ -160,7 +164,7 @@ const UserForm = memo(function UserForm({
         result.password = '비밀번호는 6~10자여야 합니다.';
       }
     }
-    if (formData.role !== 'staff' && formData.role !== 'subadmin' && !formData.department) {
+    if (!hasFixedDepartment(formData.role) && !formData.department) {
       result.department = '소속을 선택해주세요.';
     }
     return result;
@@ -313,13 +317,12 @@ const UserForm = memo(function UserForm({
                 ...prev,
                 role,
                 department:
-                  role === 'staff'
-                    ? STAFF_DEPARTMENT
-                    : role === 'subadmin'
-                      ? ADMIN_DEPARTMENT
-                      : prev.department === STAFF_DEPARTMENT || prev.department === ADMIN_DEPARTMENT
-                        ? ''
-                        : prev.department,
+                  getFixedDepartment(role) ??
+                  // 고정 소속에서 지사로 내려오면 그 값을 비운다 — 남겨두면
+                  // 지사 계정에 '관리자'·'담당자' 소속이 그대로 붙는다.
+                  (prev.department === STAFF_DEPARTMENT || prev.department === ADMIN_DEPARTMENT
+                    ? ''
+                    : prev.department),
               }));
             }}
             className={styles.select}
@@ -334,17 +337,12 @@ const UserForm = memo(function UserForm({
 
       <div className={styles.formGroup}>
         <label htmlFor="department">소속 <span className={styles.required}>*</span></label>
-        {formData.role === 'staff' ? (
+        {/* 소속이 역할로 고정되는 계정은 고를 게 없으므로 잠긴 칸에 그 값만 보여준다.
+            역할이 늘어도 getFixedDepartment가 값을 주면 이 가지를 그대로 탄다. */}
+        {fixedDepartment ? (
           <div className={styles.selectWrapper}>
-            <select id="department" className={styles.select} value={STAFF_DEPARTMENT} disabled>
-              <option value={STAFF_DEPARTMENT}>{STAFF_DEPARTMENT} (자동 지정)</option>
-            </select>
-            <MdExpandMore className={styles.selectIcon} />
-          </div>
-        ) : formData.role === 'subadmin' ? (
-          <div className={styles.selectWrapper}>
-            <select id="department" className={styles.select} value={ADMIN_DEPARTMENT} disabled>
-              <option value={ADMIN_DEPARTMENT}>관리자 (자동 지정)</option>
+            <select id="department" className={styles.select} value={fixedDepartment} disabled>
+              <option value={fixedDepartment}>{fixedDepartment} (자동 지정)</option>
             </select>
             <MdExpandMore className={styles.selectIcon} />
           </div>

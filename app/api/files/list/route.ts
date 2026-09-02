@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRole } from '@/lib/roles';
 import { getUserFromRequest } from '@/lib/jwt';
 import { createClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       'myRejectCount',
     ];
     const sortBy = SORTABLE.includes(sortByParam) ? sortByParam : 'uploaded_at';
-    const isAdmin = user.role === 'admin' || user.role === 'subadmin';
+    const isAdmin = isAdminRole(user.role);
 
     // 일반 사용자는 본인 소속 파일만 볼 수 있음
     let userDepartment: string | null = null;

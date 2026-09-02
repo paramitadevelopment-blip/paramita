@@ -6,6 +6,8 @@
  * 화면에서 "소속"을 고르는 자리는 조직 단위여야 하므로 여기서 접어서 쓴다.
  */
 
+import { hasFixedDepartment, isStaffRole } from '@/lib/roles';
+
 export interface DepartmentLike {
   id: number;
   name: string;
@@ -33,6 +35,17 @@ const HIDDEN_DEPARTMENTS = [ADMIN_DEPARTMENT, STAFF_DEPARTMENT];
  * 파일 필터에는 그대로 나와야 하므로 여기서만 걸러낸다.
  */
 const NON_ASSIGNABLE_GROUPS = ['이외지역'];
+
+/**
+ * 이 역할에 서버가 붙여 주는 소속. 사람이 고르는 역할(지사)이면 null.
+ *
+ * 화면과 서버가 같은 값을 써야 한다 — 다르면 화면에 보이는 소속과 실제로
+ * 저장되는 소속이 갈린다. 역할이 늘어도 이 함수 하나만 고치면 된다.
+ */
+export function getFixedDepartment(role?: string | null): string | null {
+  if (!hasFixedDepartment(role)) return null;
+  return isStaffRole(role) ? STAFF_DEPARTMENT : ADMIN_DEPARTMENT;
+}
 
 /**
  * 소속 목록을 조직 단위로 접는다.

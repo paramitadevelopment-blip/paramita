@@ -8,6 +8,7 @@ import { useDownloadHistoryDelete } from '@/app/hooks/useDownloadHistoryDelete';
 import { usePreviewFile } from '@/app/hooks/useFileDownload';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { toDepartmentGroups } from '@/lib/departments';
+import { isAdminRole } from '@/lib/roles';
 import Spinner from '@/app/components/Spinner/Spinner';
 import SearchBar from '@/app/components/SearchBar';
 import Pagination from '@/app/components/Pagination/Pagination';
@@ -47,7 +48,7 @@ const DownloadHistorySection = memo(function DownloadHistorySectionComponent() {
   const { showAlert } = useAlert();
   const { data: departmentsData } = useDepartments();
   const user = useAuthStore((state) => state.user);
-  const isAdmin = user?.role === 'admin' || user?.role === 'subadmin';
+  const isAdmin = isAdminRole(user?.role);
   const { deleteMutation, getAllRecordsMutation } = useDownloadHistoryDelete();
   const previewMutation = usePreviewFile();
 

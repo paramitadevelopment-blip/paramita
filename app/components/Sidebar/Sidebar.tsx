@@ -6,6 +6,19 @@ import { useAuthStore } from '@/app/store/authStore';
 import { usePendingRequestCount } from '@/app/hooks/usePendingRequestCount';
 import { useUnreadReapplyCount } from '@/app/hooks/useReapplyNotices';
 import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck, MdBlock, MdPersonSearch, MdLogin, MdDriveFolderUpload } from 'react-icons/md';
+import {
+  canManageUsers,
+  canViewDashboard,
+  canClassifyAndDeploy,
+  canUseFileTransfer,
+  canManageFiles,
+  canDownloadDeployedFiles,
+  canViewReapplyNotices,
+  canReviewDownloadRequests,
+  canUseGlobalSearch,
+  canViewAccessLogs,
+  canManageBlacklist,
+} from '@/lib/roles';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar() {
@@ -15,13 +28,10 @@ export default function Sidebar() {
   // 다시 그려지는데, 사이드바는 모든 화면에 떠 있어 영향이 넓다.
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  // DB담당자는 파일전달 화면만 본다. 파일 업로드(분류·배포)는 관리자 전용이고,
-  // 다운로드·재신청은 지사·관리자 전용으로 남긴다.
-  const isStaff = user?.role === 'staff';
-  const isAdmin = user?.role === 'admin';
-  const isSubadmin = user?.role === 'subadmin';
-  const isAdminOrSubadmin = isAdmin || isSubadmin;
-  const { data: pendingCount = 0 } = usePendingRequestCount(isAdminOrSubadmin);
+  // 메뉴는 역할 이름이 아니라 '무엇을 할 수 있는가'로 가른다 — 역할이 늘어도
+  // lib/roles.ts만 보면 되고, 화면 접근을 실제로 막는 proxy.ts와 같은 기준을 쓴다.
+  const role = user?.role;
+  const { data: pendingCount = 0 } = usePendingRequestCount(canReviewDownloadRequests(role));
   // 재신청 알림은 지사도 본다. 로그인만 되어 있으면 자기 소속 건수를 센다.
   const { data: reapplyCount = 0 } = useUnreadReapplyCount(Boolean(user));
 
@@ -43,7 +53,7 @@ export default function Sidebar() {
 
       <nav className={styles.nav}>
         <ul>
-          {isAdminOrSubadmin && (
+          {canViewDashboard(role) && (
             <li>
               <Link
                 href="/dashboard"
@@ -54,7 +64,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdmin && (
+          {canManageUsers(role) && (
             <li>
               <Link
                 href="/dashboard/users"
@@ -65,7 +75,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdminOrSubadmin && (
+          {canClassifyAndDeploy(role) && (
             <li>
               <Link
                 href="/dashboard/files"
@@ -76,7 +86,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {(isAdminOrSubadmin || isStaff) && (
+          {canUseFileTransfer(role) && (
             <li>
               <Link
                 href="/dashboard/file-transfer"
@@ -87,7 +97,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdminOrSubadmin && (
+          {canManageFiles(role) && (
             <li>
               <Link
                 href="/dashboard/original-files"
@@ -98,7 +108,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {!isStaff && (
+          {canDownloadDeployedFiles(role) && (
             <li>
               <Link
                 href="/dashboard/download"
@@ -109,7 +119,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {!isStaff && (
+          {canViewReapplyNotices(role) && (
             <li>
               <Link
                 href="/dashboard/reapply"
@@ -123,7 +133,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdminOrSubadmin && (
+          {canReviewDownloadRequests(role) && (
             <li>
               <Link
                 href="/dashboard/download-approval"
@@ -137,7 +147,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdminOrSubadmin && (
+          {canUseGlobalSearch(role) && (
             <li>
               <Link
                 href="/dashboard/search"
@@ -148,7 +158,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdminOrSubadmin && (
+          {canViewAccessLogs(role) && (
             <li>
               <Link
                 href="/dashboard/download-history"
@@ -159,7 +169,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdminOrSubadmin && (
+          {canViewAccessLogs(role) && (
             <li>
               <Link
                 href="/dashboard/login-history"
@@ -170,7 +180,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdminOrSubadmin && (
+          {canManageBlacklist(role) && (
             <li>
               <Link
                 href="/dashboard/blacklist"
@@ -181,7 +191,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {isAdminOrSubadmin && (
+          {canManageFiles(role) && (
             <li>
               <Link
                 href="/dashboard/files/history"

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canViewAccessLogs } from '@/lib/roles';
 import { getUserFromRequest } from '@/lib/jwt';
 import { createClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '@/lib/fetchAllRows';
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (user.role !== 'admin' && user.role !== 'subadmin') {
+    if (!canViewAccessLogs(user.role)) {
       return NextResponse.json({ error: 'Only admin can view download history' }, { status: 403 });
     }
 

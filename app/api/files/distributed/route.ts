@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canClassifyAndDeploy } from '@/lib/roles';
 import { getUserFromRequest } from '@/lib/jwt';
 import { createClient } from '@supabase/supabase-js';
 
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 삭제 흐름에서만 쓰이므로 관리자만 조회한다.
-    if (user.role !== 'admin' && user.role !== 'subadmin') {
+    if (!canClassifyAndDeploy(user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

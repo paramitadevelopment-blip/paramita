@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { canManageFiles } from '@/lib/roles';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { hasHistoryAccess } from '@/lib/historyAccess';
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Admin 및 Subadmin 복구 가능
-    if (user.role !== 'admin' && user.role !== 'subadmin') {
+    if (!canManageFiles(user.role)) {
       return NextResponse.json({ error: 'Only admin can restore files' }, { status: 403 });
     }
 

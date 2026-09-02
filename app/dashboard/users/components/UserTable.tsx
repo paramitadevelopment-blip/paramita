@@ -5,6 +5,7 @@ import { MdEdit, MdDelete, MdInfoOutline, MdArrowDropUp, MdArrowDropDown, MdHist
 import EmptyState from '@/app/components/EmptyState/EmptyState';
 import { UserRow } from '../types';
 import DepartmentLogsModal from './DepartmentLogsModal';
+import { belongsToOrganization, isProtectedAccount } from '@/lib/roles';
 import styles from './UserTable.module.css';
 
 /** 역할값 → 화면에 보일 이름과 배지 색 클래스 */
@@ -57,7 +58,7 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
   const handleSelectAll = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const newSet: Set<number> = e.target.checked
-        ? new Set(users.filter((u) => u.role !== 'admin').map((u) => u.id))
+        ? new Set(users.filter((u) => !isProtectedAccount(u.role)).map((u) => u.id))
         : new Set();
       setSelectedIds(newSet);
     },
@@ -121,7 +122,7 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
                 checked={
                   selectedIds.size > 0 &&
                   users
-                    .filter(u => u.role !== 'admin')
+                    .filter(u => !isProtectedAccount(u.role))
                     .every(u => selectedIds.has(u.id))
                 }
                 onChange={handleSelectAll}
@@ -195,7 +196,7 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
           {sortedUsers.map((user) => (
             <tr key={user.id}>
               <td className={styles.checkboxTd}>
-                {user.role !== 'admin' && (
+                {!isProtectedAccount(user.role) && (
                   <input
                     type="checkbox"
                     checked={selectedIds.has(user.id)}
@@ -221,12 +222,12 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
                   title="소속 변경 이력"
                   style={{
                     visibility:
-                      user.role === 'admin' || user.role === 'subadmin' || user.role === 'staff'
-                        ? 'hidden'
-                        : 'visible',
+                      // 소속로그는 실제 조직에 속한 계정(지사)만 의미가 있다.
+                      // 그 외는 소속이 역할로 고정돼 바뀔 일이 없다.
+                      belongsToOrganization(user.role) ? 'visible' : 'hidden',
                   }}
                   disabled={
-                    user.role === 'admin' || user.role === 'subadmin' || user.role === 'staff'
+                    !belongsToOrganization(user.role)
                   }
                 >
                   <MdHistory />
@@ -244,8 +245,8 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
                   className={`${styles.iconBtn} ${styles.delete}`}
                   onClick={() => handleDelete(user.id, user.username)}
                   title="삭제"
-                  style={{ visibility: user.role === 'admin' ? 'hidden' : 'visible' }}
-                  disabled={user.role === 'admin'}
+                  style={{ visibility: isProtectedAccount(user.role) ? 'hidden' : 'visible' }}
+                  disabled={isProtectedAccount(user.role)}
                 >
                   <MdDelete />
                   <span>삭제</span>

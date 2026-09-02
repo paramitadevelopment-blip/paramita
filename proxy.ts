@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { canManageUsers, getAllowedDashboardRoutes, getLandingRoute } from '@/lib/roles';
 
 const publicRoutes = ['/login'];
 const publicApiRoutes = ['/api/auth/login'];
-
-// 일반 사용자(비 admin)가 접근 가능한 대시보드 경로 (화이트리스트)
-// 여기 없는 /dashboard 하위 경로는 전부 admin 전용으로 간주한다.
-//
-// 재신청 고객은 지사가 자기 소속 건만 본다. 무엇을 보여줄지는 API가 소속으로
-// 거르므로, 여기서는 화면에 들어올 수 있게만 열어 준다.
-const userAllowedRoutes = ['/dashboard/download', '/dashboard/reapply'];
-
-// DB담당자는 파일전달 화면만 쓴다. 원본을 올리기만 하고, 분류·배포는 관리자
-// 몫이라 파일 업로드 화면에는 못 들어간다. 지사와 다른 화이트리스트를 따로
-// 둔다 — 하나로 합치면 지사가 파일전달을, DB담당자가 다운로드를 볼 수 있게 된다.
-const staffAllowedRoutes = ['/dashboard/file-transfer'];
 
 // 다른 곳(lib/jwt, lib/csrf, 로그인)은 시크릿이 없으면 전부 throw한다.
 // 여기만 기본값으로 넘어가면, 설정이 빠진 배포에서 누구나 알 수 있는 키로 서명한
@@ -74,13 +63,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    const target =
-      role === 'admin' || role === 'subadmin'
-        ? '/dashboard'
-        : role === 'staff'
-          ? '/dashboard/file-transfer'
-          : '/dashboard/download';
-    return NextResponse.redirect(new URL(target, request.url));
+    return NextResponse.redirect(new URL(getLandingRoute(role), request.url));
   }
 
   // 대시보드 페이지 접근 시 역할 기반 차단 (렌더링 전에 서버에서 처리)
@@ -95,23 +78,24 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    if (role === 'subadmin') {
-      // 서브관리자는 사용자 관리 화면만 접근 불가
-      if (pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/')) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-      }
-    } else if (role !== 'admin') {
-      // DB담당자는 파일전달 화면만, 그 외(지사)는 기존 화이트리스트를 그대로 쓴다.
-      const allowedRoutes = role === 'staff' ? staffAllowedRoutes : userAllowedRoutes;
-      const fallback = role === 'staff' ? '/dashboard/file-transfer' : '/dashboard/download';
+    // 사용자 관리는 관리자만 쓴다. 관리자급인 서브관리자도 여기서 걸린다 —
+    // 아래 화이트리스트는 관리자급을 아예 안 보므로 이 검사를 먼저 해야 한다.
+    const isUsersRoute =
+      pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/');
+    if (isUsersRoute && !canManageUsers(role)) {
+      return NextResponse.redirect(new URL(getLandingRoute(role), request.url));
+    }
 
+    // 관리자급은 나머지 화면에 제한이 없다(null). 그 외는 역할별 화이트리스트를 본다.
+    const allowedRoutes = getAllowedDashboardRoutes(role);
+    if (allowedRoutes) {
       const isAllowed = allowedRoutes.some(
         (route) => pathname === route || pathname.startsWith(route + '/')
       );
 
       // 허용 목록에 없으면 각자의 기본 화면으로 (무한 리다이렉트 방지)
       if (!isAllowed) {
-        return NextResponse.redirect(new URL(fallback, request.url));
+        return NextResponse.redirect(new URL(getLandingRoute(role), request.url));
       }
     }
   }
