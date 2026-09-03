@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { isHiddenDepartment } from '@/lib/departments';
+import { isAssignableDepartmentGroup } from '@/lib/departments';
 import styles from '../page.module.css';
 
 interface Department {
@@ -34,6 +34,27 @@ const DeptResultGrids = memo(function DeptResultGridsComponent({
   addedRowsByDept,
   onPreview,
 }: DeptResultGridsProps) {
+  /*
+   * 결과에 줄을 세울 소속.
+   *
+   * 배정 대상이 아닌 소속('관리자'·'담당자'·'이외지역')은 늘 0건으로 자리만
+   * 차지한다. 특히 '이외지역'은 주소를 못 읽은 건이 파라인슈로 가게 되면서
+   * 이제 아무것도 안 담긴다.
+   *
+   * 다만 실제로 담긴 게 있으면 숨기지 않는다 — '이외지역'은 파라인슈가
+   * 사라졌을 때를 위한 안전망이라, 그게 걸린 날 화면에서 안 보이면 그 건들이
+   * 어디로 갔는지 알 방법이 없다.
+   */
+  const visibleDepartments = departments.filter((dept) => {
+    if (isAssignableDepartmentGroup(dept.name, !!dept.is_admin)) return true;
+
+    return (
+      (classificationByDeptId[dept.id] ?? 0) > 0 ||
+      (rowsByDeptId[dept.id]?.length ?? 0) > 0 ||
+      (addedRowsByDept?.[dept.name]?.length ?? 0) > 0
+    );
+  });
+
   return (
     <div className={styles.resultGridRight}>
       {/* 규칙이 배정한 결과와, 지금 고른 것까지 반영한 결과를 나란히 둔다.
@@ -42,8 +63,7 @@ const DeptResultGrids = memo(function DeptResultGridsComponent({
         <div className={styles.deptResultColumn}>
           <div className={styles.deptResultTitle}>규칙 배정</div>
           <div className={styles.departmentResults}>
-            {departments
-              .filter((dept) => !dept.is_admin && !isHiddenDepartment(dept.name))
+            {visibleDepartments
               .map((dept) => {
                 const count = classificationByDeptId[dept.id] || 0;
                 const deptRows = rowsByDeptId[dept.id] ?? [];
@@ -74,8 +94,7 @@ const DeptResultGrids = memo(function DeptResultGridsComponent({
             <span className={styles.deptResultHint}>배포되는 최종 숫자</span>
           </div>
           <div className={styles.departmentResults}>
-            {departments
-              .filter((dept) => !dept.is_admin && !isHiddenDepartment(dept.name))
+            {visibleDepartments
               .map((dept) => {
                 const added = addedRowsByDept?.[dept.name] ?? [];
                 const ruleRows = rowsByDeptId[dept.id] ?? [];

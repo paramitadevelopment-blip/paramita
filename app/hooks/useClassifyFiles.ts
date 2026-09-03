@@ -41,7 +41,11 @@ export function useClassifyFiles({
   const [classifiedFiles, setClassifiedFiles] = useState<ClassifiedFile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   /** 지역별로 고를 수 있는 소속. 서버가 분류하면서 같이 알려준다. */
-  const [regionChoices, setRegionChoices] = useState<Record<string, string[]>>({});
+  /**
+   * 이 분류 결과가 어느 시점 규칙으로 나왔는지.
+   * 배포할 때 함께 보내 그사이 지역 설정이 바뀌었는지 서버가 대조한다.
+   */
+  const [rulesUpdatedAt, setRulesUpdatedAt] = useState<string | null>(null);
 
   const autoClassifyMutation = useAutoClassify();
 
@@ -62,7 +66,7 @@ export function useClassifyFiles({
       onSuccess: (result) => {
         setClassificationResults(result.classificationByDeptId);
         setClassifiedFiles(result.files ?? []);
-        setRegionChoices(result.regionChoices ?? {});
+        setRulesUpdatedAt(result.rulesUpdatedAt ?? null);
         setCurrentIndex(0);
         onClassified(result);
       },
@@ -79,7 +83,7 @@ export function useClassifyFiles({
     classifiedFiles,
     currentIndex,
     setCurrentIndex,
-    regionChoices,
+    rulesUpdatedAt,
     /** 현재 보고 있는 파일의 결과 */
     current: (classifiedFiles[currentIndex] ?? null) as ClassifiedFile | null,
     isClassifying: autoClassifyMutation.isPending,

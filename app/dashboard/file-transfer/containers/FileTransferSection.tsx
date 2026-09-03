@@ -39,7 +39,9 @@ const FileTransferSection = memo(function FileTransferSectionComponent() {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
-  const limit = 10;
+  /* 한 쪽에 몇 건을 볼지. 바꾸면 첫 쪽으로 돌아간다 —
+     5쪽을 보다가 50개씩으로 바꾸면 있지도 않은 쪽을 보게 된다. */
+  const [limit, setLimit] = useState(10);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 파일전달로 올린 원본은 원본파일 관리와 섞이면 안 된다. 출처를 함께 보낸다.
@@ -199,6 +201,21 @@ const FileTransferSection = memo(function FileTransferSectionComponent() {
           onReset={handleSearchReset}
           placeholder="검색어를 입력해주세요."
         />
+
+        <select
+          className={sharedStyles.select}
+          value={limit}
+          onChange={(e) => {
+            setLimit(parseInt(e.target.value));
+            setPage(1);
+          }}
+          aria-label="한 쪽에 보여줄 건수"
+        >
+          <option value="10">10개씩보기</option>
+          <option value="20">20개씩보기</option>
+          <option value="30">30개씩보기</option>
+          <option value="50">50개씩보기</option>
+        </select>
       </div>
 
       {isLoading ? null : uploads.length === 0 ? (

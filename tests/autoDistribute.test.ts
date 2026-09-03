@@ -3,7 +3,6 @@ import {
   autoDistributePending,
   birthSortKey,
   parseJuminBirth,
-  REGION_CHOICES,
   type PendingEntry,
 } from '@/lib/insurance';
 
@@ -11,9 +10,17 @@ import {
  * 자동 배분 검증.
  *
  * 사람이 골라야 하는 건들을 소속별 숫자가 고르게 되도록 나눈다.
- * 규칙을 어기면(강원 건이 경기로 가면) 배포 서버가 거부하므로,
+ * 갈 수 있는 곳이 아닌 데로 넣으면 배포 서버가 거부하므로,
  * "고르게 나누는가"와 "갈 수 있는 곳에만 넣는가"를 둘 다 봐야 한다.
+ *
+ * 후보는 이제 지역이 아니라 행마다 정해진다 — 같은 지역이라도 나이 구간이
+ * 다르면 받는 소속이 갈리기 때문이다.
  */
+
+/** 세 곳 다 갈 수 있는 건 */
+const THREE = ['경기', '굿모닝제너럴', '파라인슈1'];
+/** 갈 곳이 둘뿐인 건 */
+const TWO = ['굿모닝제너럴', '파라인슈1'];
 
 /** 갈 곳별 배분 결과 수를 센다. */
 function countBy(picks: Record<string, string>): Record<string, number> {
@@ -51,34 +58,35 @@ describe('생년월일 읽기', () => {
 });
 
 describe('갈 수 있는 곳에만 넣는가', () => {
-  it('강원 건은 굿모닝제너럴·파라인슈1 둘 중 하나다', () => {
+  it('후보가 둘인 건은 그 둘 중 하나다', () => {
     const pending: PendingEntry[] = Array.from({ length: 6 }, (_, i) => ({
       key: `k${i}`,
-      region: '강원' as const,
+      region: '강원',
       jumin: jumin(`70010${i + 1}`),
+      choices: TWO,
     }));
 
     const picks = autoDistributePending(pending);
 
     for (const dept of Object.values(picks)) {
-      expect(REGION_CHOICES['강원']).toContain(dept);
+      expect(TWO).toContain(dept);
     }
-    // 경기로는 절대 가지 않는다 — 가면 배포가 거부한다
+    // 후보에 없는 곳으로는 절대 가지 않는다 — 가면 배포가 거부한다
     expect(Object.values(picks)).not.toContain('경기');
   });
 
-  it('서울·경기·인천 건은 세 곳 중 하나다', () => {
+  it('행마다 후보가 다르면 각자의 후보 안에서 고른다', () => {
     const pending: PendingEntry[] = [
-      { key: 'a', region: '서울', jumin: jumin('700101') },
-      { key: 'b', region: '경기', jumin: jumin('700102') },
-      { key: 'c', region: '인천', jumin: jumin('700103') },
+      { key: 'a', region: '서울', jumin: jumin('700101'), choices: THREE },
+      { key: 'b', region: '서울', jumin: jumin('700102'), choices: TWO },
+      { key: 'c', region: '부산', jumin: jumin('700103'), choices: ['한울부원'] },
     ];
 
     const picks = autoDistributePending(pending);
 
-    expect(REGION_CHOICES['서울']).toContain(picks['a']);
-    expect(REGION_CHOICES['경기']).toContain(picks['b']);
-    expect(REGION_CHOICES['인천']).toContain(picks['c']);
+    expect(THREE).toContain(picks['a']);
+    expect(TWO).toContain(picks['b']);
+    expect(picks['c']).toBe('한울부원');
   });
 });
 
@@ -86,8 +94,9 @@ describe('고르게 나누는가', () => {
   it('빈 상태에서 9건이면 세 곳에 3건씩', () => {
     const pending: PendingEntry[] = Array.from({ length: 9 }, (_, i) => ({
       key: `k${i}`,
-      region: '서울' as const,
+      region: '서울',
       jumin: jumin(`7001${String(i + 1).padStart(2, '0')}`),
+      choices: THREE,
     }));
 
     expect(countBy(autoDistributePending(pending))).toEqual({
@@ -100,8 +109,9 @@ describe('고르게 나누는가', () => {
     // 최종이 (2+0+3+5)/3 = 3.33 → 4·3·3 이 되어야 한다.
     const pending: PendingEntry[] = Array.from({ length: 5 }, (_, i) => ({
       key: `k${i}`,
-      region: '서울' as const,
+      region: '서울',
       jumin: jumin(`7001${String(i + 1).padStart(2, '0')}`),
+      choices: THREE,
     }));
 
     const picks = autoDistributePending(pending, { 경기: 2, 굿모닝제너럴: 0, 파라인슈1: 3 });
@@ -123,8 +133,9 @@ describe('고르게 나누는가', () => {
     // 굿모닝만 0이고 나머지가 5씩이면, 3건은 전부 굿모닝으로 가야 한다
     const pending: PendingEntry[] = Array.from({ length: 3 }, (_, i) => ({
       key: `k${i}`,
-      region: '서울' as const,
+      region: '서울',
       jumin: jumin(`7001${String(i + 1).padStart(2, '0')}`),
+      choices: THREE,
     }));
 
     const picks = autoDistributePending(pending, { 경기: 5, 굿모닝제너럴: 0, 파라인슈1: 5 });
@@ -132,18 +143,22 @@ describe('고르게 나누는가', () => {
   });
 });
 
-describe('강원을 먼저 넣는가', () => {
-  it('강원이 나중이면 몰릴 상황에서도 고르게 나뉜다', () => {
-    // 강원 2건 + 서울 4건. 강원은 굿모닝·파라1만 가능하다.
-    // 서울을 먼저 채우면 굿모닝·파라1이 차서 강원이 한쪽으로 몰린다.
+/**
+ * 갈 곳이 적은 건을 먼저 넣어야 한다. 나중에 넣으면 그 몇 안 되는 자리가
+ * 이미 차 있어 한쪽으로 몰린다. (예전에 강원을 먼저 넣던 이유가 이것이다)
+ */
+describe('후보가 적은 건을 먼저 넣는가', () => {
+  it('나중에 넣으면 몰릴 상황에서도 고르게 나뉜다', () => {
+    // 후보 둘인 건 2개 + 후보 셋인 건 4개.
+    // 후보 셋을 먼저 채우면 굿모닝·파라1이 차서 후보 둘이 한쪽으로 몰린다.
     const pending: PendingEntry[] = [
-      // 서울 건들이 생년월일상 더 이르다 (먼저 처리될 후보)
-      { key: 's1', region: '서울', jumin: jumin('500101') },
-      { key: 's2', region: '서울', jumin: jumin('500102') },
-      { key: 's3', region: '서울', jumin: jumin('500103') },
-      { key: 's4', region: '서울', jumin: jumin('500104') },
-      { key: 'g1', region: '강원', jumin: jumin('900101') },
-      { key: 'g2', region: '강원', jumin: jumin('900102') },
+      // 후보 셋인 건들이 생년월일상 더 이르다 (먼저 처리될 후보)
+      { key: 's1', region: '서울', jumin: jumin('500101'), choices: THREE },
+      { key: 's2', region: '서울', jumin: jumin('500102'), choices: THREE },
+      { key: 's3', region: '서울', jumin: jumin('500103'), choices: THREE },
+      { key: 's4', region: '서울', jumin: jumin('500104'), choices: THREE },
+      { key: 'g1', region: '강원', jumin: jumin('900101'), choices: TWO },
+      { key: 'g2', region: '강원', jumin: jumin('900102'), choices: TWO },
     ];
 
     const picks = autoDistributePending(pending);
@@ -151,7 +166,7 @@ describe('강원을 먼저 넣는가', () => {
 
     // 6건이 세 곳에 2건씩
     expect(counts).toEqual({ 경기: 2, 굿모닝제너럴: 2, 파라인슈1: 2 });
-    // 강원 둘은 서로 다른 곳으로 갈라진다
+    // 후보가 둘인 두 건은 서로 다른 곳으로 갈라진다
     expect(picks['g1']).not.toBe(picks['g2']);
   });
 });
@@ -159,8 +174,8 @@ describe('강원을 먼저 넣는가', () => {
 describe('생년월일 순서', () => {
   it('이른 생일부터 자리를 잡는다', () => {
     const pending: PendingEntry[] = [
-      { key: 'young', region: '서울', jumin: jumin('900101') },
-      { key: 'old', region: '서울', jumin: jumin('500101') },
+      { key: 'young', region: '서울', jumin: jumin('900101'), choices: THREE },
+      { key: 'old', region: '서울', jumin: jumin('500101'), choices: THREE },
     ];
 
     // 굿모닝만 비어 있으니 먼저 처리된 쪽이 굿모닝을 가져간다
@@ -170,9 +185,9 @@ describe('생년월일 순서', () => {
 
   it('같은 입력이면 항상 같은 결과다', () => {
     const pending: PendingEntry[] = [
-      { key: 'a', region: '서울', jumin: jumin('700101') },
-      { key: 'b', region: '인천', jumin: jumin('700101') }, // 생일 동일
-      { key: 'c', region: '강원', jumin: jumin('700101') },
+      { key: 'a', region: '서울', jumin: jumin('700101'), choices: THREE },
+      { key: 'b', region: '인천', jumin: jumin('700101'), choices: THREE }, // 생일 동일
+      { key: 'c', region: '강원', jumin: jumin('700101'), choices: TWO },
     ];
 
     const first = autoDistributePending(pending);
@@ -188,7 +203,17 @@ describe('가장자리', () => {
 
   it('생년월일을 못 읽어도 배정은 된다', () => {
     // 순서만 뒤로 밀릴 뿐, 빠뜨리면 배포가 막힌다
-    const picks = autoDistributePending([{ key: 'x', region: '서울', jumin: '' }]);
-    expect(REGION_CHOICES['서울']).toContain(picks['x']);
+    const picks = autoDistributePending([
+      { key: 'x', region: '서울', jumin: '', choices: THREE },
+    ]);
+    expect(THREE).toContain(picks['x']);
+  });
+
+  /** 아무 데도 못 가는 건은 건너뛴다 — 배포 게이트가 안 골랐다고 잡아준다. */
+  it('후보가 없으면 아무 데도 넣지 않는다', () => {
+    const picks = autoDistributePending([
+      { key: 'x', region: '서울', jumin: jumin('700101'), choices: [] },
+    ]);
+    expect(picks['x']).toBeUndefined();
   });
 });

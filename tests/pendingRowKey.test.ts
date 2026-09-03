@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   pendingRowKey,
   dedupeByOrderNumber,
-  assignByAddress,
   isOrderNumberMissing,
 } from '@/lib/insurance';
+import { detectRegion } from '@/lib/assignmentRegions';
 
 /**
  * 사람이 부서를 골라야 하는 행의 키 검증.
@@ -65,9 +65,9 @@ describe('예전 방식이었다면 겪었을 상황 (회귀 방지)', () => {
     const { items } = dedupeByOrderNumber(rows, (r) => r.order);
     expect(items).toHaveLength(2);
 
-    // 둘 다 사람이 골라야 하는 지역이다
-    expect(assignByAddress(rows[0].address).kind).toBe('select');
-    expect(assignByAddress(rows[1].address).kind).toBe('select');
+    // 둘 다 지역이 읽히는 행이라 배정 대상이다 (누가 받을지는 설정에 달렸다)
+    expect(detectRegion(rows[0].address)).toBe('서울');
+    expect(detectRegion(rows[1].address)).toBe('서울');
 
     // 예전 방식: 키가 겹쳐 한 명을 고르면 다른 한 명까지 같이 바뀐다
     expect(oldKey(rows[0].order)).toBe(oldKey(rows[1].order));

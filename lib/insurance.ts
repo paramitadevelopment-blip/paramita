@@ -1,3 +1,6 @@
+import { detectRegion, type Region } from '@/lib/assignmentRegions';
+import { matchDepartments, toAgeBracket, type DepartmentRule } from '@/lib/assignmentRules';
+
 /**
  * 주민번호 앞자리에서 실제 생년월일을 읽는다.
  * 나이 계산과 생년월일 정렬이 같은 규칙(성별코드로 세기 판단)을 써야 하므로
@@ -385,26 +388,14 @@ export function getInsurerTypeFromRows(rows: string[][], productColIdx: number):
 }
 
 // ─────────────────────────────────────────────────────────────
-// 보험사별 부서 배정
+// 부서 배정
 //
-// 흥국과 동양은 나이 구간만 다르고, 70세 미만 주소 배정은 완전히 같다.
-// 규칙 전문은 docs 흐름도 참고.
+// 어느 지역·나이대가 어느 소속으로 가는지는 코드가 아니라 설정이다.
+// lib/assignmentRegions.ts(주소→지역 판정)와 lib/assignmentRules.ts(규칙 매칭)를 본다.
+//
+// 예전에는 보험사(흥국·동양)마다 나이 구간이 달랐지만, 지금은 나이 구간이
+// 70/75로 하나이고 보험사는 배정에 영향을 주지 않는다.
 // ─────────────────────────────────────────────────────────────
-
-/** 자동 배정하지 않고 사람이 부서를 고르는 지역 */
-export const SELECTABLE_REGIONS = ['서울', '경기', '인천', '강원'] as const;
-export type SelectableRegion = (typeof SELECTABLE_REGIONS)[number];
-
-/**
- * 지역별로 고를 수 있는 부서.
- * 강원만 경기지사를 뺀다 — 흥국·동양 공통.
- */
-export const REGION_CHOICES: Record<SelectableRegion, readonly string[]> = {
-  서울: ['경기', '굿모닝제너럴', '파라인슈1'],
-  경기: ['경기', '굿모닝제너럴', '파라인슈1'],
-  인천: ['경기', '굿모닝제너럴', '파라인슈1'],
-  강원: ['굿모닝제너럴', '파라인슈1'],
-};
 
 // ─────────────────────────────────────────────────────────────
 // 상담메모 규칙 (업로드 화면 체크박스로 켠다)
@@ -480,71 +471,66 @@ export function isMemoBeforeCutoff(memo: unknown, now: Date = new Date()): boole
  */
 export type Assignment =
   | { kind: 'dept'; dept: string }
-  | { kind: 'select'; region: SelectableRegion }
+  | {
+      kind: 'select';
+      region: Region;
+      /** 이 행을 받을 수 있는 소속들. 화면의 드롭다운이 이 목록만 보여준다 */
+      choices: string[];
+      /** 왜 사람이 골라야 하는가 — 여럿이 맡고 있거나(multiple), 아무도 안 맡거나(unmatched) */
+      reason: 'multiple' | 'unmatched';
+    }
   | { kind: 'error'; reason: string };
 
-const DEPT_BY_REGION: Array<[RegExp, string]> = [
-  [/^(부산|울산|경남|경상남도|대구)/, '한울부원'],
-  [/^(전남|전북|전라남도|전라북도|전라도|광주)/, '경기'],
-  [/^(경북|경상북도)/, '굿모닝제너럴'],
-  [/^(충북|충남|충청북도|충청남도|세종|대전|제주)/, '파라인슈1'],
-];
-
-const REGION_PATTERNS: Array<[RegExp, SelectableRegion]> = [
-  [/^서울/, '서울'],
-  [/^(경기도|경기)/, '경기'],
-  [/^인천/, '인천'],
-  [/^(강원도|강원|강릉|속초)/, '강원'],
-];
-
-/**
- * 주소 → 배정. 나이와 무관하게 주소만 본다.
- * 시·도를 못 읽으면 '이외지역'으로 보낸다. 조용히 아무 부서에나 넣으면
- * 잘못 나간 건을 나중에 찾을 수 없다.
- */
-export function assignByAddress(address: unknown): Assignment {
-  const first = String(address ?? '').trim().split(/[\s,]+/)[0] || '';
-
-  if (!first) return { kind: 'dept', dept: '이외지역' };
-
-  for (const [pattern, dept] of DEPT_BY_REGION) {
-    if (pattern.test(first)) return { kind: 'dept', dept };
-  }
-
-  for (const [pattern, region] of REGION_PATTERNS) {
-    if (pattern.test(first)) return { kind: 'select', region };
-  }
-
-  return { kind: 'dept', dept: '이외지역' };
-}
-
-/** 주소가 부산·울산·경남·대구인가 (동양 70~75세 구간에서만 쓴다) */
-function isHanulRegion(address: unknown): boolean {
-  const first = String(address ?? '').trim().split(/[\s,]+/)[0] || '';
-  return DEPT_BY_REGION[0][0].test(first);
-}
-
-/** 주소에서 시·도를 아예 못 읽는가 */
+/** 주소에서 지역을 아예 못 읽는가. 우편번호로 주소를 되살릴지 판단하는 데 쓴다 */
 export function isUnreadableAddress(address: unknown): boolean {
-  const first = String(address ?? '').trim().split(/[\s,]+/)[0] || '';
-  if (!first) return true;
-  return (
-    !DEPT_BY_REGION.some(([p]) => p.test(first)) &&
-    !REGION_PATTERNS.some(([p]) => p.test(first))
-  );
+  return detectRegion(address) === null;
 }
 
 /**
- * 보험사별 부서 배정.
- * @param insurer 'hk'(흥국) | 'dy'(동양)
- * @param jumin   생년월일성별
- * @param address 주소
+ * 조직(group_name) → 그 조직의 배정 분류들(name).
+ * 파일은 분류 단위로 만들어지므로(deploy가 departments.name으로 찾는다)
+ * 규칙이 정한 조직을 분류까지 좁혀야 한다.
+ */
+export type DepartmentIndex = Record<string, string[]>;
+
+/**
+ * 조직 안에서 실제로 파일이 붙을 분류를 고른다.
+ *
+ * 대부분의 조직은 분류가 하나라 그대로 쓴다. 파라인슈만 둘로 나뉘는데,
+ * 그 안에서는 나이로 가른다 — 70세 미만은 앞(파라인슈1), 70세 이상은
+ * 그다음(파라인슈2). 예전 규칙 중 유일하게 살아남은 자리다.
+ *
+ * 이름을 정렬해서 고른다 — DB가 돌려주는 순서에 기대면 같은 파일을 두 번
+ * 돌렸을 때 다른 분류로 갈 수 있다.
+ */
+export function resolveDeptName(
+  index: DepartmentIndex,
+  group: string,
+  age: number
+): string | null {
+  const names = [...(index[group] ?? [])].sort((a, b) => a.localeCompare(b, 'ko-KR'));
+  if (names.length === 0) return null;
+  if (names.length === 1) return names[0];
+  return age >= 70 ? names[1] : names[0];
+}
+
+/**
+ * 한 행을 어디로 보낼지 정한다.
+ *
+ * 보험사는 더 이상 보지 않는다 — 나이 구간이 설정값이 되면서 흥국·동양이
+ * 같은 규칙을 타게 됐다. 보험사 구분은 파일에 열로만 남는다.
+ *
+ * @param jumin    생년월일성별
+ * @param address  주소 (우편번호로 보정된 값이면 그것)
+ * @param rules    설정된 배정 규칙
+ * @param index    조직 → 배정 분류 목록
  * @param memoRule 상담메모 규칙. 주면 켜지고, 안 주면 꺼진다
  */
 export function assignRow(
-  insurer: 'hk' | 'dy',
   jumin: unknown,
   address: unknown,
+  rules: DepartmentRule[],
+  index: DepartmentIndex,
   memoRule?: MemoRuleContext
 ): Assignment {
   const age = calculateInsuranceAge(String(jumin ?? ''));
@@ -554,41 +540,73 @@ export function assignRow(
   }
 
   // 상담 예정이 지났거나 오늘 11시 이전이면 파라 계열로 몰고 나이로만 가른다.
-  // 나이 기준 70세는 아래 규칙과 같다 — 흥국 70세 이상, 동양 70세 이상 모두
-  // 파라인슈2로 가므로 여기서도 같은 선을 쓴다.
+  // 지역 설정보다 먼저 걸린다 — 이 규칙은 "언제 연락해야 하는가"라서
+  // 누가 그 지역을 맡았는지와 무관하다.
   if (memoRule && isMemoBeforeCutoff(memoRule.memo, memoRule.now)) {
-    return { kind: 'dept', dept: age >= 70 ? '파라인슈2' : '파라인슈1' };
+    const dept = resolveDeptName(index, MEMO_RULE_GROUP, age);
+    if (dept) return { kind: 'dept', dept };
+    // 그 조직이 없어졌다면 조용히 아무 데나 보내지 않고 사람에게 넘긴다.
   }
 
-  if (insurer === 'hk') {
-    // 흥국: 70세 하나로 가른다
-    if (age >= 70) return { kind: 'dept', dept: '파라인슈2' };
-    return assignByAddress(address);
+  const region = detectRegion(address);
+  if (region === null) {
+    /*
+     * 우편번호로도 못 살린 주소. 지역을 모르니 지역 설정에 걸릴 수가 없다.
+     *
+     * 예전에는 '이외지역'에 쌓아 두고 사람이 나눠 줬는데, 결국 손이 한 번 더
+     * 가는 자리라 파라인슈가 받기로 했다. 나이로 하위 분류를 가르는 건
+     * 다른 배정과 같다 — 지금은 분류가 하나라 그대로 간다.
+     */
+    const dept = resolveDeptName(index, UNREADABLE_ADDRESS_GROUP, age);
+    if (dept) return { kind: 'dept', dept };
+
+    // 그 조직이 없어졌다면 예전처럼 한곳에 모은다. 갈 곳이 없다고 버리면
+    // 그 건은 아무 파일에도 안 담기고 조용히 사라진다.
+    return { kind: 'dept', dept: UNREADABLE_FALLBACK_DEPT };
   }
 
-  // 동양: 70세와 75세, 둘로 가른다
-  if (age >= 70 && age < 75) {
-    // 이 구간만 주소를 한 번 본다
-    if (isUnreadableAddress(address)) return { kind: 'dept', dept: '이외지역' };
-    if (isHanulRegion(address)) return { kind: 'dept', dept: '한울부원' };
-    return { kind: 'dept', dept: '파라인슈2' };
+  const groups = matchDepartments(rules, region, toAgeBracket(age));
+
+  /*
+   * 후보는 조직이 아니라 배정 분류로 좁혀서 돌려준다.
+   *
+   * 설정은 조직 단위(파라인슈)로 하지만 파일은 분류 단위(파라인슈1·2)로 만들어진다.
+   * 화면에 조직 이름을 보여주고 배포에서 분류로 바꾸면, 사람이 고른 것과 실제로
+   * 파일이 만들어지는 자리가 달라 미리보기 숫자가 안 맞는다. 나이를 아는 지금
+   * 여기서 분류까지 정해 내려보낸다.
+   */
+  const toDeptNames = (list: string[]) =>
+    list
+      .map((group) => resolveDeptName(index, group, age))
+      .filter((name): name is string => name !== null);
+
+  if (groups.length === 1) {
+    const dept = resolveDeptName(index, groups[0], age);
+    // 규칙에는 있는데 소속이 사라진 경우. 배포가 이름으로 파일을 만들기 때문에
+    // 그냥 두면 이 건은 아무 파일에도 안 담기고 조용히 사라진다.
+    if (dept) return { kind: 'dept', dept };
+    return { kind: 'select', region, choices: toDeptNames(Object.keys(index)), reason: 'unmatched' };
   }
 
-  if (age >= 75) return { kind: 'dept', dept: '파라인슈2' };
+  if (groups.length > 1) {
+    return { kind: 'select', region, choices: toDeptNames(groups), reason: 'multiple' };
+  }
 
-  // 70세 미만 — 흥국과 완전히 같다
-  return assignByAddress(address);
+  // 아무도 안 맡은 조합. 버리지 않고 배정 가능한 소속 전체 중에 고르게 한다.
+  return { kind: 'select', region, choices: toDeptNames(Object.keys(index)), reason: 'unmatched' };
 }
 
-/** 배정에 쓰이는 모든 부서명 */
-export const ASSIGN_DEPARTMENTS = [
-  '한울부원',
-  '경기',
-  '굿모닝제너럴',
-  '파라인슈1',
-  '파라인슈2',
-  '이외지역',
-] as const;
+/** 상담메모 규칙이 몰아주는 조직 */
+export const MEMO_RULE_GROUP = '파라인슈';
+
+/** 주소를 못 읽어 지역 설정에 걸릴 수 없는 건을 받는 조직 */
+export const UNREADABLE_ADDRESS_GROUP = '파라인슈';
+
+/**
+ * 위 조직마저 없을 때 건을 모아 두는 소속.
+ * 배정이 아니라 "갈 곳을 못 정했다"는 표시라 사람이 속하는 조직이 아니다.
+ */
+export const UNREADABLE_FALLBACK_DEPT = '이외지역';
 
 /**
  * 사람이 부서를 골라야 하는 행의 키.
@@ -626,30 +644,25 @@ export function isOrderNumberMissing(orderValue: unknown): boolean {
 /** 주문번호가 없어 배포를 막을 때 쓰는 사유. 분류와 배포가 같은 문구를 쓴다. */
 export const ORDER_NUMBER_MISSING_REASON = '주문번호 없음';
 
-/**
- * 자동 배분이 쓰는 소속들.
- * REGION_CHOICES에 나오는 것들의 합집합이다. 한울부원·파라인슈2·이외지역은
- * 사람이 고르는 대상이 아니므로 여기 없다.
- */
-export const AUTO_DISTRIBUTE_DEPARTMENTS = ['경기', '굿모닝제너럴', '파라인슈1'] as const;
-
 /** 자동 배분에 넣을 한 건 */
 export interface PendingEntry {
   /** pendingRowKey로 만든 행 식별자 */
   key: string;
-  region: SelectableRegion;
+  region: string;
   /** 생년월일성별 (정렬 기준) */
   jumin: unknown;
+  /** 이 건이 갈 수 있는 소속들. 행마다 다르다 */
+  choices: string[];
 }
 
 /**
  * 사람이 골라야 하는 건들을 소속별 숫자가 고르게 되도록 나눈다.
  *
  * - 규칙으로 이미 배정된 수(baseCounts)를 시작점으로 잡는다. 그래야 최종 숫자가 맞는다.
- * - 강원 건을 먼저 넣는다. 갈 수 있는 곳이 굿모닝제너럴·파라인슈1 둘뿐이라,
- *   나중에 넣으면 그 둘이 이미 차 있어 한쪽으로 몰린다.
- * - 그 다음 나머지를 생년월일이 이른 순으로 넣는다. 같은 순서를 다시 돌리면
- *   같은 결과가 나와야 하므로 정렬 기준을 고정한다.
+ * - 갈 수 있는 곳이 적은 건부터 넣는다. 나중에 넣으면 그 몇 안 되는 곳이 이미
+ *   차 있어 한쪽으로 몰린다. (예전에 강원을 먼저 넣던 이유가 이것이다)
+ * - 그 다음 생년월일이 이른 순으로 넣는다. 같은 순서를 다시 돌리면 같은 결과가
+ *   나와야 하므로 정렬 기준을 고정한다.
  * - 매번 "갈 수 있는 곳 중 가장 적게 받은 곳"에 넣는다.
  *
  * @param pending    선택 대기 건들
@@ -660,16 +673,12 @@ export function autoDistributePending(
   pending: PendingEntry[],
   baseCounts: Record<string, number> = {}
 ): Record<string, string> {
-  const counts: Record<string, number> = {};
-  for (const dept of AUTO_DISTRIBUTE_DEPARTMENTS) {
-    counts[dept] = baseCounts[dept] ?? 0;
-  }
+  const counts: Record<string, number> = { ...baseCounts };
 
-  // 강원을 앞으로. 그 안에서는 생년월일 순, 같으면 키 순으로 고정한다.
+  // 후보가 적은 건을 앞으로. 그 안에서는 생년월일 순, 같으면 키 순으로 고정한다.
   const ordered = [...pending].sort((a, b) => {
-    const aNarrow = a.region === '강원' ? 0 : 1;
-    const bNarrow = b.region === '강원' ? 0 : 1;
-    if (aNarrow !== bNarrow) return aNarrow - bNarrow;
+    const diffChoices = a.choices.length - b.choices.length;
+    if (diffChoices !== 0) return diffChoices;
 
     const diff = birthSortKey(a.jumin) - birthSortKey(b.jumin);
     if (diff !== 0) return diff;
@@ -679,10 +688,11 @@ export function autoDistributePending(
   const picks: Record<string, string> = {};
 
   for (const entry of ordered) {
-    const choices = REGION_CHOICES[entry.region];
+    const choices = entry.choices;
     if (!choices || choices.length === 0) continue;
 
-    // 가장 적게 받은 곳. 같으면 REGION_CHOICES에 적힌 순서를 따라 결과를 고정한다.
+    // 가장 적게 받은 곳. 같으면 후보 목록의 순서를 따라 결과를 고정한다
+    // (matchDepartments가 이름순으로 정렬해 주므로 설정 순서와 무관하다).
     let best = choices[0];
     for (const dept of choices) {
       if ((counts[dept] ?? 0) < (counts[best] ?? 0)) best = dept;

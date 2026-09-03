@@ -66,6 +66,8 @@ export function useDeployFiles() {
       rowAssignments: Array<Record<string, string>>;
       /** 상담메모 규칙. 분류할 때 켰으면 배포도 같은 값이어야 결과가 안 갈린다 */
       memoRule: boolean;
+      /** 분류가 본 배정 규칙의 시각. 그사이 설정이 바뀌었으면 서버가 배포를 막는다 */
+      rulesUpdatedAt: string | null;
     }) => {
       const response = await fetch('/api/files/deploy', {
         method: 'POST',

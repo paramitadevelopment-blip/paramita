@@ -705,9 +705,18 @@
   cursor: pointer;
 }
 
-.pickModeTab:hover {
+.pickModeTab:hover:not(:disabled) {
   border-color: #db1a62;
   color: #db1a62;
+}
+
+/* 자동 배분할 건이 없을 때. 눌러도 아무 일이 안 일어나는데 눌리는 것처럼
+   보이면 "채워졌겠거니" 하고 넘어간다. */
+.pickModeTab:disabled {
+  background: #f5f5f5;
+  border-color: #eee;
+  color: #bbb;
+  cursor: not-allowed;
 }
 
 .pickModeTabActive {
@@ -716,7 +725,16 @@
   color: white;
 }
 
-.pickModeTabActive:hover {
+/*
+ * 고른 탭에 마우스를 올렸을 때.
+ *
+ * 위의 .pickModeTab:hover:not(:disabled)가 선택자 하나만큼 더 세서,
+ * 그냥 :hover로 두면 글자색이 배경(#db1a62)과 같아져 글씨가 사라진다.
+ * 세기를 맞춰 준다.
+ */
+.pickModeTabActive:hover:not(:disabled) {
+  background: #c01555;
+  border-color: #c01555;
   color: white;
 }
 
@@ -798,21 +816,180 @@
   margin-left: 6px;
 }
 
-/* 선택 대기 표의 데이터 칸.
-   내용이 길어도 폭을 넘기지 않게 잘라낸다. 안 자르면 tel1처럼 긴 열이
-   표를 밀어내 정작 골라야 할 '배정 소속'이 화면 밖으로 나간다.
-   잘린 값은 마우스를 올리면 전체가 보인다(title). */
+/* 선택 대기 표는 가로로 넘긴다.
+   예전에는 폭에 맞춰 열을 눌러 담고 넘치는 값을 …로 잘랐는데, 주소나
+   상품명처럼 정작 보고 골라야 할 값이 잘려 마우스를 올려야만 보였다. */
+/* 보이는 건들을 한 소속으로 몰아주는 줄.
+   사유로 걸러 놓고도 한 건씩 눌러야 하면 거른 보람이 없다. */
+/* 자동선택이 막힌 이유. 버튼만 흐리게 두면 왜 안 눌리는지 알 수 없다. */
+.pickModeNote {
+  align-self: center;
+  margin-left: 4px;
+  font-size: 16px;
+  color: #999;
+}
+
+.bulkAssignBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.bulkAssignLabel {
+  font-size: 17px;
+  color: #555;
+  font-weight: 600;
+}
+
+.bulkAssignSelectWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 표 안의 소속 드롭다운(.regionSelect)과 같은 모양으로 맞춘다.
+   appearance를 지워야 브라우저 기본 화살표와 아이콘이 겹치지 않는다. */
+.bulkAssignSelect {
+  appearance: none;
+  padding: 8px 30px 8px 12px;
+  font-size: 17px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.bulkAssignBtn {
+  padding: 8px 18px;
+  font-size: 17px;
+  font-weight: 600;
+  border: 1px solid #db1a62;
+  border-radius: 4px;
+  background: #db1a62;
+  color: white;
+  cursor: pointer;
+}
+
+.bulkAssignBtn:disabled {
+  background: #e9a5bd;
+  border-color: #e9a5bd;
+  cursor: not-allowed;
+}
+
+/* 어느 지역에서 왜 넘어왔는지.
+   한 줄씩 세로로 쌓으면 조합이 예닐곱 개일 때 표보다 길어져 읽히지 않는다.
+   작은 카드로 끊어 가로로 흐르게 한다. */
+.pendingReasonBox {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.pendingReasonCard {
+  min-width: 170px;
+  padding: 10px 14px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-left: 4px solid #bbb;
+  border-radius: 6px;
+}
+
+/* 담당 지사가 없는 건 = 지역 설정에 빈칸이 있다는 뜻.
+   겹친 건과 달리 설정을 손봐야 하는 신호라 색으로 갈라 둔다. */
+.pendingReasonCardGap {
+  background: #fffbe6;
+  border-color: #ffe58f;
+  border-left-color: #d4a017;
+}
+
+.pendingReasonHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.pendingReasonWhere {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+}
+
+.pendingReasonCount {
+  font-size: 18px;
+  font-weight: 700;
+  color: #db1a62;
+  white-space: nowrap;
+}
+
+.pendingReasonWhat {
+  font-size: 16px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.pendingTableWrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+/* max-content로 내용만큼 늘리되, 좁을 때는 표가 칸을 다 채우게 100%를 밑바닥으로 준다. */
+.pendingTable {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+
+.pendingHeadRow {
+  background: #fafafa;
+  border-bottom: 2px solid #ddd;
+}
+
+.pendingRow {
+  border-bottom: 1px solid #eee;
+}
+
+/* 선택 대기 표의 데이터 칸. 값을 그대로 다 보여준다 —
+   한 줄로 두고(nowrap) 넘치는 만큼 표가 가로로 길어지게 둔다. */
 .pendingDataCell {
   padding: 10px 12px;
   color: #666;
   font-size: 16px;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* 배정 소속은 드롭다운이 들어가므로 폭을 반드시 확보한다. */
+.pendingRegionCell {
+  padding: 10px 12px;
+  text-align: center;
+  color: #666;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+/*
+ * 배정 소속은 오른쪽에 붙여 둔다.
+ *
+ * 표가 가로로 길어지면 정작 눌러야 할 드롭다운이 스크롤 밖으로 나가,
+ * 값을 보려고 오른쪽으로 밀 때마다 다시 왼쪽으로 돌아와야 한다.
+ * border는 sticky 칸에서 collapse에 먹혀 사라지므로 그림자로 경계를 준다.
+ */
+.pendingDeptTh,
+.pendingDeptCell {
+  position: sticky;
+  right: 0;
+  box-shadow: -1px 0 0 #e0e0e0;
+}
+
 .pendingDeptTh {
   padding: 12px;
   text-align: left;
@@ -821,14 +998,32 @@
   white-space: nowrap;
   width: 320px;
   min-width: 320px;
+  background: #fafafa;
+  z-index: 2;
+  /* 배경을 깐 sticky 칸은 tr에 준 줄 경계를 덮어 버린다. 칸에도 직접 준다. */
+  border-bottom: 2px solid #ddd;
 }
 
-/* tel1은 tel2와 같은 번호다. 앞자리(010)만 보이면 충분하니 좁게 눌러
-   '배정 소속'이 밀리지 않게 한다. 전체 값은 마우스를 올리면 보인다. */
-.pendingNarrowCol {
-  max-width: 62px;
-  width: 62px;
-  white-space: nowrap;
+.pendingDeptCell {
+  padding: 10px 12px;
+  background: white;
+  z-index: 1;
+  border-bottom: 1px solid #eee;
+}
+
+.pendingSelectWrap {
+  position: relative;
+}
+
+/* 드롭다운 화살표. 클릭은 select가 받아야 하므로 이벤트를 통과시킨다. */
+.pendingSelectCaret {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 16px;
+  color: #666;
 }
 
 /* 모달 오른쪽 위 닫기 ✕. 글자 하나라 버튼 기본 여백을 지우고 가운데로 맞춘다. */
@@ -1208,4 +1403,28 @@
   .transferCardBtn {
     justify-content: center;
   }
+}
+
+/* 제목 줄 오른쪽의 지역설정 버튼.
+   배정 규칙은 분류를 돌리기 전에 정하는 것이라 업로드 화면 맨 위에 둔다. */
+.regionSettingBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border: 1px solid #db1a62;
+  border-radius: 6px;
+  background: white;
+  color: #db1a62;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.regionSettingBtn:hover {
+  background: #fdf2f6;
+}
+
+.regionSettingIcon {
+  font-size: 22px;
 }

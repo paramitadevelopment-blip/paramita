@@ -33,6 +33,13 @@ export interface PastRecord extends DedupeKey {
   assignedAt: Date | null;
   /** 고객이 실제로 신청한 날(접수일자 열). 우리가 처리한 날이 아니다. */
   receivedAt: Date | null;
+  /**
+   * 그때의 주문번호.
+   *
+   * 블랙리스트에 올릴 때 "몇 번 신청해서 걸렸나"를 건별로 남기는데,
+   * 같은 신청을 두 번 세지 않으려면 이 값이 있어야 한다.
+   */
+  orderNo: string;
 }
 
 /** 최근 며칠치만 남긴다. */
@@ -57,6 +64,32 @@ export function toBlacklistKeys(records: PastRecord[]): BlacklistKey[] {
   return records
     .filter((r) => r.dupReason !== DUP_ORDER_REASON)
     .map((r) => ({ product: r.product, birth: r.birth, tel1: r.tel1, tel2: r.tel2 }));
+}
+
+/** 블랙리스트 판정에 쓴 것과 같은 건들. 어느 파일의 어느 주문이었는지까지 들고 있다 */
+export type BlacklistSource = BlacklistKey &
+  Pick<PastRecord, 'name' | 'orderNo' | 'fileId' | 'fileName' | 'receivedAt'>;
+
+/**
+ * 명단에 올릴 때 "몇 번 신청해서 걸렸나"를 건별로 남기는 데 쓴다.
+ *
+ * toBlacklistKeys와 같은 것을 세지만 출처를 버리지 않는다 —
+ * 횟수만 남기면 화면에 3회라고 떠 있어도 어디서 왔는지 짚을 수가 없다.
+ */
+export function toBlacklistSources(records: PastRecord[]): BlacklistSource[] {
+  return records
+    .filter((r) => r.dupReason !== DUP_ORDER_REASON)
+    .map((r) => ({
+      product: r.product,
+      birth: r.birth,
+      tel1: r.tel1,
+      tel2: r.tel2,
+      name: r.name,
+      orderNo: r.orderNo,
+      fileId: r.fileId,
+      fileName: r.fileName,
+      receivedAt: r.receivedAt,
+    }));
 }
 
 /**
@@ -139,6 +172,7 @@ export async function loadRecentKeys(
         tel2: String((row as any)['Tel2'] ?? ''),
         birth: String((row as any)['생년월일성별'] ?? ''),
         product: String((row as any)['상품명'] ?? ''),
+        orderNo: String((row as any)['주문번호'] ?? ''),
       });
     }
   }

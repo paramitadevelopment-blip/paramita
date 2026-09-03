@@ -1,20 +1,36 @@
 import { useMutation } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
 
-export type SelectableRegion = '서울' | '경기' | '인천' | '강원';
+import type { Region } from '@/lib/assignmentRegions';
+
+export type { Region };
 
 export interface ClassifiedFile {
   fileName: string;
   /** 상품명으로 가린 보험사 */
   insurerType: 'hk' | 'dy';
   /** 사람이 부서를 골라야 하는 지역별 건수 */
-  pendingByRegion: Record<SelectableRegion, number>;
+  pendingByRegion: Record<Region, number>;
   /** 지역별 대기 건의 행 (미리보기용) */
-  pendingRowsByRegion: Record<SelectableRegion, any[][]>;
+  pendingRowsByRegion: Record<Region, any[][]>;
   /** 지역별 대기 건의 주문번호. pendingRowsByRegion과 같은 순서 */
-  pendingKeysByRegion: Record<SelectableRegion, string[]>;
+  pendingKeysByRegion: Record<Region, string[]>;
   /** 자동 배분이 생년월일 순으로 나누기 위해 쓰는 값. 키와 같은 순서다. */
-  pendingJuminByRegion: Record<SelectableRegion, string[]>;
+  pendingJuminByRegion: Record<Region, string[]>;
+  /** 지역 → 그 행들이 갈 수 있는 소속들 (키와 같은 순서). 나이 구간이 달라 행마다 다르다 */
+  pendingChoicesByRegion: Record<Region, string[][]>;
+  /**
+   * 지역 → 왜 직접 골라야 하는지 (키와 같은 순서).
+   * 'multiple'은 여러 소속이 겹친 것, 'unmatched'는 아무도 안 맡은 것.
+   */
+  pendingReasonsByRegion: Record<Region, string[]>;
+  /**
+   * 규칙이 이미 정한 건들. 수동배정 표에 함께 보여주고, 필요하면
+   * 그 자리에서 다른 소속으로 바꿀 수 있다.
+   */
+  assignedRows: Array<{ key: string; region: Region | null; dept: string; row: any[] }>;
+  /** 규칙이 정한 건을 바꿀 때 고를 수 있는 소속 전부 */
+  assignableDepts: string[];
   /** 중복 제거 전 원본 행 수 */
   totalRows: number;
   /** 중복으로 제외된 행 수 (주문번호 기준 + 고객 기준) */
@@ -42,7 +58,8 @@ export interface ClassifiedFile {
 export interface ClassifyResponse {
   success: boolean;
   /** 지역별 고를 수 있는 부서 (서버가 정한 목록) */
-  regionChoices: Record<SelectableRegion, string[]>;
+  /** 이 결과가 어느 시점 규칙으로 나왔는지. 배포가 대조해 그사이 바뀌었으면 막는다 */
+  rulesUpdatedAt: string | null;
   fileCount: number;
   /** 파일별 분류 결과 (1/N 페이지로 표시) */
   files: ClassifiedFile[];

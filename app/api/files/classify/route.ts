@@ -5,12 +5,8 @@ import { verifyCsrfToken } from '@/lib/csrf';
 import { createClient } from '@supabase/supabase-js';
 import {
   assignRow,
-  getInsurerType,
   getInsurerTypeFromRows,
-  ASSIGN_DEPARTMENTS,
-  SELECTABLE_REGIONS,
-  REGION_CHOICES,
-  type SelectableRegion,
+  type DepartmentIndex,
   isExcludedColumn,
   dedupeByOrderNumber,
   findRequiredColumns,
@@ -36,21 +32,22 @@ import { resolveAddresses } from '@/lib/addressFix';
 import { loadRecentKeys, withinDays, toDedupeKeys, toBlacklistKeys } from '@/lib/historyLookup';
 import { splitAlreadyListed, splitOverThreshold } from '@/lib/blacklist';
 import { loadBlacklist } from '@/lib/blacklistStore';
+import { loadAssignmentRules } from '@/lib/assignmentRulesStore';
+import { REGIONS, detectRegion } from '@/lib/assignmentRegions';
+import { isAssignableDepartmentGroup } from '@/lib/departments';
 import * as XLSX from 'xlsx';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const CATEGORIES = [...ASSIGN_DEPARTMENTS];
-
 /** 업로드 라우트와 같은 한도. 여기가 느슨하면 업로드 전에 서버가 먼저 주저앉는다. */
 const MAX_FILE_SIZE = 300 * 1024 * 1024;
 /** 한 번에 처리할 파일 수. 없으면 수백 개를 한 요청에 밀어넣을 수 있다. */
 const MAX_FILES = 30;
 
-function emptyCounts(): Record<string, number> {
-  return CATEGORIES.reduce((acc, c) => ({ ...acc, [c]: 0 }), {});
+function emptyCounts(categories: string[]): Record<string, number> {
+  return categories.reduce((acc, c) => ({ ...acc, [c]: 0 }), {});
 }
 
 export async function POST(request: NextRequest) {
@@ -104,33 +101,58 @@ export async function POST(request: NextRequest) {
     // 분류 단계에서는 아직 파일이 저장되기 전이라 뺄 것이 없다.
     let recentKeys: Awaited<ReturnType<typeof loadRecentKeys>>;
     let blacklistKeys: Awaited<ReturnType<typeof loadBlacklist>>;
+    // 배정 규칙. 어느 소속이 어느 지역·나이대를 받는지는 이제 설정값이다.
+    let assignment: Awaited<ReturnType<typeof loadAssignmentRules>>;
     try {
       recentKeys = await loadRecentKeys(supabase, classifiedAt);
       blacklistKeys = await loadBlacklist(supabase);
+      assignment = await loadAssignmentRules(supabase);
     } catch (historyError) {
       console.error('Failed to load recent records:', historyError);
       return NextResponse.json(
-        { error: '최근 기록이나 블랙리스트를 읽지 못해 걸러낼 수 없습니다. 잠시 후 다시 시도해주세요.' },
+        { error: '최근 기록이나 배정 규칙을 읽지 못해 분류할 수 없습니다. 잠시 후 다시 시도해주세요.' },
         { status: 500 }
       );
     }
 
-    // 부서 조회 (분류명 → 부서ID 변환용)
+    /*
+     * 배정 대상 소속.
+     *
+     * 예전에는 코드에 목록을 적어 뒀지만, 이제 소속은 화면에서 늘어날 수
+     * 있다. 관리자 소속만 빼고 DB에 있는 그대로 쓴다 —
+     * 목록이 코드와 DB 두 곳에 있으면 새 소속으로 배정된 건이 조용히 사라진다.
+     */
     const { data: departments } = await supabase
       .from('departments')
-      .select('id, name')
-      .in('name', CATEGORIES);
+      .select('id, name, group_name')
+      .eq('is_admin', false);
+
+    const deptRows = departments ?? [];
+    const CATEGORIES = deptRows.map((d) => d.name);
 
     const deptMap: Record<string, number> = {};
-    for (const dept of departments ?? []) {
+    for (const dept of deptRows) {
       deptMap[dept.name] = dept.id;
+    }
+
+    /*
+     * 조직 → 그 조직의 배정 분류들.
+     *
+     * 나뉜 조직(파라인슈)에서 나이로 하나를 고를 때와, 아무도 안 맡은 건의
+     * 후보 목록을 만들 때 쓴다. 후보로 나가면 안 되는 소속('이외지역'·'담당자')은
+     * 여기서 빼야 한다 — 규칙 저장 API와 같은 기준을 본다.
+     */
+    const deptIndex: DepartmentIndex = {};
+    for (const dept of deptRows) {
+      if (!isAssignableDepartmentGroup(dept.group_name, false)) continue;
+      (deptIndex[dept.group_name] ??= []).push(dept.name);
     }
 
     // 파일별 결과
     const perFile: any[] = [];
 
     // 전체 합산 (배포 시 전달용)
-    const mergedCounts = emptyCounts();
+    const mergedCounts = emptyCounts(CATEGORIES);
     let mergedTotalRows = 0;
     let mergedErrorCount = 0;
     let mergedDupRemovedCount = 0;
@@ -213,7 +235,7 @@ export async function POST(request: NextRequest) {
           ? { memo: formatCellValue(row[memoCol] ?? ''), now: classifiedAt }
           : undefined;
 
-      const counts = emptyCounts();
+      const counts = emptyCounts(CATEGORIES);
       const rowsByCategory: Record<string, Record<string, any>[]> = CATEGORIES.reduce(
         (acc, c) => ({ ...acc, [c]: [] }),
         {}
@@ -277,7 +299,8 @@ export async function POST(request: NextRequest) {
       ];
       const dupRemovedCount = duplicateRows.length;
 
-      // 보험사 판정 — 배정 규칙이 갈리므로 분류보다 먼저 정한다.
+      // 보험사 판정 — 배정에는 안 쓰이고 파일 이름표·저장 경로에 쓰인다.
+      // 한 파일에 두 보험사가 섞이면 여기서 막는 것이 본래 목적이다.
       // 보험사는 과거 중복을 걷어내기 "전"의 행으로 판정한다.
       // 걷어낸 뒤 행이 하나도 안 남으면 판정할 근거가 사라져,
       // 정작 문제는 "전부 중복"인데 "보험사를 못 가리겠다"는 엉뚱한 오류가 나간다.
@@ -324,11 +347,32 @@ export async function POST(request: NextRequest) {
       // 자동 배분이 생년월일 순으로 나누므로 그 값도 함께 보낸다.
       // 화면은 어느 열이 생년월일인지 모르기 때문에 여기서 뽑아 줘야 한다.
       const pendingJuminByRegion: Record<string, string[]> = {};
-      for (const region of SELECTABLE_REGIONS) {
+      // 갈 수 있는 소속은 행마다 다르다 — 같은 지역이라도 나이 구간이 다르면
+      // 받는 소속이 달라진다. 그래서 지역이 아니라 행에 붙여 보낸다.
+      const pendingChoicesByRegion: Record<string, string[][]> = {};
+      // 왜 직접 골라야 하는지. 'multiple'은 여러 소속이 겹친 것, 'unmatched'는
+      // 아무도 안 맡은 것이다. 둘은 사람이 할 판단이 달라서 화면에 구분해 보여준다.
+      const pendingReasonsByRegion: Record<string, string[]> = {};
+      /*
+       * 규칙이 이미 정한 건들. 화면이 수동배정 표에 함께 보여주고,
+       * 필요하면 그 자리에서 다른 소속으로 바꿀 수 있게 한다.
+       *
+       * 지역별로 나누지 않는다 — 주소를 못 읽은 건은 지역이 없어서
+       * 지역별 배열에 넣을 자리가 없다.
+       */
+      const assignedRows: Array<{
+        key: string;
+        region: string | null;
+        dept: string;
+        row: Record<string, any>;
+      }> = [];
+      for (const region of REGIONS) {
         pendingByRegion[region] = 0;
         pendingRowsByRegion[region] = [];
         pendingKeysByRegion[region] = [];
         pendingJuminByRegion[region] = [];
+        pendingChoicesByRegion[region] = [];
+        pendingReasonsByRegion[region] = [];
       }
 
       for (let dedupedIndex = 0; dedupedIndex < assignableEntries.length; dedupedIndex++) {
@@ -342,11 +386,12 @@ export async function POST(request: NextRequest) {
           }
 
           const assigned = assignRow(
-          insurerType,
-          row[juminCol],
-          addressAt.get(row) ?? row[addressCol],
-          memoRuleFor(row)
-        );
+            row[juminCol],
+            addressAt.get(row) ?? row[addressCol],
+            assignment.rules,
+            deptIndex,
+            memoRuleFor(row)
+          );
 
           if (assigned.kind === 'error') {
             errorRows.push({ row: sourceRow, reason: assigned.reason });
@@ -355,9 +400,18 @@ export async function POST(request: NextRequest) {
             pendingRowsByRegion[assigned.region].push(row);
             pendingKeysByRegion[assigned.region].push(pendingRowKey(row[orderCol], dedupedIndex));
             pendingJuminByRegion[assigned.region].push(String(row[juminCol] ?? ''));
+            pendingChoicesByRegion[assigned.region].push(assigned.choices);
+            pendingReasonsByRegion[assigned.region].push(assigned.reason);
           } else if (counts.hasOwnProperty(assigned.dept)) {
             counts[assigned.dept]++;
             rowsByCategory[assigned.dept].push(row);
+            assignedRows.push({
+              key: pendingRowKey(row[orderCol], dedupedIndex),
+              // 주소를 못 읽은 건은 지역이 없다. 화면에서 '-'로 보여준다.
+              region: detectRegion(addressAt.get(row) ?? row[addressCol]),
+              dept: assigned.dept,
+              row,
+            });
           } else {
             errorRows.push({ row: sourceRow, reason: `알 수 없는 분류: ${assigned.dept}` });
           }
@@ -413,9 +467,10 @@ export async function POST(request: NextRequest) {
         }
 
         const assigned = assignRow(
-          insurerType,
           row[juminCol],
           addressAt.get(row) ?? row[addressCol],
+          assignment.rules,
+          deptIndex,
           memoRuleFor(row)
         );
         // 아직 안 고른 건은 '미정'이다. 여기 지역명을 넣으면 '선택: 인천'처럼
@@ -447,7 +502,7 @@ export async function POST(request: NextRequest) {
 
       // 미리보기용: 지역별 대기 건의 행 데이터
       const pendingRowsByRegionArrays: Record<string, any[][]> = {};
-      for (const region of SELECTABLE_REGIONS) {
+      for (const region of REGIONS) {
         pendingRowsByRegionArrays[region] = toRowArrays(pendingRowsByRegion[region]);
       }
 
@@ -459,6 +514,17 @@ export async function POST(request: NextRequest) {
         pendingRowsByRegion: pendingRowsByRegionArrays,
         pendingKeysByRegion,
         pendingJuminByRegion,
+        pendingChoicesByRegion,
+        pendingReasonsByRegion,
+        // 규칙이 정한 건을 바꿀 때 고를 수 있는 소속 전부.
+        // 그 행의 후보가 아니라 전체다 — 규칙 밖으로 옮기는 일이기 때문이다.
+        assignableDepts: Object.values(deptIndex).flat(),
+        assignedRows: assignedRows.map((entry) => ({
+          key: entry.key,
+          region: entry.region,
+          dept: entry.dept,
+          row: previewHeaders.map((header) => formatCellValue(entry.row[header] ?? '')),
+        })),
         // 원본 데이터는 중복 제거 전 (업로드 당시 그대로)
         totalRows: rawData.length,
         dupRemovedCount,
@@ -500,8 +566,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      // 지역별 고를 수 있는 부서. UI가 목록을 따로 들고 있으면 규칙이 갈라진다.
-      regionChoices: REGION_CHOICES,
+      /*
+       * 이 결과가 어느 시점의 규칙으로 나온 것인지.
+       *
+       * 분류해 놓고 확인하는 사이에 누가 설정을 바꾸면 화면에 보인 배정과 실제로
+       * 나가는 배정이 갈린다. 배포가 이 값을 받아 대조해서, 달라졌으면 막는다.
+       */
+      rulesUpdatedAt: assignment.updatedAt,
       fileCount: uploadedFiles.length,
       files: perFile,
       totalRows: mergedTotalRows,

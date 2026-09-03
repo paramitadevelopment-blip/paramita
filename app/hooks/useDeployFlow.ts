@@ -42,6 +42,8 @@ interface UseDeployFlowOptions {
   fileCount: number;
   /** 상담메모 규칙. 분류할 때와 같은 값이어야 한다 */
   memoRule: boolean;
+  /** 분류가 본 배정 규칙의 시각. 그사이 지역 설정이 바뀌었으면 배포가 막힌다 */
+  rulesUpdatedAt: string | null;
   onSuccess: () => void;
   onError: (error: unknown) => void;
 }
@@ -58,6 +60,7 @@ export function useDeployFlow({
   rowPicks,
   fileCount,
   memoRule,
+  rulesUpdatedAt,
   onSuccess,
   onError,
 }: UseDeployFlowOptions) {
@@ -76,6 +79,7 @@ export function useDeployFlow({
         rowAssignments: buildRowAssignments(fileCount, rowPicks),
         // 분류할 때와 같은 값을 보내야 화면에 본 결과와 실제 배포가 안 갈린다.
         memoRule,
+        rulesUpdatedAt,
       });
       onSuccess();
     } catch (error) {

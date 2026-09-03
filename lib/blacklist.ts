@@ -187,6 +187,22 @@ export function splitAlreadyListed<T>(
  * @param threshold 몇 회부터 막을지. 기본 3
  * @returns newlyHit 이번에 걸린 행. 배포 때 명단에 올린다
  */
+/**
+ * 이 사람의 지난 신청들을 골라낸다.
+ *
+ * 명단에 올릴 때 "3회 신청해서 걸렸다"고 해놓고 신청 기록은 오늘 것 한 줄만
+ * 남기면, 화면에 '3회 이상 신청 / 1회'로 떠서 무슨 말인지 알 수 없다.
+ * 걸리게 만든 지난 신청도 함께 남겨야 숫자와 출처가 맞는다.
+ *
+ * 같은 사람인지는 판정과 같은 기준(상품 + 번호 겹침)으로 본다.
+ *
+ * @param key  명단에 올릴 사람
+ * @param past 지난 신청들 (이미 기간·주문번호중복으로 걸러진 것)
+ */
+export function findPastApplications<P extends BlacklistKey>(key: BlacklistKey, past: P[]): P[] {
+  return past.filter((record) => isSamePerson(key, record));
+}
+
 export function splitOverThreshold<T>(
   items: T[],
   toKey: (item: T) => BlacklistKey,

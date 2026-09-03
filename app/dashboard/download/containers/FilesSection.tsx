@@ -13,7 +13,7 @@ import { useFileSelection } from '@/app/hooks/useFileSelection';
 import { invalidateDashboard } from '@/app/hooks/useDashboardCache';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { isAdminRole } from '@/lib/roles';
-import { toDepartmentGroups, getSubDepartments } from '@/lib/departments';
+import { toAssignableDepartmentGroups, getSubDepartments } from '@/lib/departments';
 import Spinner from '@/app/components/Spinner/Spinner';
 import Pagination from '@/app/components/Pagination/Pagination';
 import EmptyState from '@/app/components/EmptyState/EmptyState';
@@ -165,9 +165,14 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 소속 필터는 조직 단위로 보여준다. 파라인슈1·파라인슈2는 '파라인슈' 한 줄이 된다.
+  /*
+   * 소속 필터는 조직 단위로 보여준다. 쪼개진 조직은 한 줄이 된다.
+   *
+   * '이외지역'은 뺀다 — 주소를 못 읽은 건이 파라인슈로 가게 되면서 이제
+   * 아무것도 안 담긴다. 늘 0건인 줄이 필터에 남아 있으면 고를 것이 하나 늘 뿐이다.
+   */
   const departmentGroups = useMemo(
-    () => toDepartmentGroups(departmentsData),
+    () => toAssignableDepartmentGroups(departmentsData),
     [departmentsData]
   );
 

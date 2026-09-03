@@ -4,6 +4,7 @@ import {
   isJudgeable,
   splitAlreadyListed,
   splitOverThreshold,
+  findPastApplications,
   type BlacklistKey,
 } from '@/lib/blacklist';
 
@@ -276,5 +277,47 @@ describe('판정 순서', () => {
     const only = splitOverThreshold([key()], (x) => x, [key(), key()]);
     expect(only.newlyHit).toHaveLength(1);
     expect(only.newlyHit[0].count).toBe(3);
+  });
+});
+
+/**
+ * 명단에 올릴 때 걸리게 만든 지난 신청까지 찾아낸다.
+ *
+ * 오늘 건만 남기면 화면에 '60일 내 3회 이상 신청 / 1회'로 떠서,
+ * 3번이라는데 왜 1번이냐가 된다. 숫자와 출처가 맞아야 한다.
+ */
+describe('지난 신청 찾기 (findPastApplications)', () => {
+  const src = (over: Partial<{ tel1: string; tel2: string; orderNo: string; name: string }> = {}) => ({
+    product: '동양생명(치매간병)',
+    birth: '7301192******',
+    tel1: over.tel1 ?? '010-1111-2222',
+    tel2: over.tel2 ?? '010-1111-2222',
+    name: over.name ?? '홍길동',
+    orderNo: over.orderNo ?? '주문1',
+    fileId: 'f1',
+    fileName: '20260901_동양생명.xlsx',
+    receivedAt: null,
+  });
+
+  const me = { product: '동양생명(치매간병)', birth: '7301192******', tel1: '010-1111-2222', tel2: '010-1111-2222' };
+
+  it('같은 사람의 지난 신청을 모두 찾는다', () => {
+    const past = [src({ orderNo: 'A' }), src({ orderNo: 'B' })];
+    expect(findPastApplications(me, past).map((p) => p.orderNo)).toEqual(['A', 'B']);
+  });
+
+  /* 번호를 어느 칸에 넣었든 같은 사람이다. 판정과 같은 기준을 써야 한다. */
+  it('전화번호가 한쪽만 겹쳐도 같은 사람으로 본다', () => {
+    const past = [src({ tel1: '010-1111-2222', tel2: '010-9999-9999', orderNo: 'C' })];
+    expect(findPastApplications(me, past)).toHaveLength(1);
+  });
+
+  it('다른 사람의 신청은 안 가져온다', () => {
+    const past = [src({ tel1: '010-8888-7777', tel2: '010-8888-7777', orderNo: 'D' })];
+    expect(findPastApplications(me, past)).toEqual([]);
+  });
+
+  it('지난 신청이 없으면 빈 배열이다', () => {
+    expect(findPastApplications(me, [])).toEqual([]);
   });
 });

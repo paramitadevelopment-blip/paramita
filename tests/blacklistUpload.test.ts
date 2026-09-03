@@ -43,6 +43,7 @@ const row = (o: Record<string, any> = {}) => ({
 /** 과거 60일 안에 올라온 한 줄 */
 const past = (o: Partial<PastRecord> = {}): PastRecord => ({
   uploadedAt: daysAgo(10),
+  orderNo: `과거주문-${Math.random()}`,
   dupReason: '',
   assignedTo: '파라인슈1',
   assignedAt: null,

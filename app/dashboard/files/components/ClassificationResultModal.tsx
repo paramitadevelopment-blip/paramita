@@ -33,6 +33,10 @@ interface ClassificationResultModalProps {
   queryClient: QueryClient;
 }
 
+/* 아직 아무 탭도 안 고른 파일에 넘길 빈 값.
+   매번 {}를 새로 만들면 memo가 걸린 표가 그때마다 다시 그려진다. */
+const EMPTY_PICK_MODES: Record<string, 'manual' | 'auto'> = {};
+
 const ClassificationResultModal = memo(function ClassificationResultModalComponent({
   departments,
   classificationResults: initialResults,
@@ -54,7 +58,7 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
     classifiedFiles,
     currentIndex,
     setCurrentIndex,
-    regionChoices,
+    rulesUpdatedAt,
     current,
     isClassifying,
   } = useClassifyFiles({
@@ -70,11 +74,15 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
     rowPicks,
     pickMode,
     pendingSort,
+    regionTab,
+    reasonTab,
     resultWithPicks,
-    narrowCols,
     unpicked,
     handlePickMode,
     handlePickRow,
+    handleRegionTab,
+    handleReasonTab,
+    handlePickAll,
     togglePendingSort,
   } = usePendingPicks(classifiedFiles, currentIndex);
 
@@ -85,6 +93,7 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
     rowPicks,
     fileCount: classifiedFiles.length,
     memoRule,
+    rulesUpdatedAt,
     onSuccess: () => {
       onClose();
       showAlert({ type: 'success', title: '배포 완료', message: '파일이 배포되었습니다.' });
@@ -150,14 +159,17 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
               <PendingAssignTable
                 current={current}
                 currentIndex={currentIndex}
-                pickMode={pickMode[currentIndex] ?? 'manual'}
+                pickMode={pickMode[currentIndex] ?? EMPTY_PICK_MODES}
                 onPickMode={handlePickMode}
                 pendingSort={pendingSort}
                 onToggleSort={togglePendingSort}
-                narrowCols={narrowCols}
                 rowPicks={rowPicks[currentIndex] ?? {}}
                 onPickRow={handlePickRow}
-                regionChoices={regionChoices}
+                regionTab={regionTab[currentIndex] ?? 'all'}
+                onRegionTab={handleRegionTab}
+                reasonTab={reasonTab[currentIndex] ?? 'all'}
+                onReasonTab={handleReasonTab}
+                onPickAll={handlePickAll}
               />
             </>
           ) : null}

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCsrfToken } from '@/app/store/authStore';
+import { ASSIGNMENT_RULES_KEY } from '@/app/hooks/useAssignmentRules';
 import { invalidateDashboard } from './useDashboardCache';
 
 interface Department {
@@ -55,6 +56,9 @@ export function useCreateDepartment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       invalidateDashboard(queryClient);
+      // 지역설정 표의 열은 소속 목록에서 만들어진다. 안 비우면 방금 만든
+      // 소속이 새로고침 전까지 안 보인다 (staleTime이 5분이라 그동안 안 받아온다).
+      queryClient.invalidateQueries({ queryKey: ASSIGNMENT_RULES_KEY });
     },
   });
 }
@@ -90,6 +94,9 @@ export function useDeleteDepartment() {
       // 소속이 바뀌면 파일의 소속과 사용자별 소속 이력도 함께 바뀐다.
       queryClient.invalidateQueries({ queryKey: ['files'] });
       queryClient.invalidateQueries({ queryKey: ['departmentLogs'] });
+      // 지운 소속이 지역설정 표에 열로 남아 있으면, 없는 소속에 체크해 두고
+      // 저장하다 거부당한다 (규칙 저장 API가 실재하는 소속만 받는다).
+      queryClient.invalidateQueries({ queryKey: ASSIGNMENT_RULES_KEY });
     },
   });
 }

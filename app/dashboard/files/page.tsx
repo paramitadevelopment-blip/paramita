@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { MdCloudUpload, MdCloudDownload } from 'react-icons/md';
+import { MdCloudUpload, MdCloudDownload, MdTune } from 'react-icons/md';
 import { useAuthStore } from '@/app/store/authStore';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { useAlert } from '@/app/components/Alert/Alert';
@@ -12,7 +12,7 @@ import TransferredFileSelect from './components/TransferredFileSelect';
 import SelectedFilesList from './components/SelectedFilesList';
 import ClassificationProgressModal from './components/ClassificationProgressModal';
 import ClassificationResultModal from './components/ClassificationResultModal';
-import MemoRuleOption from './components/MemoRuleOption';
+import RegionSettingModal from './components/RegionSettingModal';
 import styles from './page.module.css';
 import { isValidUploadFileName, UPLOAD_FILE_NAME_HINT } from '@/lib/insurance';
 
@@ -49,14 +49,24 @@ function FilesPage() {
   const [isClassificationComplete, setIsClassificationComplete] = useState(false);
   const [classificationResults, setClassificationResults] = useState<Record<number, number>>({});
   const [totalFiles, setTotalFiles] = useState(0);
-  // 상담메모 규칙. 기본으로 켜둔다. 켜면 해당 건은 주소·나이 규칙을 건너뛰므로,
-  // 끄고 돌리려면 분류 전에 체크를 풀어야 한다.
-  const [memoRule, setMemoRule] = useState(true);
+  /*
+   * 상담메모 규칙 (상담 예정이 오늘 11시 이전이면 파라인슈로 몰아주기).
+   *
+   * 지금은 꺼 둔다. 규칙 자체는 서버·분류·배포에 그대로 살아 있고, 화면에서
+   * 켜는 자리(MemoRuleOption 체크박스)만 내렸다 — 나중에 되돌릴 수 있게
+   * 로직은 남겨 뒀다. 다시 쓰려면 아래 두 가지만 하면 된다.
+   *   1) 이 값을 useState(true)로 되돌리거나
+   *   2) 아래 렌더에 <MemoRuleOption checked={memoRule} ... />를 되살린다
+   * (components/MemoRuleOption.tsx와 그 CSS는 지우지 않았다)
+   */
+  const [memoRule] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // 파일전달 탭의 체크 상태는 그 컴포넌트 안에서만 갖고 있다. 선택 목록을
   // 밖(전체 삭제·분류 완료)에서 통째로 비울 때 체크도 같이 풀리게 하려면
   // key를 바꿔 다시 마운트시키는 수밖에 없다 — 내부 상태를 직접 건드릴 방법이 없다.
   const [transferResetKey, setTransferResetKey] = useState(0);
+  // 지역설정 화면. 분류를 돌리기 전에 배정 규칙을 정하는 자리다.
+  const [isRegionSettingOpen, setIsRegionSettingOpen] = useState(false);
 
   const user = useAuthStore((state) => state.user);
   const { data: departmentsData = [] } = useDepartments();
@@ -206,6 +216,14 @@ function FilesPage() {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1>파일 업로드</h1>
+        <button
+          type="button"
+          className={styles.regionSettingBtn}
+          onClick={() => setIsRegionSettingOpen(true)}
+        >
+          <MdTune className={styles.regionSettingIcon} />
+          지역 설정
+        </button>
       </div>
 
       <div className={styles.contentWrapper}>
@@ -245,11 +263,7 @@ function FilesPage() {
           />
         )}
 
-        <MemoRuleOption
-          checked={memoRule}
-          disabled={isDistributing || isClassificationComplete}
-          onChange={setMemoRule}
-        />
+        {/* 상담메모 우선 배정 체크박스를 내렸다. 되살리는 방법은 memoRule 선언부 주석 참고. */}
 
         {selectedFiles.length > 0 && !isDistributing && !isClassificationComplete && (
           <SelectedFilesList
@@ -268,6 +282,10 @@ function FilesPage() {
             departments={departments}
             distributionStats={distributionStats}
           />
+        )}
+
+        {isRegionSettingOpen && (
+          <RegionSettingModal onClose={() => setIsRegionSettingOpen(false)} />
         )}
 
         {isClassificationComplete && (

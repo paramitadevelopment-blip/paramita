@@ -7,7 +7,8 @@ import {
   clearZipCache,
   getZipCacheSize,
 } from '@/lib/zipcode';
-import { isUnreadableAddress, assignByAddress } from '@/lib/insurance';
+import { isUnreadableAddress } from '@/lib/insurance';
+import { detectRegion } from '@/lib/assignmentRegions';
 
 /**
  * 우편번호로 주소를 되찾는 부분.
@@ -153,31 +154,33 @@ describe('조회와 캐시', () => {
  * 이 기능을 만든 이유. 오타 난 주소가 우편번호를 거쳐 제자리를 찾아야 한다.
  */
 describe('오타 보정이 실제로 되는가', () => {
-  it('경냄 → (우편번호) → 경상남도 → 한울부원', () => {
+  it('경냄 → (우편번호) → 경상남도 → 지역을 읽는다', () => {
     expect(isUnreadableAddress('경냄 창원시 성산구')).toBe(true);
     const fixed = '경상남도 창원시 성산구';
     expect(isUnreadableAddress(fixed)).toBe(false);
-    expect(assignByAddress(fixed)).toEqual({ kind: 'dept', dept: '한울부원' });
+    expect(detectRegion(fixed)).toBe('경남');
   });
 
-  it('API가 주는 정식 명칭이 우리 규칙에 그대로 걸린다', () => {
+  it('API가 주는 정식 명칭이 그대로 지역으로 걸린다', () => {
     const 실제응답 = [
-      ['부산광역시 해운대구', '한울부원'],
-      ['경상남도 창원시', '한울부원'],
-      ['전북특별자치도 전주시', '경기'],
-      ['경상북도 안동시', '굿모닝제너럴'],
-      ['제주특별자치도 제주시', '파라인슈1'],
-      ['세종특별자치시 한솔동', '파라인슈1'],
+      ['부산광역시 해운대구', '부산'],
+      ['경상남도 창원시', '경남'],
+      ['전북특별자치도 전주시', '전북'],
+      ['경상북도 안동시', '경북'],
+      ['제주특별자치도 제주시', '제주'],
+      ['세종특별자치시 한솔동', '세종'],
+      ['서울특별시 중구', '서울'],
+      ['인천광역시 연수구', '인천'],
+      ['강원특별자치도 춘천시', '강원'],
     ] as const;
-    for (const [addr, dept] of 실제응답) {
-      expect(assignByAddress(addr)).toEqual({ kind: 'dept', dept });
+    for (const [addr, region] of 실제응답) {
+      expect(detectRegion(addr)).toBe(region);
     }
   });
 
-  it('사람이 골라야 하는 지역도 정식 명칭으로 걸린다', () => {
-    expect(assignByAddress('서울특별시 중구')).toEqual({ kind: 'select', region: '서울' });
-    expect(assignByAddress('인천광역시 연수구')).toEqual({ kind: 'select', region: '인천' });
-    expect(assignByAddress('강원특별자치도 춘천시')).toEqual({ kind: 'select', region: '강원' });
-    expect(assignByAddress('경기도 성남시')).toEqual({ kind: 'select', region: '경기' });
+  /** 경기는 시·군까지 읽어야 북·남이 갈린다. 우편번호 보정이 시·군을 살려줘야 한다. */
+  it('경기는 보정된 주소의 시·군으로 북·남이 갈린다', () => {
+    expect(detectRegion('경기도 성남시')).toBe('경기남부');
+    expect(detectRegion('경기도 의정부시')).toBe('경기북부');
   });
 });

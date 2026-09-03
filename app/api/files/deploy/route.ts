@@ -5,8 +5,7 @@ import { verifyCsrfToken } from '@/lib/csrf';
 import { createClient } from '@supabase/supabase-js';
 import {
   assignRow,
-  REGION_CHOICES,
-  type SelectableRegion,
+  type DepartmentIndex,
   isExcludedColumn,
   dedupeByOrderNumber,
   findRequiredColumns,
@@ -43,8 +42,19 @@ import { parseDateCell } from '@/lib/parseDateCell';
 import { normalizeSheet } from '@/lib/columnAliases';
 import { dedupeAgainstHistory } from '@/lib/historyDedupe';
 import { resolveAddresses } from '@/lib/addressFix';
-import { loadRecentKeys, withinDays, toDedupeKeys, toBlacklistKeys } from '@/lib/historyLookup';
-import { splitAlreadyListed, splitOverThreshold, findListed } from '@/lib/blacklist';
+import {
+  loadRecentKeys,
+  withinDays,
+  toDedupeKeys,
+  toBlacklistKeys,
+  toBlacklistSources,
+} from '@/lib/historyLookup';
+import {
+  splitAlreadyListed,
+  splitOverThreshold,
+  findListed,
+  findPastApplications,
+} from '@/lib/blacklist';
 import {
   loadBlacklist,
   registerBlacklist,
@@ -52,6 +62,8 @@ import {
   type BlacklistEntry,
 } from '@/lib/blacklistStore';
 import { recordReapplyNotices, type ReapplyCandidate } from '@/lib/reapplyStore';
+import { loadAssignmentRules } from '@/lib/assignmentRulesStore';
+import { isAssignableDepartmentGroup } from '@/lib/departments';
 import * as XLSX from 'xlsx';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -80,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { files, classificationResults, rowAssignments, memoRule } = body;
+    const { files, classificationResults, rowAssignments, memoRule, rulesUpdatedAt } = body;
 
     // 상담메모 규칙 (업로드 화면 체크박스). 분류할 때 켰으면 배포도 켜야 한다.
     const memoRuleOn = memoRule === true;
@@ -110,12 +122,57 @@ export async function POST(request: NextRequest) {
     // 모든 부서 조회 (관리자 제외)
     const { data: departments, error: deptError } = await supabase
       .from('departments')
-      .select('id, name')
+      .select('id, name, group_name')
       .eq('is_admin', false);
 
     if (deptError || !departments || departments.length === 0) {
       console.error('Failed to fetch departments:', deptError);
       return NextResponse.json({ error: 'Failed to fetch departments' }, { status: 500 });
+    }
+
+    // 조직 → 배정 분류들. 분류(classify)와 같은 기준으로 만들어야 후보가 어긋나지 않는다.
+    const deptIndex: DepartmentIndex = {};
+    for (const dept of departments) {
+      if (!isAssignableDepartmentGroup(dept.group_name, false)) continue;
+      (deptIndex[dept.group_name] ??= []).push(dept.name);
+    }
+
+    /*
+     * 사람이 고를 수 있는 배정 소속 이름 전부.
+     *
+     * 규칙이 정한 건을 화면에서 다른 소속으로 바꿨을 때 그 값이 실재하는지 본다.
+     * 배포는 소속명으로 파일을 만들기 때문에, 없는 이름이 들어오면 그 건은
+     * 아무 파일에도 안 담기고 조용히 사라진다.
+     */
+    const assignableDeptNames = new Set(Object.values(deptIndex).flat());
+
+    let assignment: Awaited<ReturnType<typeof loadAssignmentRules>>;
+    try {
+      assignment = await loadAssignmentRules(supabase);
+    } catch (rulesError) {
+      console.error('Failed to load assignment rules:', rulesError);
+      return NextResponse.json(
+        { error: '배정 규칙을 읽지 못해 배포할 수 없습니다. 잠시 후 다시 시도해주세요.' },
+        { status: 500 }
+      );
+    }
+
+    /*
+     * 분류할 때 본 규칙과 지금 규칙이 같은가.
+     *
+     * 분류해 놓고 확인하는 사이에 누가 지역 설정을 바꾸면, 화면에서 본 배정과
+     * 실제로 나가는 배정이 달라진다. 사람이 고른 선택도 그때 후보 기준이라
+     * 지금은 허용되지 않는 소속일 수 있다. 조용히 다르게 내보내느니 막고
+     * 다시 분류하게 한다.
+     */
+    if (rulesUpdatedAt !== undefined && rulesUpdatedAt !== assignment.updatedAt) {
+      return NextResponse.json(
+        {
+          error: '배정 규칙이 바뀌었습니다. 분류를 다시 실행해주세요.',
+          code: 'RULES_CHANGED',
+        },
+        { status: 409 }
+      );
     }
 
     // 각 파일에 대해 모든 부서별로 복사본 생성
@@ -415,7 +472,7 @@ export async function POST(request: NextRequest) {
       const originalContent: any[] = [];
       let seq = 1;
       const picked = assignmentsByFile[fileIdx] ?? {};
-      const unpickedRows: Array<{ region: SelectableRegion; key: string }> = [];
+      const unpickedRows: Array<{ region: string; key: string }> = [];
       // 주문번호가 없는 행. 분류 화면에서도 막지만 그건 UX일 뿐이라 여기서 다시 본다.
       const missingOrderRows: number[] = [];
 
@@ -432,9 +489,10 @@ export async function POST(request: NextRequest) {
         }
 
         const assigned = assignRow(
-          insurerType,
           row[juminIdx],
           addressAt.get(row) ?? row[addressIdx],
+          assignment.rules,
+          deptIndex,
           memoRuleFor(row)
         );
 
@@ -450,7 +508,9 @@ export async function POST(request: NextRequest) {
           // 그 지역에 허용된 부서인지 여기서 다시 확인한다.
           const key = pendingRowKey(row[orderIdx], dedupedIndex);
           const choice = picked[key];
-          if (choice && (REGION_CHOICES[assigned.region] as readonly string[]).includes(choice)) {
+          // 후보는 행마다 다르다 — 같은 지역이라도 나이 구간이 다르면 받는 소속이
+          // 달라진다. 그래서 지역별 목록이 아니라 이 행의 후보로 확인한다.
+          if (choice && assigned.choices.includes(choice)) {
             category = choice;
           } else {
             // 안 골랐거나 그 지역에 없는 부서다. 아래에서 한꺼번에 막는다.
@@ -458,7 +518,21 @@ export async function POST(request: NextRequest) {
             category = 'error';
           }
         } else {
-          category = assigned.dept;
+          /*
+           * 규칙이 정한 건. 화면에서 다른 소속으로 바꿨으면 그 값을 쓴다.
+           *
+           * 클라이언트 값은 신뢰하지 않는다 — 실재하는 배정 소속인지 여기서
+           * 다시 본다. 없는 이름이 들어오면 그 건은 아무 파일에도 안 담기고
+           * 조용히 사라지기 때문이다.
+           */
+          const key = pendingRowKey(row[orderIdx], dedupedIndex);
+          const choice = picked[key];
+          if (choice && choice !== assigned.dept && assignableDeptNames.has(choice)) {
+            category = choice;
+            assignedBy = ASSIGNED_BY_PERSON;
+          } else {
+            category = assigned.dept;
+          }
         }
 
         const rowNo = seq++;
@@ -542,10 +616,30 @@ export async function POST(request: NextRequest) {
         appliedAt: receiptIdx >= 0 ? parseDateCell(item[receiptIdx]) : null,
       });
 
-      // 이번에 걸린 사람을 명단에 올린다. 미리보기에서는 하지 않는다 —
-      // 올려보기만 하고 배포를 안 했는데 영구 차단되면 안 된다.
+      /*
+       * 이번에 걸린 사람을 명단에 올린다. 미리보기에서는 하지 않는다 —
+       * 올려보기만 하고 배포를 안 했는데 영구 차단되면 안 된다.
+       *
+       * 오늘 건만 신청 기록으로 남기면 화면에 '60일 내 3회 이상 신청 / 1회'로
+       * 떠서 무슨 말인지 알 수 없다. 걸리게 만든 지난 신청도 함께 남긴다.
+       */
+      const blacklistWindow = toBlacklistSources(withinDays(recentKeys, deployedAt, BLACKLIST_DAYS));
+
       for (const { item, count } of blacklistNew) {
-        pendingBlacklist.push(toBlacklistEntry(item, BLACKLIST_REASON_NEW, count));
+        const entry = toBlacklistEntry(item, BLACKLIST_REASON_NEW, count);
+        pendingBlacklist.push(entry);
+
+        // 지난 신청들. 같은 사람인지는 판정과 같은 기준으로 본다.
+        for (const past of findPastApplications(entry, blacklistWindow)) {
+          pendingBlacklist.push({
+            ...entry,
+            customerName: past.name || entry.customerName,
+            sourceFileId: past.fileId || null,
+            sourceFileName: past.fileName || null,
+            orderNo: past.orderNo,
+            appliedAt: past.receivedAt,
+          });
+        }
       }
 
       /*

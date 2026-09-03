@@ -37,6 +37,24 @@ const HIDDEN_DEPARTMENTS = [ADMIN_DEPARTMENT, STAFF_DEPARTMENT];
 const NON_ASSIGNABLE_GROUPS = ['이외지역'];
 
 /**
+ * 배정 규칙을 붙일 수 있는 조직인가.
+ *
+ * 세 곳(규칙 저장 API·분류·배포)이 같은 기준을 봐야 한다 — 한 곳만 느슨하면
+ * 규칙에는 없는 소속이 "직접 고르기" 목록에 나타나거나, 반대로 규칙에 저장된
+ * 소속이 배정에서 빠진다.
+ *
+ * 빼는 것들:
+ * - 관리자 소속 — 업로드한 원본이 들어가는 자리다
+ * - '담당자' — 역할 전용 소속이라 파일을 받지 않는다
+ * - '이외지역' — 주소를 못 읽은 건이 모이는 자리지 사람이 맡는 조직이 아니다
+ */
+export function isAssignableDepartmentGroup(groupName: string, isAdmin: boolean): boolean {
+  if (isAdmin) return false;
+  if (isHiddenDepartment(groupName)) return false;
+  return !NON_ASSIGNABLE_GROUPS.includes(groupName);
+}
+
+/**
  * 이 역할에 서버가 붙여 주는 소속. 사람이 고르는 역할(지사)이면 null.
  *
  * 화면과 서버가 같은 값을 써야 한다 — 다르면 화면에 보이는 소속과 실제로

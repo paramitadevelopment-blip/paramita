@@ -1,206 +1,246 @@
 import { describe, it, expect } from 'vitest';
-import { assignRow, assignByAddress, calculateInsuranceAge } from '@/lib/insurance';
+import {
+  assignRow,
+  resolveDeptName,
+  calculateInsuranceAge,
+  type DepartmentIndex,
+} from '@/lib/insurance';
+import type { DepartmentRule } from '@/lib/assignmentRules';
 
 /**
- * 배정 규칙 검증.
- * 이 로직이 틀리면 고객 데이터가 엉뚱한 부서로 나가고, 나간 뒤에는 되돌릴 수 없다.
- * 규칙은 lib/insurance.ts의 assignRow에 있다.
+ * 한 행을 어디로 보낼지.
+ *
+ * 예전에는 규칙이 코드에 박혀 있었지만 이제 설정값이다. 그래서 여기서 보는 건
+ * "설정을 이렇게 두면 이렇게 간다"이지 특정 지사의 담당 지역이 아니다.
+ *
+ * 조용히 사라지는 건이 없어야 한다는 게 요점이다 — 아무도 안 맡은 조합도,
+ * 여럿이 맡은 조합도 사람이 고르는 목록으로 나와야 한다.
  */
 
-/** 기준일을 고정한다. '오늘'에 따라 나이가 흔들리면 테스트가 날짜마다 달라진다. */
-const BASE = new Date(2026, 7, 20); // 2026-08-20
+/** 실제 소속 구성. 파라인슈만 분류가 둘로 나뉜다. */
+const INDEX: DepartmentIndex = {
+  경기: ['경기'],
+  굿모닝제너럴: ['굿모닝제너럴'],
+  한울부원: ['한울부원'],
+  파라인슈: ['파라인슈1', '파라인슈2'],
+};
+
+const RULES: DepartmentRule[] = [
+  { group: '경기', regions: ['서울'], ageBrackets: ['under70'] },
+  { group: '굿모닝제너럴', regions: ['서울'], ageBrackets: ['70to75'] },
+  { group: '한울부원', regions: ['부산'], ageBrackets: ['under70', '70to75', 'over75'] },
+  { group: '파라인슈', regions: ['제주'], ageBrackets: ['under70', '70to75', 'over75'] },
+];
 
 /**
- * 원하는 보험나이가 나오는 주민번호 앞자리를 만든다.
- * 보험나이는 만나이에 "마지막 생일로부터 6개월 경과 시 +1"이 붙으므로,
- * 생일을 기준일과 같은 달·일로 잡아 만나이와 보험나이를 일치시킨다.
+ * 그 보험나이가 되는 주민번호 앞자리를 만든다.
+ *
+ * 보험나이는 생일까지 남은 개월로 반올림해서 만나이와 한 살 어긋난다.
+ * 그 규칙을 여기에 베껴 쓰면 규칙이 바뀔 때 테스트도 같이 틀리므로,
+ * 실제 계산에 물어보며 맞는 해를 찾는다.
  */
 function juminForAge(age: number): string {
-  const birthYear = BASE.getFullYear() - age;
-  const yy = String(birthYear % 100).padStart(2, '0');
-  const mm = String(BASE.getMonth() + 1).padStart(2, '0');
-  const dd = String(BASE.getDate()).padStart(2, '0');
-  // 1900년대생 남성(1). 1926년 이후 출생만 다루므로 문제없다.
-  return `${yy}${mm}${dd}1`;
+  const thisYear = new Date().getFullYear();
+  for (const delta of [0, -1, 1, -2, 2]) {
+    const jumin = `${String(thisYear - age + delta).slice(2)}0101-1`;
+    if (calculateInsuranceAge(jumin) === age) return jumin;
+  }
+  throw new Error(`보험나이 ${age}세가 되는 주민번호를 만들지 못했다`);
 }
 
-describe('보험나이 계산', () => {
-  it('생일 당일이면 만나이와 같다', () => {
-    expect(calculateInsuranceAge(juminForAge(70), BASE)).toBe(70);
-    expect(calculateInsuranceAge(juminForAge(69), BASE)).toBe(69);
+describe('규칙이 하나로 정해지면 자동배정', () => {
+  it('서울 + 70세 미만 → 경기', () => {
+    const result = assignRow(juminForAge(50), '서울 강남구', RULES, INDEX);
+    expect(result).toEqual({ kind: 'dept', dept: '경기' });
   });
 
-  it('형식이 깨지면 -1을 준다', () => {
-    expect(calculateInsuranceAge('', BASE)).toBe(-1);
-    expect(calculateInsuranceAge('12345', BASE)).toBe(-1); // 7자리 미만
-    expect(calculateInsuranceAge('abcdefg', BASE)).toBe(-1); // 숫자 아님
-    expect(calculateInsuranceAge('9913011', BASE)).toBe(-1); // 13월
-    expect(calculateInsuranceAge('9902301', BASE)).toBe(-1); // 2월 30일
-  });
-
-  it('성별코드로 세기를 가른다', () => {
-    // 같은 YYMMDD라도 코드가 1이면 1900년대, 3이면 2000년대
-    const y1900 = calculateInsuranceAge('9001011', BASE);
-    const y2000 = calculateInsuranceAge('9001013', BASE);
-    expect(y1900).toBeGreaterThan(y2000);
+  it('서울 + 70~75세 → 굿모닝제너럴', () => {
+    const result = assignRow(juminForAge(72), '서울 강남구', RULES, INDEX);
+    expect(result).toEqual({ kind: 'dept', dept: '굿모닝제너럴' });
   });
 });
 
-describe('주소 배정 (나이 무관)', () => {
-  it.each([
-    ['부산 해운대구', '한울부원'],
-    ['울산 남구', '한울부원'],
-    ['경남 창원시', '한울부원'],
-    ['대구 수성구', '한울부원'],
-    ['전남 여수시', '경기'],
-    ['광주 북구', '경기'],
-    ['경북 포항시', '굿모닝제너럴'],
-    ['충남 천안시', '파라인슈1'],
-    ['세종 어진동', '파라인슈1'],
-    ['제주 서귀포시', '파라인슈1'],
-  ])('%s → %s', (address, dept) => {
-    expect(assignByAddress(address)).toEqual({ kind: 'dept', dept });
+/**
+ * 나뉜 조직은 나이로 분류를 고른다. 파일은 분류 단위로 만들어지므로
+ * 조직 이름만으로는 어느 파일에 담을지 정할 수 없다.
+ */
+describe('나뉜 조직은 나이로 분류가 갈린다', () => {
+  it('70세 미만은 파라인슈1', () => {
+    expect(assignRow(juminForAge(40), '제주 제주시', RULES, INDEX)).toEqual({
+      kind: 'dept',
+      dept: '파라인슈1',
+    });
   });
 
-  it.each([
-    ['서울 강남구', '서울'],
-    ['경기도 성남시', '경기'],
-    ['인천 연수구', '인천'],
-    ['강원 춘천시', '강원'],
-  ])('%s → 사람이 고르는 지역(%s)', (address, region) => {
-    expect(assignByAddress(address)).toEqual({ kind: 'select', region });
+  it('70세 이상은 파라인슈2', () => {
+    expect(assignRow(juminForAge(80), '제주 제주시', RULES, INDEX)).toEqual({
+      kind: 'dept',
+      dept: '파라인슈2',
+    });
   });
 
-  it('시·도를 못 읽으면 이외지역으로 보낸다', () => {
-    expect(assignByAddress('')).toEqual({ kind: 'dept', dept: '이외지역' });
-    expect(assignByAddress(null)).toEqual({ kind: 'dept', dept: '이외지역' });
-    expect(assignByAddress('어딘가 알 수 없는 곳')).toEqual({ kind: 'dept', dept: '이외지역' });
+  it('분류가 하나뿐인 조직은 나이와 무관하게 그 이름', () => {
+    expect(resolveDeptName(INDEX, '경기', 30)).toBe('경기');
+    expect(resolveDeptName(INDEX, '경기', 90)).toBe('경기');
   });
 
-  it("부서명 '경기'와 지역 '경기'는 다른 결과다", () => {
-    // 전남 → 업체 '경기'(dept), 경기도 → 사람이 고르는 지역 '경기'(select).
-    // 둘이 뒤섞이면 전라도 건이 경기도 담당에게 간다.
-    const jeonnam = assignByAddress('전남 순천시');
-    const gyeonggi = assignByAddress('경기도 수원시');
-    expect(jeonnam.kind).toBe('dept');
-    expect(gyeonggi.kind).toBe('select');
+  it('없는 조직이면 null — 조용히 아무 데나 보내지 않는다', () => {
+    expect(resolveDeptName(INDEX, '없는소속', 50)).toBeNull();
   });
 });
 
-describe('흥국(hk): 70세 하나로 가른다', () => {
-  it('70세 이상은 주소와 무관하게 파라인슈2', () => {
-    expect(assignRow('hk', juminForAge(70), '부산 해운대구')).toEqual({
-      kind: 'dept', dept: '파라인슈2',
-    });
-    expect(assignRow('hk', juminForAge(85), '서울 강남구')).toEqual({
-      kind: 'dept', dept: '파라인슈2',
+describe('여럿이 맡은 조합은 사람이 고른다', () => {
+  it('후보를 모두 돌려준다', () => {
+    const overlapping: DepartmentRule[] = [
+      { group: '경기', regions: ['서울'], ageBrackets: ['under70'] },
+      { group: '한울부원', regions: ['서울'], ageBrackets: ['under70'] },
+    ];
+    const result = assignRow(juminForAge(50), '서울 강남구', overlapping, INDEX);
+
+    expect(result.kind).toBe('select');
+    if (result.kind !== 'select') return;
+    expect(result.reason).toBe('multiple');
+    expect(result.choices).toEqual(['경기', '한울부원']);
+    expect(result.region).toBe('서울');
+  });
+
+  /** 후보는 조직이 아니라 분류로 좁혀서 내려간다 — 화면에서 고른 그대로 파일이 만들어져야 한다. */
+  it('나뉜 조직은 후보도 나이에 맞는 분류로 나온다', () => {
+    const overlapping: DepartmentRule[] = [
+      { group: '경기', regions: ['제주'], ageBrackets: ['over75'] },
+      { group: '파라인슈', regions: ['제주'], ageBrackets: ['over75'] },
+    ];
+    const result = assignRow(juminForAge(80), '제주 제주시', overlapping, INDEX);
+
+    expect(result.kind).toBe('select');
+    if (result.kind !== 'select') return;
+    expect(result.choices).toContain('파라인슈2');
+    expect(result.choices).not.toContain('파라인슈1');
+    expect(result.choices).not.toContain('파라인슈');
+  });
+});
+
+/**
+ * 지역은 맡았는데 나이가 안 맞는 건 = 남는 DB.
+ * 이걸 버리면 그 사람에게 아무도 연락하지 않게 된다.
+ */
+describe('아무도 안 맡은 조합은 예외로 빠진다', () => {
+  it('나이가 안 맞으면 예외', () => {
+    // 서울은 70세 미만(경기)·70~75세(굿모닝)만 맡았다. 75세 이상은 빈자리다.
+    const result = assignRow(juminForAge(80), '서울 강남구', RULES, INDEX);
+
+    expect(result.kind).toBe('select');
+    if (result.kind !== 'select') return;
+    expect(result.reason).toBe('unmatched');
+    expect(result.region).toBe('서울');
+  });
+
+  it('아무도 안 맡은 지역도 예외', () => {
+    const result = assignRow(juminForAge(50), '대전 유성구', RULES, INDEX);
+    expect(result.kind).toBe('select');
+    if (result.kind !== 'select') return;
+    expect(result.reason).toBe('unmatched');
+  });
+
+  it('예외는 배정 가능한 소속 전체가 후보로 나온다', () => {
+    const result = assignRow(juminForAge(50), '대전 유성구', RULES, INDEX);
+    if (result.kind !== 'select') throw new Error('select여야 한다');
+    expect(result.choices).toContain('경기');
+    expect(result.choices).toContain('한울부원');
+    // 나이에 맞는 분류 하나만 나온다
+    expect(result.choices).toContain('파라인슈1');
+    expect(result.choices).not.toContain('파라인슈2');
+  });
+
+  it('설정이 아예 없으면 전부 예외로 빠진다 — 배포가 막히지 조용히 나가지 않는다', () => {
+    const result = assignRow(juminForAge(50), '서울 강남구', [], INDEX);
+    expect(result.kind).toBe('select');
+  });
+});
+
+/**
+ * 주소를 못 읽으면 지역 설정에 걸릴 수가 없다.
+ * 예전에는 '이외지역'에 쌓아 두고 사람이 나눴는데, 이제 파라인슈가 받는다.
+ */
+describe('주소를 못 읽으면 파라인슈', () => {
+  it('빈 주소', () => {
+    expect(assignRow(juminForAge(50), '', RULES, INDEX)).toEqual({
+      kind: 'dept',
+      dept: '파라인슈1',
     });
   });
 
-  it('70세 미만은 주소로 배정한다', () => {
-    expect(assignRow('hk', juminForAge(69), '부산 해운대구')).toEqual({
-      kind: 'dept', dept: '한울부원',
+  it('시·도가 아닌 값', () => {
+    expect(assignRow(juminForAge(50), '어딘가 알 수 없는 곳', RULES, INDEX)).toEqual({
+      kind: 'dept',
+      dept: '파라인슈1',
     });
-    expect(assignRow('hk', juminForAge(30), '서울 강남구')).toEqual({
-      kind: 'select', region: '서울',
+  });
+
+  /** 경기인 건 알지만 시·군을 모르면 북·남을 찍을 수 없다. */
+  it('경기인데 시·군을 모르면 파라인슈', () => {
+    expect(assignRow(juminForAge(50), '경기도', RULES, INDEX)).toEqual({
+      kind: 'dept',
+      dept: '파라인슈1',
+    });
+  });
+
+  /** 조직이 나뉘어 있으면 다른 배정과 똑같이 나이로 하위 분류를 가른다. */
+  it('나뉜 조직이면 나이로 분류가 갈린다', () => {
+    expect(assignRow(juminForAge(80), '', RULES, INDEX)).toEqual({
+      kind: 'dept',
+      dept: '파라인슈2',
+    });
+  });
+
+  /*
+   * 파라인슈가 사라진 경우. 갈 곳이 없다고 버리면 그 건은 아무 파일에도
+   * 안 담기고 조용히 사라지므로, 예전처럼 한곳에 모아 사람 눈에 띄게 한다.
+   */
+  it('파라인슈가 없으면 이외지역으로 모은다', () => {
+    const withoutParain: DepartmentIndex = { 경기: ['경기'], 한울부원: ['한울부원'] };
+    expect(assignRow(juminForAge(50), '', RULES, withoutParain)).toEqual({
+      kind: 'dept',
+      dept: '이외지역',
     });
   });
 });
 
-describe('동양(dy): 70세와 75세, 둘로 가른다', () => {
-  it('70~75세 구간만 주소를 본다', () => {
-    // 이 구간에서 부산·울산·경남·대구는 한울부원으로 빠진다
-    expect(assignRow('dy', juminForAge(72), '부산 해운대구')).toEqual({
-      kind: 'dept', dept: '한울부원',
-    });
-    // 그 밖의 읽히는 주소는 파라인슈2
-    expect(assignRow('dy', juminForAge(72), '서울 강남구')).toEqual({
-      kind: 'dept', dept: '파라인슈2',
-    });
-    // 못 읽는 주소는 이외지역
-    expect(assignRow('dy', juminForAge(72), '알 수 없음')).toEqual({
-      kind: 'dept', dept: '이외지역',
-    });
-  });
-
-  it('75세 이상은 주소와 무관하게 파라인슈2', () => {
-    expect(assignRow('dy', juminForAge(75), '부산 해운대구')).toEqual({
-      kind: 'dept', dept: '파라인슈2',
-    });
-    expect(assignRow('dy', juminForAge(90), '알 수 없음')).toEqual({
-      kind: 'dept', dept: '파라인슈2',
-    });
-  });
-
-  it('70세 미만은 흥국과 같다', () => {
-    expect(assignRow('dy', juminForAge(69), '부산 해운대구')).toEqual(
-      assignRow('hk', juminForAge(69), '부산 해운대구')
-    );
-    expect(assignRow('dy', juminForAge(40), '경북 포항시')).toEqual(
-      assignRow('hk', juminForAge(40), '경북 포항시')
-    );
-  });
-
-  it('경계값: 69/70/74/75에서 규칙이 바뀌는 지점을 짚는다', () => {
-    // 69 → 주소 기준(한울부원), 70~74 → 주소 보되 부산은 한울부원, 75 → 무조건 파라인슈2
-    expect(assignRow('dy', juminForAge(69), '서울 강남구')).toEqual({ kind: 'select', region: '서울' });
-    expect(assignRow('dy', juminForAge(70), '서울 강남구')).toEqual({ kind: 'dept', dept: '파라인슈2' });
-    expect(assignRow('dy', juminForAge(74), '부산 해운대구')).toEqual({ kind: 'dept', dept: '한울부원' });
-    expect(assignRow('dy', juminForAge(75), '부산 해운대구')).toEqual({ kind: 'dept', dept: '파라인슈2' });
+describe('생년월일을 못 읽으면 오류', () => {
+  it('나이를 모르면 어느 구간인지도 모른다', () => {
+    const result = assignRow('없는값', '서울 강남구', RULES, INDEX);
+    expect(result).toEqual({ kind: 'error', reason: '생년월일 형식 오류' });
   });
 });
 
-describe('생년월일이 깨진 행', () => {
-  it('배정하지 않고 오류로 표시한다', () => {
-    // 조용히 아무 부서로 보내면 잘못 나간 걸 나중에 못 찾는다
-    expect(assignRow('dy', '', '부산')).toEqual({
-      kind: 'error', reason: '생년월일 형식 오류',
+/**
+ * 상담메모 규칙은 "언제 연락해야 하는가"라서 누가 그 지역을 맡았는지와 무관하다.
+ * 지역 설정보다 먼저 걸린다.
+ */
+describe('상담메모 규칙이 지역 설정보다 먼저 걸린다', () => {
+  const NOW = new Date(2026, 8, 2, 9, 0, 0);
+
+  it('오늘 11시 이전 상담이면 지역과 무관하게 파라인슈로 간다', () => {
+    const result = assignRow(juminForAge(50), '부산 해운대구', RULES, INDEX, {
+      memo: '2026-09-02 10:00:00',
+      now: NOW,
     });
-    expect(assignRow('hk', 'XXXXXXX', '서울')).toEqual({
-      kind: 'error', reason: '생년월일 형식 오류',
+    expect(result).toEqual({ kind: 'dept', dept: '파라인슈1' });
+  });
+
+  it('그 안에서도 나이로 분류가 갈린다', () => {
+    const result = assignRow(juminForAge(80), '부산 해운대구', RULES, INDEX, {
+      memo: '2026-09-02 10:00:00',
+      now: NOW,
     });
-  });
-});
-
-describe('상담메모 규칙 (켰을 때)', () => {
-  const now = new Date(2026, 7, 20, 14, 0, 0); // 2026-08-20 14:00
-
-  it('예정 시각이 오늘 11시보다 앞이면 나이로만 가른다', () => {
-    // 주소가 부산이어도 한울부원으로 가지 않고 파라 계열로 몰린다
-    expect(
-      assignRow('dy', juminForAge(50), '부산 해운대구', { memo: '2026-08-20 09:30', now })
-    ).toEqual({ kind: 'dept', dept: '파라인슈1' });
-
-    expect(
-      assignRow('dy', juminForAge(72), '부산 해운대구', { memo: '2026-08-20 09:30', now })
-    ).toEqual({ kind: 'dept', dept: '파라인슈2' });
+    expect(result).toEqual({ kind: 'dept', dept: '파라인슈2' });
   });
 
-  it('지난 날짜면 시각과 무관하게 걸린다', () => {
-    expect(
-      assignRow('hk', juminForAge(50), '서울 강남구', { memo: '2026-08-12 23:59', now })
-    ).toEqual({ kind: 'dept', dept: '파라인슈1' });
-  });
-
-  it('오늘 11시 이후 예정이면 규칙이 걸리지 않는다', () => {
-    // 평소 규칙대로 주소를 본다
-    expect(
-      assignRow('hk', juminForAge(50), '부산 해운대구', { memo: '2026-08-20 15:00', now })
-    ).toEqual({ kind: 'dept', dept: '한울부원' });
-  });
-
-  it('메모가 비었거나 날짜가 없으면 규칙이 걸리지 않는다', () => {
-    expect(
-      assignRow('hk', juminForAge(50), '부산 해운대구', { memo: '', now })
-    ).toEqual({ kind: 'dept', dept: '한울부원' });
-    expect(
-      assignRow('hk', juminForAge(50), '부산 해운대구', { memo: '전화함', now })
-    ).toEqual({ kind: 'dept', dept: '한울부원' });
-  });
-
-  it('규칙을 끄면(memoRule 미전달) 메모가 있어도 무시한다', () => {
-    expect(assignRow('hk', juminForAge(50), '부산 해운대구')).toEqual({
-      kind: 'dept', dept: '한울부원',
+  it('11시 이후 상담이면 규칙이 안 걸리고 지역 설정을 탄다', () => {
+    const result = assignRow(juminForAge(50), '부산 해운대구', RULES, INDEX, {
+      memo: '2026-09-02 14:00:00',
+      now: NOW,
     });
+    expect(result).toEqual({ kind: 'dept', dept: '한울부원' });
   });
 });

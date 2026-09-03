@@ -55,6 +55,7 @@ const row = (o: RowOverrides = {}): Row => {
 
 const past = (o: Partial<PastRecord> = {}): PastRecord => ({
   uploadedAt: daysAgo(10),
+  orderNo: `과거주문-${Math.random()}`,
   dupReason: '',
   assignedTo: '파라인슈1',
   assignedAt: null,
