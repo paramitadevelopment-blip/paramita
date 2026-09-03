@@ -328,8 +328,10 @@ const UserForm = memo(function UserForm({
             className={styles.select}
           >
             <option value="user">지사</option>
+            <option value="agent">설계사 (지사 소속. 민원만 처리)</option>
             <option value="subadmin">서브관리자</option>
             <option value="staff">DB담당자 (파일 업로드만 가능)</option>
+            <option value="complaint">민원담당자 (민원 등록만 가능)</option>
           </select>
           <MdExpandMore className={styles.selectIcon} />
         </div>

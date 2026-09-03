@@ -1,0 +1,490 @@
+/*
+ * 민원 화면.
+ *
+ * 배치·표·소속 필터는 재신청 고객 화면의 값을 그대로 쓴다. 두 화면은 지사가
+ * 나란히 오가는 자리라, 여백이나 글씨가 조금만 달라도 다른 시스템처럼 보인다.
+ *
+ * 이 화면에만 있는 것: 상태 탭, 할 일 버튼, 동작 창.
+ */
+
+.container {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 120px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+}
+
+.contentWrapper {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 40px 20px;
+  background: white;
+  overflow: visible;
+}
+
+.searchSection {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 50px;
+  margin-bottom: 16px;
+}
+
+.totalCount {
+  display: flex;
+  align-items: center;
+  height: 47px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.totalCount span {
+  font-size: 24px;
+  font-weight: 700;
+  color: #db1a62;
+  margin: 0 4px;
+}
+
+/* ── 상태 탭 ─────────────────────────────────────────────── */
+
+.statusTabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+/* 검색·정렬이 한 덩어리로 읽히도록, 사이는 좁히고 상태 탭 앞에서 한 번 띄운다. */
+.controlsSection + .statusTabs {
+  margin-top: 28px;
+}
+
+.statusTab {
+  padding: 10px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.statusTab:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.statusTab.active {
+  background: #db1a62;
+  color: white;
+  border-color: #db1a62;
+}
+
+/* 소속 필터. 관리자만 본다. 재신청 화면과 같은 모양이다. */
+.departmentsFilter {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.departmentBtn {
+  padding: 8px 28px;
+  border: 1px solid #e0e0e0;
+  border-radius: 100px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.departmentBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.departmentBtn.active {
+  background: #db1a62;
+  color: white;
+  border-color: #db1a62;
+}
+
+/* ── 정렬·개수 ───────────────────────────────────────────── */
+
+.controlsSection {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.select {
+  padding: 10px 40px 10px 16px;
+  height: 47px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #333;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23db1a62' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.select:hover {
+  border-color: #db1a62;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+/*
+ * 정렬 화살표는 다른 화면과 같이 글자 옆에 둔다. 대신 켜지지 않은 열에서도
+ * 자리는 잡아 둔다(sortIconIdle) — 켤 때만 자리가 생기면 그 열이 화살표
+ * 너비만큼 넓어지고, 밀린 옆 칸 글자가 두 줄로 접힌다.
+ */
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sortableHeader {
+  cursor: pointer;
+}
+
+.sortIcon {
+  display: flex;
+  align-items: center;
+  font-size: 30px;
+  color: #db1a62;
+  pointer-events: none;
+}
+
+.sortIconIdle {
+  visibility: hidden;
+}
+
+/* ── 표 ──────────────────────────────────────────────────── */
+
+.tableContainer {
+  background: #fafafa;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+}
+
+.table th {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.table tbody {
+  background: white;
+}
+
+.table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+.table td {
+  padding: 16px 12px;
+  font-size: 18px;
+  color: #333;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 배정 방식·매칭 근거는 지사 이름에 딸린 값이라 한 단 작게 둔다. */
+.subText {
+  display: block;
+  font-size: 14px;
+  color: #999;
+}
+
+.muted {
+  color: #aaa;
+}
+
+/* 통화내역과 처리 내용은 길이를 예측할 수 없다. 잘라 두고 title로 전체를 보여준다. */
+.memoCell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status_unassigned {
+  background: #fffbe6;
+  border: 1px solid #e0c34a;
+  color: #8a6d00;
+}
+
+.status_branch,
+.status_agent {
+  background: #f2f4f7;
+  border: 1px solid #d6dae0;
+  color: #5a6472;
+}
+
+.status_done {
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  color: #2e7d32;
+}
+
+.status_returned {
+  background: #fdeced;
+  border: 1px solid #f3c3c3;
+  color: #c8434f;
+}
+
+.actionCell {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.actionBtn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #db1a62;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: #c2154e;
+}
+
+.actionBtn:disabled {
+  background: #e0e0e0;
+  cursor: default;
+}
+
+.ghostBtn {
+  padding: 10px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ghostBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+/* ── 동작 창 ─────────────────────────────────────────────── */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #333;
+}
+
+.closeBtn {
+  border: none;
+  background: none;
+  font-size: 26px;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.closeBtn:hover {
+  color: #333;
+}
+
+/* 무엇을 넘기는지 다시 보여주는 자리. 표처럼 두 칸으로 읽히게 한다. */
+.modalSummary {
+  margin: 0 0 24px;
+  padding: 16px 20px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.modalSummary > div {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.modalSummary dt {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #888;
+}
+
+.modalSummary dd {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+  word-break: break-all;
+}
+
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.modalField > span {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.modalField select,
+.modalField textarea {
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 18px;
+  color: #333;
+  font-family: inherit;
+  background: white;
+}
+
+.modalField textarea {
+  resize: vertical;
+}
+
+.modalField select:focus,
+.modalField textarea:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .searchSection {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 10px;
+    font-size: 14px;
+  }
+
+  .totalCount,
+  .totalCount span {
+    font-size: 18px;
+  }
+
+  .statusTab,
+  .departmentBtn {
+    font-size: 14px;
+    padding: 8px 16px;
+  }
+}

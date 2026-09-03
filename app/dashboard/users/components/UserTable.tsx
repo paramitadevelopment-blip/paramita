@@ -13,13 +13,17 @@ const ROLE_LABEL: Record<string, string> = {
   admin: '관리자',
   subadmin: '서브관리자',
   user: '지사',
+  agent: '설계사',
   staff: 'DB담당자',
+  complaint: '민원담당자',
 };
 const ROLE_BADGE_CLASS: Record<string, string> = {
   admin: 'admin',
   subadmin: 'subadmin',
   user: 'user',
+  agent: 'agent',
   staff: 'staff',
+  complaint: 'complaint',
 };
 
 interface UserTableProps {

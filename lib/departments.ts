@@ -6,7 +6,7 @@
  * 화면에서 "소속"을 고르는 자리는 조직 단위여야 하므로 여기서 접어서 쓴다.
  */
 
-import { hasFixedDepartment, isStaffRole } from '@/lib/roles';
+import { hasFixedDepartment, isStaffRole, isComplaintStaffRole } from '@/lib/roles';
 
 export interface DepartmentLike {
   id: number;
@@ -62,7 +62,9 @@ export function isAssignableDepartmentGroup(groupName: string, isAdmin: boolean)
  */
 export function getFixedDepartment(role?: string | null): string | null {
   if (!hasFixedDepartment(role)) return null;
-  return isStaffRole(role) ? STAFF_DEPARTMENT : ADMIN_DEPARTMENT;
+  // 담당자 계열(DB담당자·민원담당자)은 '담당자', 서브관리자는 '관리자'.
+  // 담당자 유형이 늘어도 소속 행은 그대로다 — 여기 한 줄만 늘어난다.
+  return isStaffRole(role) || isComplaintStaffRole(role) ? STAFF_DEPARTMENT : ADMIN_DEPARTMENT;
 }
 
 /**

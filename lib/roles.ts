@@ -14,13 +14,15 @@
  * 분류·배포는 못 하게 갈릴 수 있는데, 그때 합쳐 둔 함수는 다시 쪼개야 한다.
  *
  * 역할
- * - admin    : 관리자 (전체 권한)
- * - subadmin : 서브관리자 (사용자·소속 관리를 제외한 관리자 권한)
- * - staff    : DB담당자 (파일전달로 원본만 넘긴다)
- * - user     : 지사 (배포된 파일 다운로드, 재신청 고객 열람)
+ * - admin     : 관리자 (전체 권한)
+ * - subadmin  : 서브관리자 (사용자·소속 관리를 제외한 관리자 권한)
+ * - staff     : DB담당자 (파일전달로 원본만 넘긴다)
+ * - complaint : 민원담당자 (민원을 입력하고 그 처리 결과만 본다)
+ * - user      : 지사 (배포된 파일 다운로드, 재신청 고객·민원 열람)
+ * - agent     : 설계사 (지사 밑. 자기에게 넘어온 민원만 보고 처리한다)
  */
 
-export type Role = 'admin' | 'subadmin' | 'staff' | 'user';
+export type Role = 'admin' | 'subadmin' | 'staff' | 'complaint' | 'user' | 'agent';
 
 /** DB·JWT에서 온 값은 아직 문자열이라 좁혀서 받는다. */
 type MaybeRole = Role | string | null | undefined;
@@ -33,6 +35,22 @@ export const ADMIN_ROLES = ['admin', 'subadmin'] as const;
 
 /** 원본을 저장소에 올릴 수 있는 역할. files/upload API가 쓴다. */
 export const UPLOAD_ROLES = ['admin', 'subadmin', 'staff'] as const;
+
+/**
+ * 사용자 관리 화면으로 만들거나 바꿀 수 있는 역할.
+ *
+ * 관리자(admin)가 일부러 빠져 있다 — 요청자가 이미 관리자인 것과 별개로,
+ * 그 화면이 관리자를 찍어내는 수단이 되면 안 된다.
+ *
+ * 만드는 쪽(POST)과 바꾸는 쪽(PATCH)이 같은 목록을 봐야 한다. 따로 적어 두면
+ * 역할이 늘 때 한쪽만 고쳐져서, 만들 수는 있는데 바꿀 수는 없는 역할이 생긴다.
+ */
+export const ASSIGNABLE_ROLES = ['user', 'agent', 'staff', 'complaint', 'subadmin'] as const;
+
+/** 사용자 관리 화면에서 지정할 수 있는 역할인가. */
+export function isAssignableRole(role?: MaybeRole): boolean {
+  return !!role && (ASSIGNABLE_ROLES as readonly string[]).includes(role);
+}
 
 /* ── 역할 자체를 묻는 것 ──────────────────────────────────────── */
 
@@ -51,6 +69,21 @@ export function isStaffRole(role?: MaybeRole): boolean {
   return is(role, 'staff');
 }
 
+/** 민원담당자인지. 소속이 '담당자'로 고정되는 담당자 계열이다. */
+export function isComplaintStaffRole(role?: MaybeRole): boolean {
+  return is(role, 'complaint');
+}
+
+/**
+ * 설계사인지.
+ *
+ * "보는 범위"를 가를 때 쓴다 — 지사는 자기 소속 민원 전부를, 설계사는 그중
+ * 자기에게 넘어온 것만 본다. 소속만으로는 이 둘을 구별할 수 없다.
+ */
+export function isAgentRole(role?: MaybeRole): boolean {
+  return is(role, 'agent');
+}
+
 /**
  * 계정을 만들거나 고칠 때 소속을 서버가 정해 주는 역할인지.
  *
@@ -62,17 +95,18 @@ export function isStaffRole(role?: MaybeRole): boolean {
  * 자기 정보를 고칠 때 소속이 통째로 덮인다.
  */
 export function hasFixedDepartment(role?: MaybeRole): boolean {
-  return is(role, 'staff', 'subadmin');
+  return is(role, 'staff', 'complaint', 'subadmin');
 }
 
 /**
  * 실제 조직(파라인슈·경기 …)에 속한 계정인지.
  *
- * 지사만 해당한다. 관리자·서브관리자·DB담당자의 소속은 역할 전용으로 예약된
- * 이름이라 바뀔 일이 없어서, 소속 변경 이력 같은 건 볼 것도 없다.
+ * 지사와 그 밑의 설계사가 해당한다. 관리자·서브관리자·담당자 계열의 소속은
+ * 역할 전용으로 예약된 이름이라 바뀔 일이 없어서, 소속 변경 이력 같은 건
+ * 볼 것도 없다.
  */
 export function belongsToOrganization(role?: MaybeRole): boolean {
-  return is(role, 'user');
+  return is(role, 'user', 'agent');
 }
 
 /**
@@ -171,6 +205,64 @@ export function canViewAllReapplyNotices(role?: MaybeRole): boolean {
   return is(role, 'admin', 'subadmin');
 }
 
+/* ── 민원 ─────────────────────────────────────────────────────── */
+
+/**
+ * 민원을 접수(입력)할 수 있는가.
+ *
+ * 민원담당자가 메일로 받은 내역을 화면에 옮겨 적는다. 올린 사람은 자기가
+ * 넣은 건의 처리 결과까지 이 화면에서 본다 — 그래서 등록과 조회가 한 화면이다.
+ */
+export function canRegisterComplaints(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'complaint');
+}
+
+/**
+ * 배정된 민원 화면을 볼 수 있는가.
+ *
+ * 지사는 자기 소속 건, 설계사는 자기에게 넘어온 건만 본다
+ * (canViewAllComplaints 참고). 민원담당자는 여기 못 들어온다 — 남의 지사
+ * 처리 상황까지 보게 되므로, 자기가 넣은 건만 등록 화면에서 본다.
+ */
+export function canViewComplaints(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'user', 'agent');
+}
+
+/** 민원을 소속 구분 없이 전부 볼 수 있는가. */
+export function canViewAllComplaints(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin');
+}
+
+/**
+ * 민원을 소속 설계사에게 넘길 수 있는가.
+ *
+ * 지사가 자기 소속 설계사 중에서 고른다. 관리자급도 대신 할 수 있다 —
+ * 지사가 며칠째 안 넘기면 누군가는 넘겨야 한다.
+ */
+export function canAssignComplaintAgent(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'user');
+}
+
+/**
+ * 담당 지사를 못 찾은 민원을 직접 처리할 수 있는가.
+ *
+ * 지사를 지정하거나 민원담당자에게 반려한다. 자동으로 못 찾았다는 건 기록에
+ * 없는 고객이라는 뜻이라, 판단이 필요해서 관리자급만 만진다.
+ */
+export function canResolveUnassignedComplaints(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin');
+}
+
+/**
+ * 민원 처리 내용을 적을 수 있는가.
+ *
+ * 설계사가 처리하고 적는 게 기본이지만, 지사가 직접 처리하는 경우도 있어
+ * 둘 다 연다. 누가 적었는지는 기록에 남으므로 구분이 사라지지는 않는다.
+ */
+export function canHandleComplaint(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'user', 'agent');
+}
+
 /* ── 화면 접근 ────────────────────────────────────────────────── */
 
 /**
@@ -182,6 +274,9 @@ export function canViewAllReapplyNotices(role?: MaybeRole): boolean {
 export function getLandingRoute(role?: MaybeRole): string {
   if (isAdminRole(role)) return '/dashboard';
   if (isStaffRole(role)) return '/dashboard/file-transfer';
+  if (isComplaintStaffRole(role)) return '/dashboard/complaint-register';
+  // 설계사는 파일을 받지 않는다. 민원이 유일한 화면이다.
+  if (isAgentRole(role)) return '/dashboard/complaints';
   return '/dashboard/download';
 }
 
@@ -200,5 +295,9 @@ export function getLandingRoute(role?: MaybeRole): string {
 export function getAllowedDashboardRoutes(role?: MaybeRole): string[] | null {
   if (isAdminRole(role)) return null;
   if (isStaffRole(role)) return ['/dashboard/file-transfer'];
-  return ['/dashboard/download', '/dashboard/reapply'];
+  // 민원담당자는 자기가 넣은 민원만 본다. 배정된 민원 화면('/dashboard/complaints')은
+  // 남의 지사 처리 상황이라 열지 않는다 — 경로를 형제로 둔 이유가 이것이다.
+  if (isComplaintStaffRole(role)) return ['/dashboard/complaint-register'];
+  if (isAgentRole(role)) return ['/dashboard/complaints'];
+  return ['/dashboard/download', '/dashboard/reapply', '/dashboard/complaints'];
 }

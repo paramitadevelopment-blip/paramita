@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/app/store/authStore';
 import { usePendingRequestCount } from '@/app/hooks/usePendingRequestCount';
 import { useUnreadReapplyCount } from '@/app/hooks/useReapplyNotices';
-import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck, MdBlock, MdPersonSearch, MdLogin, MdDriveFolderUpload } from 'react-icons/md';
+import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck, MdBlock, MdPersonSearch, MdLogin, MdDriveFolderUpload, MdEditNote, MdSupportAgent } from 'react-icons/md';
 import {
   canManageUsers,
   canViewDashboard,
@@ -14,6 +14,8 @@ import {
   canManageFiles,
   canDownloadDeployedFiles,
   canViewReapplyNotices,
+  canRegisterComplaints,
+  canViewComplaints,
   canReviewDownloadRequests,
   canUseGlobalSearch,
   canViewAccessLogs,
@@ -130,6 +132,32 @@ export default function Sidebar() {
                 {reapplyCount > 0 && (
                   <span className={styles.badge}>{reapplyCount > 99 ? '99+' : reapplyCount}</span>
                 )}
+              </Link>
+            </li>
+          )}
+          {/*
+            민원 등록은 민원담당자가, 민원은 지사·설계사가 쓴다. 한 사람이 둘 다
+            보는 일은 관리자뿐이라, 메뉴도 역할을 따라 갈라 둔다.
+          */}
+          {canRegisterComplaints(role) && (
+            <li>
+              <Link
+                href="/dashboard/complaint-register"
+                className={`${styles.navLink} ${pathname === '/dashboard/complaint-register' ? styles.active : ''}`}
+              >
+                <MdEditNote className={styles.icon} />
+                <span>민원 등록</span>
+              </Link>
+            </li>
+          )}
+          {canViewComplaints(role) && (
+            <li>
+              <Link
+                href="/dashboard/complaints"
+                className={`${styles.navLink} ${pathname === '/dashboard/complaints' ? styles.active : ''}`}
+              >
+                <MdSupportAgent className={styles.icon} />
+                <span>민원</span>
               </Link>
             </li>
           )}

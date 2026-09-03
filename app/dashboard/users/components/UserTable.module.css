@@ -127,6 +127,18 @@
   color: #e65100;
 }
 
+/* 설계사는 지사 밑이라 지사(파랑)의 옅은 쪽을 쓴다 — 한 계열로 보여야 한다. */
+.badge.agent {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+/* 담당자 계열은 DB담당자와 같은 주황 계열로 묶는다. */
+.badge.complaint {
+  background: #fdece7;
+  color: #bf360c;
+}
+
 .actions {
   display: flex;
   gap: 8px;

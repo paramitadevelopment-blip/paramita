@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { isAssignableGroup, getFixedDepartment } from '@/lib/departments';
-import { canManageUsers, hasFixedDepartment } from '@/lib/roles';
+import { canManageUsers, hasFixedDepartment, isAssignableRole } from '@/lib/roles';
 import { parsePagination } from '@/lib/pagination';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -170,13 +170,13 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * 이 화면으로는 지사·서브관리자·DB담당자까지만 만들 수 있다. 관리자는 여기로 못 만든다 —
-     * 요청자가 이미 admin인 것과 별개로, 이 엔드포인트 자체가 admin을 찍어낼
-     * 수단이 되면 안 된다. 값을 안 보내면 기존과 같이 지사로 만든다.
+     * 만들 수 있는 역할은 lib/roles.ts의 ASSIGNABLE_ROLES 하나로 정한다.
+     * 관리자는 여기로 못 만든다 — 요청자가 이미 admin인 것과 별개로, 이
+     * 엔드포인트 자체가 admin을 찍어낼 수단이 되면 안 된다.
+     * 값을 안 보내면 기존과 같이 지사로 만든다.
      */
-    const ASSIGNABLE_ROLES = ['user', 'staff', 'subadmin'];
     const role = requestedRole ?? 'user';
-    if (!ASSIGNABLE_ROLES.includes(role)) {
+    if (!isAssignableRole(role)) {
       return NextResponse.json({ error: '지정할 수 없는 역할입니다.' }, { status: 400 });
     }
 
@@ -336,7 +336,7 @@ export async function PUT(request: NextRequest) {
       if (!canManageUsers(user.role)) {
         return NextResponse.json({ error: 'Only admin can change role' }, { status: 403 });
       }
-      if (!['user', 'staff', 'subadmin'].includes(role)) {
+      if (!isAssignableRole(role)) {
         return NextResponse.json({ error: '지정할 수 없는 역할입니다.' }, { status: 400 });
       }
     }

@@ -2,6 +2,7 @@
 
 import React, { memo, useRef } from 'react';
 import { digitsOnly } from '@/lib/columnAliases';
+import { formatPhone } from '@/lib/phoneFormat';
 import styles from '../page.module.css';
 
 export interface RegisterForm {
@@ -19,20 +20,6 @@ interface RegisterModalProps {
   onSubmit: () => void;
   onClose: () => void;
   isSubmitting: boolean;
-}
-
-/**
- * 전화번호에 하이픈을 넣어 준다.
- *
- * 사람이 직접 치는 값이라 010-1234-5678, 01012345678, 010 1234 5678이 섞인다.
- * 서버가 어차피 하이픈을 벗겨 저장하지만, 화면에서 자릿수가 눈에 보여야
- * 한 자리 빠뜨린 걸 알아챈다.
- */
-function formatPhone(value: string): string {
-  const digits = value.replace(/\D/g, '');
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`;
 }
 
 /**
