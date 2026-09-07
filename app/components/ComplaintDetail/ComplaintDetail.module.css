@@ -1,0 +1,250 @@
+/*
+ * 민원 상세 창.
+ *
+ * 민원 화면과 민원 등록 화면이 같이 쓴다 — 두 화면이 다르게 생기면 같은 값을
+ * 두 군데서 다르게 읽게 된다. 그래서 화면별 style 파일이 아니라 여기에 둔다.
+ */
+
+/* ── 동작 창 ─────────────────────────────────────────────── */
+
+/*
+ * 굴리는 것은 겉이다.
+ *
+ * 가운데 정렬에 창 안쪽 스크롤을 함께 두면, 내용이 화면보다 길어질 때 창이
+ * 위아래로 삐져나가면서 잘린다 — 가운데에 맞추느라 밀려난 부분은 굴려도
+ * 돌아오지 않는다. 겉을 굴리면 창은 내용만큼 자라고 끝까지 읽힌다.
+ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 1000;
+  padding: 40px 20px;
+  overflow-y: auto;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 560px;
+  padding: 28px;
+  /* 짧은 창은 그래도 가운데쯤에 오게 한다. */
+  margin: auto;
+  /*
+   * 화면을 넘지 않게 잘라 두고 안에서 굴린다.
+   *
+   * 위에서부터 쌓이게(align-items: flex-start) 해 두었으므로 창의 머리는 늘
+   * 화면 안에 있다 — 가운데 정렬일 때처럼 위쪽이 화면 밖으로 밀려 못 읽는
+   * 일이 없다. 겉의 여백(40px 위아래)만큼 빼서 잰다.
+   */
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #333;
+}
+
+.closeBtn {
+  border: none;
+  background: none;
+  font-size: 26px;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.closeBtn:hover {
+  color: #333;
+}
+
+/* ── 상세 창 ─────────────────────────────────────────────── */
+
+.detailModal {
+  max-width: 720px;
+}
+
+.detailModal h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detailTitle {
+  margin: 24px 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #888;
+}
+
+.detailTitle:first-of-type {
+  margin-top: 8px;
+}
+
+.detailList {
+  margin: 0;
+  padding: 16px 20px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.detailList > div {
+  display: flex;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.detailList dt {
+  width: 120px;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #888;
+}
+
+.detailList dd {
+  margin: 0;
+  font-size: 17px;
+  color: #333;
+  word-break: break-word;
+}
+
+/* 통화내역·처리 내용은 길고 줄바꿈이 있다. 적은 그대로 보여준다. */
+/* 반려 이력의 '언제·누가'. 사유보다 한 단 작게 두어 사유가 먼저 읽히게 한다. */
+.returnMeta {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  color: #999;
+}
+
+.detailNote {
+  display: block;
+  white-space: pre-wrap;
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status_unassigned {
+  background: #fffbe6;
+  border: 1px solid #e0c34a;
+  color: #8a6d00;
+}
+
+.status_branch,
+.status_agent {
+  background: #f2f4f7;
+  border: 1px solid #d6dae0;
+  color: #5a6472;
+}
+
+.status_done {
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  color: #2e7d32;
+}
+
+.status_returned {
+  background: #fdeced;
+  border: 1px solid #f3c3c3;
+  color: #c8434f;
+}
+
+.actionBtn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #db1a62;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: #c2154e;
+}
+
+.actionBtn:disabled {
+  background: #e0e0e0;
+  cursor: default;
+}
+
+.ghostBtn {
+  padding: 10px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ghostBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+
+.muted {
+  color: #aaa;
+}
+
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  /* 마지막 항목에 버튼이 붙어 있으면 글을 다 읽기 전에 닫게 된다. */
+  margin-top: 28px;
+}
+
+/* 드롭다운 화살표는 react-icons 로 그린다. 감싼 자리 오른쪽에 겹쳐 놓는다. */
+.selectWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.selectWrapper select {
+  width: 100%;
+  appearance: none;
+  padding-right: 40px;
+}
+
+.selectIcon {
+  position: absolute;
+  right: 12px;
+  font-size: 20px;
+  /* 사용자 관리 화면과 같은 회색. 화살표가 값보다 먼저 눈에 들면 안 된다. */
+  color: #666;
+  /* 아이콘을 눌러도 드롭다운이 열려야 한다. */
+  pointer-events: none;
+}

@@ -19,13 +19,22 @@ interface ComplaintFormModalProps {
   onSubmit: (input: ComplaintInput) => Promise<unknown>;
   /** 고칠 때 채워 둘 값. 새로 넣을 때는 없다. */
   initial?: ComplaintInput;
+  /** 무슨 일을 하는 창인가. 제목과 버튼이 이걸 따른다. */
+  mode?: 'create' | 'edit' | 'resubmit';
   isSubmitting: boolean;
 }
+
+const TITLE = {
+  create: '민원 등록',
+  edit: '민원 수정',
+  resubmit: '수정 후 재요청',
+} as const;
 
 const ComplaintFormModal = memo(function ComplaintFormModalComponent({
   onClose,
   onSubmit,
   initial,
+  mode = initial ? 'edit' : 'create',
   isSubmitting,
 }: ComplaintFormModalProps) {
   return (
@@ -36,7 +45,7 @@ const ComplaintFormModal = memo(function ComplaintFormModalComponent({
     <div className={styles.modalOverlay}>
       <div className={styles.modal}>
         <div className={styles.modalHeader}>
-          <h3>{initial ? '민원 수정' : '민원 등록'}</h3>
+          <h3>{TITLE[mode]}</h3>
           <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="닫기">
             <MdClose />
           </button>
@@ -46,6 +55,7 @@ const ComplaintFormModal = memo(function ComplaintFormModalComponent({
           onSubmit={onSubmit}
           onCancel={onClose}
           initial={initial}
+          mode={mode}
           isSubmitting={isSubmitting}
         />
       </div>

@@ -1,0 +1,1103 @@
+/*
+ * 민원 화면.
+ *
+ * 배치·표·소속 필터는 재신청 고객 화면의 값을 그대로 쓴다. 두 화면은 지사가
+ * 나란히 오가는 자리라, 여백이나 글씨가 조금만 달라도 다른 시스템처럼 보인다.
+ *
+ * 이 화면에만 있는 것: 상태 탭, 할 일 버튼, 동작 창.
+ */
+
+.container {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 120px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+}
+
+.contentWrapper {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 40px 20px;
+  background: white;
+  overflow: visible;
+}
+
+.searchSection {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 50px;
+  margin-bottom: 16px;
+}
+
+.totalCount {
+  display: flex;
+  align-items: center;
+  height: 47px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.totalCount span {
+  font-size: 24px;
+  font-weight: 700;
+  color: #db1a62;
+  margin: 0 4px;
+}
+
+/* ── 상태 탭 ─────────────────────────────────────────────── */
+
+.statusTabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+/* 검색·정렬이 한 덩어리로 읽히도록, 사이는 좁히고 상태 탭 앞에서 한 번 띄운다. */
+.controlsSection + .statusTabs {
+  margin-top: 28px;
+}
+
+.statusTab {
+  padding: 10px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.statusTab:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.statusTab.active {
+  background: #db1a62;
+  color: white;
+  border-color: #db1a62;
+}
+
+/* 소속 필터. 관리자만 본다. 재신청 화면과 같은 모양이다. */
+.departmentsFilter {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.departmentBtn {
+  padding: 8px 28px;
+  border: 1px solid #e0e0e0;
+  border-radius: 100px;
+  background: white;
+  color: #666;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.departmentBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.departmentBtn.active {
+  background: #db1a62;
+  color: white;
+  border-color: #db1a62;
+}
+
+/* 밀린 건만 보기. 자기 줄에 두어 상태 탭과 섞이지 않게 한다. */
+.overdueToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 18px;
+  color: #333;
+  cursor: pointer;
+  user-select: none;
+}
+
+.overdueToggle input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #db1a62;
+}
+
+/* 3일 넘게 안 된 건. 목록에서 이 색만 좇으면 지금 손봐야 할 것이 보인다. */
+.overdueCell {
+  color: #c8434f;
+  font-weight: 700;
+}
+
+
+/*
+ * 한 건 = 한 줄. 표는 값이 제자리에 정렬돼 있을 때만 훑을 수 있다.
+ * 목록에 없는 값은 [상세] 창에 있다.
+ */
+.table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table tbody tr:hover {
+  background: #fafafa;
+}
+
+/* 이미 확인한 줄은 가라앉혀, 안 본 것이 눈에 먼저 들어오게 한다. */
+.rowRead {
+  background-color: #fafafa;
+  color: #888;
+}
+
+/*
+ * 아직 안 본 건. 이 글자가 곧 버튼이다 — 눌러야 할 것이 눈에 띄는 자리에
+ * 그대로 있어야, 어디를 눌러 확인 처리하는지 찾지 않는다.
+ */
+.readBadge {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid #a5d6a7;
+  border-radius: 100px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.unreadBtn {
+  padding: 6px 14px;
+  border: 1px solid #f3c3d4;
+  border-radius: 100px;
+  background: #fdf2f6;
+  color: #db1a62;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.unreadBtn:hover {
+  background: #db1a62;
+  border-color: #db1a62;
+  color: white;
+}
+
+/* ── 정렬·개수 ───────────────────────────────────────────── */
+
+.controlsSection {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.select {
+  padding: 10px 40px 10px 16px;
+  height: 47px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  background: white;
+  color: #333;
+  transition: all 0.2s ease;
+  appearance: none;
+}
+
+.select:hover {
+  border-color: #db1a62;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+/*
+ * 정렬 화살표는 다른 화면과 같이 글자 옆에 둔다. 대신 켜지지 않은 열에서도
+ * 자리는 잡아 둔다(sortIconIdle) — 켤 때만 자리가 생기면 그 열이 화살표
+ * 너비만큼 넓어지고, 밀린 옆 칸 글자가 두 줄로 접힌다.
+ */
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sortableHeader {
+  cursor: pointer;
+}
+
+.sortIcon {
+  display: flex;
+  align-items: center;
+  font-size: 30px;
+  color: #db1a62;
+  pointer-events: none;
+}
+
+.sortIconIdle {
+  visibility: hidden;
+}
+
+/* ── 표 ──────────────────────────────────────────────────── */
+
+.tableContainer {
+  background: #fafafa;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #fafafa;
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+}
+
+.table th {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.table tbody {
+  background: white;
+}
+
+.table td {
+  padding: 16px 12px;
+  font-size: 18px;
+  color: #333;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ── 상세 창 ─────────────────────────────────────────────── */
+
+.detailModal {
+  max-width: 720px;
+}
+
+.detailModal h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detailTitle {
+  margin: 24px 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #888;
+}
+
+.detailTitle:first-of-type {
+  margin-top: 8px;
+}
+
+.detailList {
+  margin: 0;
+  padding: 16px 20px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.detailList > div {
+  display: flex;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.detailList dt {
+  width: 110px;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #888;
+}
+
+.detailList dd {
+  margin: 0;
+  font-size: 17px;
+  color: #333;
+  word-break: break-word;
+}
+
+/* 통화내역·처리 내용은 길고 줄바꿈이 있다. 적은 그대로 보여준다. */
+.detailNote {
+  display: block;
+  white-space: pre-wrap;
+}
+
+/* 배정 방식·매칭 근거는 지사 이름에 딸린 값이라 한 단 작게 둔다. */
+.subText {
+  display: block;
+  font-size: 14px;
+  color: #999;
+}
+
+.muted {
+  color: #aaa;
+}
+
+/* 통화내역과 처리 내용은 길이를 예측할 수 없다. 잘라 두고 title로 전체를 보여준다. */
+.memoCell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status_unassigned {
+  background: #fffbe6;
+  border: 1px solid #e0c34a;
+  color: #8a6d00;
+}
+
+.status_branch,
+.status_agent {
+  background: #f2f4f7;
+  border: 1px solid #d6dae0;
+  color: #5a6472;
+}
+
+.status_done {
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  color: #2e7d32;
+}
+
+.status_returned {
+  background: #fdeced;
+  border: 1px solid #f3c3c3;
+  color: #c8434f;
+}
+
+.actionCell {
+  display: flex;
+  gap: 8px;
+  /*
+   * 왼쪽에 붙인다. 가운데로 모으면 버튼 개수가 줄마다 달라(상세만 있는 줄,
+   * 셋 다 있는 줄) 같은 버튼이 줄마다 다른 자리에 서고, 눈이 그때마다
+   * 다시 찾는다. 왼쪽 끝을 맞춰 두면 [상세]는 늘 같은 자리에 있다.
+   */
+  justify-content: flex-start;
+  align-items: center;
+}
+
+/* 글자 수가 달라도 버튼 폭은 같게 — 줄마다 칸이 들쭉날쭉하지 않는다. */
+.actionCell button {
+  min-width: 76px;
+  text-align: center;
+}
+
+.actionBtn {
+  /* 아이콘과 글자를 한 줄에 나란히. 아이콘 없는 버튼도 모양은 그대로다. */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #db1a62;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+/*
+ * 화면 맨 위와 창 아래의 큰 버튼. 표 안의 작은 버튼(.actionBtn)과 크기를
+ * 갈라 둔다 — 같은 크기로 두면 '사은품 신청'이 표의 [상세]와 같은 무게로 보인다.
+ * 민원 등록 화면의 것과 같은 값이다.
+ */
+.submitBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 8px;
+  background: #db1a62;
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.submitBtn:hover:not(:disabled) {
+  background: #c2154e;
+}
+
+.submitBtn:disabled {
+  background: #e0e0e0;
+  cursor: default;
+}
+
+/* 검색 줄의 버튼은 오른쪽 끝에 둔다. 검색칸과 붙어 있으면 잘못 누른다. */
+.searchSection .submitBtn {
+  margin-left: auto;
+}
+
+/* 창 아래 버튼은 취소와 나란히 서야 하므로 자동 여백을 끈다. */
+.modalActions .submitBtn,
+.modalActions .ghostBtn {
+  margin-left: 0;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: #c2154e;
+}
+
+.actionBtn:disabled {
+  background: #e0e0e0;
+  cursor: default;
+}
+
+.ghostBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ghostBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+/* ── 동작 창 ─────────────────────────────────────────────── */
+
+/*
+ * 굴리는 것은 겉이다.
+ *
+ * 가운데 정렬(align-items: center)에 창 안쪽 스크롤을 함께 두면, 내용이 화면보다
+ * 길어질 때 창이 위아래로 삐져나가면서 잘린다 — 가운데에 맞추느라 위쪽이 화면
+ * 밖으로 밀리고, 그 부분은 굴려도 돌아오지 않는다. 겉을 굴리게 하면 창은
+ * 내용만큼 자라고 위에서 아래까지 다 읽힌다.
+ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 1000;
+  padding: 40px 20px;
+  overflow-y: auto;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 560px;
+  padding: 28px;
+  /* 짧은 창은 그래도 가운데쯤에 오게 한다. */
+  margin: auto;
+  /*
+   * 화면을 넘지 않게 잘라 두고 안에서 굴린다.
+   *
+   * 위에서부터 쌓이게(align-items: flex-start) 해 두었으므로 창의 머리는 늘
+   * 화면 안에 있다 — 가운데 정렬일 때처럼 위쪽이 화면 밖으로 밀려 못 읽는
+   * 일이 없다. 겉의 여백(40px 위아래)만큼 빼서 잰다.
+   */
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #333;
+}
+
+.closeBtn {
+  border: none;
+  background: none;
+  font-size: 26px;
+  color: #999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.closeBtn:hover {
+  color: #333;
+}
+
+/* 무엇을 넘기는지 다시 보여주는 자리. 표처럼 두 칸으로 읽히게 한다. */
+.modalSummary {
+  margin: 0 0 24px;
+  padding: 16px 20px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.modalSummary > div {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.modalSummary dt {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #888;
+}
+
+.modalSummary dd {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+  word-break: break-all;
+}
+
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.modalField > span {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+/*
+ * input 도 함께 잡는다.
+ *
+ * 민원 창은 고르는 칸과 긴 글만 있어서 select·textarea 만 있으면 됐다.
+ * 사은품 신청서는 열여덟 칸이 거의 다 input 이라, 빠져 있으면 그 칸들만
+ * 브라우저 기본 모양으로 나와 한 창 안에서 두 가지 생김새가 섞인다.
+ */
+.modalField input,
+.modalField select,
+.modalField textarea {
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 18px;
+  color: #333;
+  font-family: inherit;
+  background: white;
+  /* 칸이 늘어나도 창을 밀지 않는다. 두 단으로 나눈 격자에서 특히 그렇다. */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.modalField textarea {
+  resize: vertical;
+}
+
+.modalField input:focus,
+.modalField select:focus,
+.modalField textarea:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.modalField input:disabled,
+.modalField input[readonly] {
+  background: #f3f3f3;
+  color: #555;
+  cursor: not-allowed;
+}
+
+/* 꼭 채워야 하는 칸. 민원 등록 화면과 같은 표시다. */
+.required {
+  color: #db1a62;
+  margin-left: 2px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  /* 마지막 칸에 버튼이 붙어 있으면 다 적기 전에 누르게 된다. */
+  margin-top: 28px;
+}
+
+@media (max-width: 768px) {
+  .searchSection {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .header h1 {
+    font-size: 24px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 10px;
+    font-size: 14px;
+  }
+
+  .totalCount,
+  .totalCount span {
+    font-size: 18px;
+  }
+
+  .statusTab,
+  .departmentBtn {
+    font-size: 14px;
+    padding: 8px 16px;
+  }
+}
+
+/* 드롭다운 화살표는 react-icons 로 그린다. 감싼 자리 오른쪽에 겹쳐 놓는다. */
+.selectWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.selectWrapper select {
+  width: 100%;
+  appearance: none;
+  padding-right: 40px;
+}
+
+.selectIcon {
+  position: absolute;
+  right: 12px;
+  font-size: 20px;
+  /* 사용자 관리 화면과 같은 회색. 화살표가 값보다 먼저 눈에 들면 안 된다. */
+  color: #666;
+  /* 아이콘을 눌러도 드롭다운이 열려야 한다. */
+  pointer-events: none;
+}
+
+/* ── 같은 건의 반복 민원 ─────────────────────────────────── */
+
+/*
+ * 같은 주문·같은 고객으로 또 들어온 건. 배경만 옅게 물들인다.
+ *
+ * 글자색은 건드리지 않는다 — 경과일의 붉은 글씨가 '밀린 건'을 뜻하므로,
+ * 둘이 같은 색이면 무엇을 말하는지 흐려진다.
+ */
+.rowRepeat td {
+  background: #fff5f7;
+}
+
+.rowRepeat:hover td {
+  background: #ffe9ef;
+}
+
+/* 몇 번째 민원인가. 등록일 옆에 붙여 한 칸을 더 쓰지 않는다. */
+.threadBadge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: #db1a62;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ── 처리 창의 지난 민원 ─────────────────────────────────── */
+
+/*
+ * 접지 않는다. 접어 두면 아무도 펼치지 않고, 펼치지 않으면 지난 안내를
+ * 모른 채 같은 말을 되풀이하게 된다.
+ */
+.threadBox {
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid #f3c3d4;
+  border-radius: 10px;
+  background: #fff5f7;
+}
+
+.threadBox h4 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #db1a62;
+}
+
+/*
+ * 안쪽에 따로 스크롤을 두지 않는다.
+ *
+ * 창 자체가 이미 스크롤된다(.modal). 안팎으로 두 개가 겹치면 안쪽이 먼저
+ * 끝나면서 글이 잘린 것처럼 보이고, 어느 쪽을 굴려야 할지도 알기 어렵다.
+ * 회차가 아무리 쌓여도 창 하나만 굴리면 끝까지 읽힌다.
+ */
+.threadList {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * 회차 하나가 카드 하나다.
+ *
+ * 전에는 이번 건만 흰 바탕이고 나머지는 투명이라, 같은 성격의 것이 서로
+ * 다른 물건처럼 보였다. 전부 같은 카드로 두고, 이번 건은 테두리로만 짚는다 —
+ * 바탕색으로 가르면 "처리된 것"과 "지금 보는 것"이 같은 방식으로 표시돼
+ * 무엇을 말하는지 흐려진다.
+ */
+.threadList li {
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  border: 1px solid #f3dae2;
+  border-radius: 8px;
+  background: white;
+}
+
+.threadList li:last-child {
+  margin-bottom: 0;
+}
+
+.threadHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  /* 표시가 늘어나도 한 줄에 밀어 넣지 않는다 — 밀리면 시각이 잘린다. */
+  flex-wrap: wrap;
+}
+
+.threadSeq {
+  padding: 2px 10px;
+  border-radius: 100px;
+  background: #db1a62;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.threadWhen {
+  font-size: 15px;
+  color: #888;
+}
+
+.threadMemo {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.7;
+  color: #333;
+  white-space: pre-wrap;
+  /* 띄어쓰기 없이 길게 적은 줄도 창을 밀지 않고 접힌다. */
+  word-break: break-word;
+}
+
+/* 그 회차에 우리가 뭐라고 안내했는지. 고객 말과 섞이지 않게 흰 바탕에 얹는다. */
+/* 카드가 흰 바탕이 됐으므로 안쪽은 옅게 깔아야 고객 말과 갈린다. */
+.threadHandled {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #faf7f8;
+  border-left: 3px solid #db1a62;
+}
+
+.threadHandledLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #db1a62;
+}
+
+.threadHandledBody {
+  margin: 0 0 6px;
+  font-size: 16px;
+  line-height: 1.7;
+  color: #444;
+  /* 줄바꿈은 적은 그대로 살리고, 긴 줄은 창 너비에서 접는다. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 이걸 켜야 저장 버튼이 열린다. 읽게 하는 방법은 이것뿐이다. */
+.threadCheck {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #f3c3d4;
+  font-size: 17px;
+  font-weight: 600;
+  color: #333;
+  cursor: pointer;
+}
+
+.threadCheck input {
+  width: 20px;
+  height: 20px;
+  accent-color: #db1a62;
+  cursor: pointer;
+}
+
+/* 저장하면 무슨 일이 일어나는지 미리 알려 준다. */
+.fieldHint {
+  display: block;
+  margin-top: 8px;
+  font-size: 15px;
+  color: #db1a62;
+  font-weight: 600;
+}
+
+/* 회차가 여럿이면 읽을 것이 많다. 그 창만 넓게 쓴다. */
+.wideModal {
+  max-width: 720px;
+}
+
+/*
+ * 지금 누른 회차. 테두리만 진하게 한다.
+ *
+ * 두께를 바꾸면 그 줄만 1px씩 밀려 다른 카드와 어긋난다. 색만 바꾸고
+ * 안쪽 그림자로 한 겹 더 둘러 굵어 보이게 한다.
+ */
+.threadCurrent {
+  border-color: #db1a62;
+  box-shadow: inset 0 0 0 1px #db1a62;
+}
+
+.threadHere {
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: #333;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.threadDone {
+  padding: 2px 8px;
+  border: 1px solid #a5d6a7;
+  border-radius: 100px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* 아직 안 끝난 것이 몇 건인지. 제목 옆에 작게 붙인다. */
+.threadNote {
+  font-size: 15px;
+  font-weight: 500;
+  color: #888;
+}
+
+/* ── 사은품 신청 ──────────────────────────────────────────── */
+
+/* 지사가 골라 보내는 자리. 체크한 건수가 버튼에 붙는다. */
+.checkCell {
+  width: 40px;
+  text-align: center;
+}
+
+.checkCell input {
+  width: 18px;
+  height: 18px;
+  accent-color: #db1a62;
+  cursor: pointer;
+}
+
+.forwardBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  border: 1px solid #f3c3d4;
+  border-radius: 10px;
+  background: #fff5f7;
+  font-size: 17px;
+  color: #333;
+}
+
+.forwardBar strong {
+  color: #db1a62;
+}
+
+/* 주문번호 조회 줄. 번호를 치고 [조회]를 누르면 아래 칸이 채워진다. */
+.lookupRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+.lookupRow .modalField {
+  flex: 1;
+  margin: 0;
+}
+
+.lookupHint {
+  margin: -8px 0 20px;
+  font-size: 15px;
+  color: #666;
+}
+
+.lookupHint.ok {
+  color: #2e7d32;
+}
+
+.lookupHint.bad {
+  color: #c8434f;
+}
+
+/* 잠긴 칸. 기록에서 온 값이라 못 고친다는 것이 보여야 한다. */
+.lockedField input {
+  background: #f3f3f3;
+  color: #555;
+  cursor: not-allowed;
+}
+
+.lockedTag {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #999;
+}
+
+/* 발주리스트 열이 열여덟 개라 두 단으로 나눈다. */
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 20px;
+}
+
+.formGrid .full {
+  grid-column: 1 / -1;
+}
+
+.formGrid .modalField {
+  margin: 0;
+}
+
+.formSection {
+  margin: 20px 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #db1a62;
+}
+
+/* 보완 사유. 신청한 쪽이 목록에서 바로 봐야 한다. */
+.supplementNote {
+  margin-top: 6px;
+  font-size: 15px;
+  color: #c8434f;
+}
+
+.status_requested {
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  color: #ad6800;
+}
+
+.status_forwarded {
+  background: #e6f4ff;
+  border: 1px solid #91caff;
+  color: #0958d9;
+}
+
+.status_shipped {
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  color: #2e7d32;
+}
+
+.status_supplement {
+  background: #fdeced;
+  border: 1px solid #f3c3c3;
+  color: #c8434f;
+}
+
+@media (max-width: 768px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 그냥 지나치면 안 되는 탭에 건수를 붙인다. 민원 등록 화면과 같은 모양이다. */
+.tabCount {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: #db1a62;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.statusTab.active .tabCount {
+  background: white;
+  color: #db1a62;
+}

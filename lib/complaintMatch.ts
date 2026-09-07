@@ -82,6 +82,7 @@ export function matchComplaint(
       matchKey: 'order_no',
       dept: text(byOrder.assignedTo),
       at: byOrder.receivedAt ?? byOrder.assignedAt ?? byOrder.uploadedAt,
+      assignedAt: byOrder.assignedAt ?? null,
       fileId: byOrder.fileId ?? null,
       fileName: byOrder.fileName ?? null,
     };

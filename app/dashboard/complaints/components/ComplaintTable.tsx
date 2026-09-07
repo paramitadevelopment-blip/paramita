@@ -4,8 +4,8 @@ import React, { memo } from 'react';
 import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import {
   COMPLAINT_STATUS_LABEL,
-  ASSIGN_TYPE_LABEL,
-  MATCH_KEY_LABEL,
+  daysSince,
+  isOverdueComplaint,
   type ComplaintRow,
 } from '@/lib/complaints';
 import type { ActionKind } from './ComplaintActionModal';
@@ -14,8 +14,12 @@ import styles from '../page.module.css';
 /**
  * 민원 목록.
  *
- * 한 줄에 "누구의 민원인가 · 무슨 내용인가 · 지금 누구 차례인가"가 다 있어야
- * 한다. 상세를 따로 열어야 알 수 있으면, 목록은 그냥 넘겨야 할 줄만 늘어난다.
+ * 훑을 때 필요한 것만 둔다 — 언제 들어왔나, 누구 건인가, 무슨 내용인가,
+ * 지금 어디까지 됐나, 무엇을 해야 하나. 한 칸에 한 값이라 줄이 흔들리지 않는다.
+ *
+ * 나머지(상품·발주확인일·통화일시·올린 사람·배정 근거·처리 이력)는 [상세]에 있다.
+ * 목록에 다 넣으려다 칸이 서로 밀어내 겹치고 잘렸다 — 값을 감춘 게 아니라
+ * 볼 자리를 옮긴 것이다.
  */
 
 /* 'ko-KR'은 끝에 점을 붙인다('2026. 9. 3.'). 다른 화면과 같이 그 점만 뗀다. */
@@ -51,8 +55,10 @@ const SortableHeader = memo(function SortableHeader({
 interface ComplaintTableProps {
   rows: ComplaintRow[];
   isAdmin: boolean;
-  isAgent: boolean;
-  canAssignAgent: boolean;
+  /** 지사·설계사가 '봤다'고 남긴다. 관리자도 대신 눌러 줄 수 있다. */
+  onRead: (row: ComplaintRow) => void;
+  /** 목록에 없는 값까지 다 보여주는 창을 연다. */
+  onOpen: (row: ComplaintRow) => void;
   sortBy: string;
   sortOrder: 'asc' | 'desc';
   onSort: (column: string) => void;
@@ -62,8 +68,8 @@ interface ComplaintTableProps {
 const ComplaintTable = memo(function ComplaintTableComponent({
   rows,
   isAdmin,
-  isAgent,
-  canAssignAgent,
+  onRead,
+  onOpen,
   sortBy,
   sortOrder,
   onSort,
@@ -76,126 +82,127 @@ const ComplaintTable = memo(function ComplaintTableComponent({
       <table className={styles.table}>
         <thead>
           <tr>
-            <SortableHeader label="접수일자" column="received_at" {...sortProps} />
+            <SortableHeader label="민원 등록일" column="created_at" {...sortProps} />
+            <th>경과</th>
             <SortableHeader label="수령인" column="customer_name" {...sortProps} />
             <SortableHeader label="전화번호" column="phone" {...sortProps} />
             <SortableHeader label="주문번호" column="order_no" {...sortProps} />
-            {/* 통화내역·처리 내용은 자유롭게 적는 글이라 글자순으로 세워도 의미가 없다. */}
+            {/* 통화내역은 자유롭게 적는 글이라 글자순으로 세워도 의미가 없다. */}
             <th>통화내역</th>
             {isAdmin && <SortableHeader label="담당 지사" column="assigned_group" {...sortProps} />}
-            {!isAgent && <SortableHeader label="담당 설계사" column="agent_name" {...sortProps} />}
             <SortableHeader label="상태" column="status" {...sortProps} />
-            <th>처리 내용</th>
-            <th>할 일</th>
+            <SortableHeader label="확인" column="read_at" {...sortProps} />
+            <th>작업</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td>{dateText(row.received_at)}</td>
-              <td>{row.customer_name}</td>
-              <td>{row.phone || '-'}</td>
-              <td>{row.order_no || '-'}</td>
-              <td className={styles.memoCell} title={row.call_memo || ''}>
-                {row.call_memo || '-'}
-              </td>
+          {rows.map((row) => {
+            const days = daysSince(row.created_at);
+            const overdue = isOverdueComplaint(row);
+            const open = row.status === 'branch' || row.status === 'agent';
+            /*
+             * 같은 건으로 또 들어온 민원. 아직 안 끝난 묶음만 붉게 칠한다 —
+             * 다 끝난 것까지 붉으면 목록이 점점 붉어져 색이 뜻을 잃는다.
+             */
+            const repeated = (row.thread_total ?? 1) > 1;
+            const alarming = repeated && row.thread_open;
 
-              {isAdmin && (
+            return (
+              <tr
+                key={row.id}
+                className={`${row.read_at ? styles.rowRead : ''} ${alarming ? styles.rowRepeat : ''}`}
+              >
                 <td>
-                  {row.assigned_group ? (
-                    <>
-                      {row.assigned_group}
-                      {/*
-                        자동으로 찾았는지 사람이 정했는지, 자동이면 무엇으로
-                        찾았는지까지. "왜 이 지사로 갔나"의 답이 이 한 칸에 있다.
-                      */}
-                      <span className={styles.subText}>
-                        {row.assign_type ? ASSIGN_TYPE_LABEL[row.assign_type] : ''}
-                        {row.match_key ? ` · ${MATCH_KEY_LABEL[row.match_key] ?? row.match_key}` : ''}
-                      </span>
-                    </>
-                  ) : (
-                    <span className={styles.muted}>미정</span>
+                  {dateText(row.created_at)}
+                  {/* 몇 번째로 들어온 건인지. 1차만 있는 건에는 붙이지 않는다. */}
+                  {repeated && (
+                    <span className={styles.threadBadge} title={`같은 건으로 ${row.thread_total}번 접수`}>
+                      {row.sequence_no}차
+                    </span>
                   )}
                 </td>
-              )}
 
-              {!isAgent && (
+                {/* 3일 넘게 안 된 건은 붉게. 목록에서 이 색만 좇으면 밀린 건이 보인다. */}
+                <td className={overdue ? styles.overdueCell : ''}>
+                  {days === 0 ? '오늘' : `${days}일`}
+                </td>
+
+                <td>{row.customer_name}</td>
+                <td>{row.phone || '-'}</td>
+                <td>{row.order_no || '-'}</td>
+
+                {/* 길이를 예측할 수 없다. 한 줄로 잘라 두고 전체는 상세에서 본다. */}
+                <td className={styles.memoCell} title={row.call_memo || ''}>
+                  {row.call_memo || '-'}
+                </td>
+
+                {isAdmin && <td>{row.assigned_group || <span className={styles.muted}>미정</span>}</td>}
+
                 <td>
-                  {row.agent_name ? (
-                    <>
-                      {row.agent_name}
-                      <span className={styles.subText}>
-                        {row.agent_assign_type ? ASSIGN_TYPE_LABEL[row.agent_assign_type] : ''}
-                      </span>
-                    </>
+                  <span className={`${styles.statusBadge} ${styles[`status_${row.status}`]}`}>
+                    {COMPLAINT_STATUS_LABEL[row.status]}
+                  </span>
+                </td>
+
+                {/*
+                  봤는지 아닌지. 관리자는 이걸로 "아예 못 본 건"과 "보고도 안 하는 건"을 가른다.
+                  누가 언제 봤는지는 상세에 있다.
+                */}
+                <td>
+                  {row.read_at ? (
+                    <span className={styles.readBadge}>확인</span>
+                  ) : open ? (
+                    // 이 칸을 눌러 확인 처리한다. 상태가 곧 버튼이라 어디를 눌러야
+                    // 하는지 따로 찾을 필요가 없다.
+                    <button type="button" className={styles.unreadBtn} onClick={() => onRead(row)}>
+                      미확인
+                    </button>
                   ) : (
-                    <span className={styles.muted}>미지정</span>
+                    <span className={styles.muted}>-</span>
                   )}
                 </td>
-              )}
 
-              <td>
-                <span className={`${styles.statusBadge} ${styles[`status_${row.status}`]}`}>
-                  {COMPLAINT_STATUS_LABEL[row.status]}
-                </span>
-              </td>
+                {/*
+                  할 수 있는 것만 버튼으로 낸다. 못 하는 동작을 눌러 보고 나서야
+                  안 된다고 알게 되면, 그 화면은 매번 시험해 봐야 하는 화면이 된다.
+                */}
+                <td className={styles.actionCell}>
+                  <button type="button" className={styles.ghostBtn} onClick={() => onOpen(row)}>
+                    상세
+                  </button>
 
-              <td className={styles.memoCell} title={row.handled_note || row.return_reason || ''}>
-                {row.status === 'returned'
-                  ? `반려 · ${row.return_reason ?? ''}`
-                  : row.handled_note || '-'}
-              </td>
+                  {row.status === 'unassigned' && isAdmin && (
+                    <>
+                      <button
+                        type="button"
+                        className={styles.actionBtn}
+                        onClick={() => onAction(row, 'assign_dept')}
+                      >
+                        지사 지정
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.ghostBtn}
+                        onClick={() => onAction(row, 'return')}
+                      >
+                        반려
+                      </button>
+                    </>
+                  )}
 
-              {/*
-                할 수 있는 것만 버튼으로 낸다. 못 하는 동작을 눌러 보고 나서야
-                안 된다고 알게 되면, 그 화면은 매번 시험해 봐야 하는 화면이 된다.
-              */}
-              <td className={styles.actionCell}>
-                {row.status === 'unassigned' && isAdmin && (
-                  <>
+                  {open && (
                     <button
                       type="button"
                       className={styles.actionBtn}
-                      onClick={() => onAction(row, 'assign_dept')}
+                      onClick={() => onAction(row, 'handle')}
                     >
-                      지사 지정
+                      처리 내용
                     </button>
-                    <button
-                      type="button"
-                      className={styles.ghostBtn}
-                      onClick={() => onAction(row, 'return')}
-                    >
-                      반려
-                    </button>
-                  </>
-                )}
-
-                {(row.status === 'branch' || row.status === 'agent') && canAssignAgent && (
-                  <button
-                    type="button"
-                    className={styles.actionBtn}
-                    onClick={() => onAction(row, 'assign_agent')}
-                  >
-                    {row.agent_name ? '설계사 변경' : '설계사 지정'}
-                  </button>
-                )}
-
-                {(row.status === 'branch' || row.status === 'agent') && (
-                  <button
-                    type="button"
-                    className={styles.ghostBtn}
-                    onClick={() => onAction(row, 'handle')}
-                  >
-                    처리 내용
-                  </button>
-                )}
-
-                {row.status === 'done' && <span className={styles.muted}>완료</span>}
-                {row.status === 'returned' && <span className={styles.muted}>-</span>}
-              </td>
-            </tr>
-          ))}
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

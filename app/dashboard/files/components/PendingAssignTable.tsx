@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { Fragment, memo, useState } from 'react';
 import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import { REGIONS, type Region } from '@/lib/assignmentRegions';
 import {
@@ -12,6 +12,7 @@ import {
   type PickScope,
 } from '@/lib/pendingPicks';
 import type { ClassifiedFile } from '@/app/hooks/useAutoClassify';
+import { ageOf, previewPlan } from '@/lib/previewAge';
 import styles from '../page.module.css';
 
 interface PendingAssignTableProps {
@@ -20,8 +21,8 @@ interface PendingAssignTableProps {
   /** 지역 탭 → 선택 방식. 탭마다 따로 기억한다 */
   pickMode: Record<string, 'manual' | 'auto'>;
   onPickMode: (fileIdx: number, mode: 'manual' | 'auto', scope: PickScope) => void;
-  pendingSort: { by: 'region' | number; order: 'asc' | 'desc' };
-  onToggleSort: (by: 'region' | number) => void;
+  pendingSort: { by: 'region' | 'age' | number; order: 'asc' | 'desc' };
+  onToggleSort: (by: 'region' | 'age' | number) => void;
   /** 주문번호 → 소속명 */
   rowPicks: Record<string, string>;
   onPickRow: (key: string, dept: string) => void;
@@ -63,6 +64,23 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
 }: PendingAssignTableProps) {
   /** 일괄배정으로 고른 소속. 누르기 전까지는 비어 있다 */
   const [bulkDept, setBulkDept] = useState('');
+
+  /*
+   * 나이를 읽을 자리.
+   *
+   * 생년월일 열은 파일마다 위치가 다르므로 한 번만 찾아 둔다. 열 찾기와 나이
+   * 계산 모두 배정이 쓰는 것과 같은 함수다 — 다르면 화면의 나이와 규칙이 본
+   * 나이가 갈려 "70세 미만인데 왜 저 소속인가"가 생긴다.
+   */
+  /*
+   * 열을 어떤 순서로 세울지. 미리보기 창과 같은 규칙을 쓴다 — 한 화면의 두
+   * 표가 다른 순서로 서면 같은 파일을 두 번 익혀야 한다.
+   *
+   * order의 값은 **원본 열 번호**다. 정렬도 이 번호로 한다 — 화면 순서로
+   * 정렬하면 열을 옮긴 만큼 어긋나 엉뚱한 열로 세워진다.
+   */
+  const plan = previewPlan(current.previewHeaders ?? []);
+  const ageAt = (row: any[]) => (plan.juminAt < 0 ? '-' : ageOf(row[plan.juminAt]));
   // 건이 실제로 있는 지역만. 지역은 18개지만 한 파일에 다 나오는 일은 없다.
   const activeRegions = REGIONS.filter((region) => (current.pendingByRegion?.[region] ?? 0) > 0);
 
@@ -300,18 +318,36 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
                   (pendingSort.order === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />)}
               </span>
             </th>
-            {current.previewHeaders?.map((header, colIdx) => (
-              <th
-                key={header}
-                className={styles.pendingSortableTh}
-                onClick={() => onToggleSort(colIdx)}
-              >
-                <span className={styles.pendingThInner}>
-                  {header}
-                  {pendingSort.by === colIdx &&
-                    (pendingSort.order === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />)}
-                </span>
-              </th>
+            {plan.order.map((colIdx, at) => (
+              <Fragment key={colIdx}>
+                {/*
+                  나이는 주소 바로 오른쪽이다. 파일에 있는 열이 아니라 생년월일로
+                  계산한 값 — 배정이 주소(지역)와 나이로 갈리므로 둘이 붙어 있어야
+                  손으로 고를 때 그 자리에서 판단이 된다. 전화번호는 그 뒤로 물렸다.
+                */}
+                {at === plan.ageAt && (
+                  <th
+                    className={styles.pendingSortableTh}
+                    onClick={() => onToggleSort('age')}
+                  >
+                    <span className={styles.pendingThInner}>
+                      나이
+                      {pendingSort.by === 'age' &&
+                        (pendingSort.order === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />)}
+                    </span>
+                  </th>
+                )}
+                <th
+                  className={styles.pendingSortableTh}
+                  onClick={() => onToggleSort(colIdx)}
+                >
+                  <span className={styles.pendingThInner}>
+                    {current.previewHeaders?.[colIdx]}
+                    {pendingSort.by === colIdx &&
+                      (pendingSort.order === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />)}
+                  </span>
+                </th>
+              </Fragment>
             ))}
             <th className={styles.pendingDeptTh}>배정 소속</th>
           </tr>
@@ -346,8 +382,15 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
             // 정렬. 숫자로 읽히면 숫자로, 아니면 한국어 기준 문자열로 비교한다.
             // 값이 비어 있는 행은 항상 뒤로 보낸다 — 오름/내림을 오갈 때마다
             // 빈 칸이 맨 위로 올라오면 정작 볼 것이 가려진다.
-            const sortValue = (item: { region: Region | null; row: any[] }) =>
-              pendingSort.by === 'region' ? item.region ?? '' : item.row[pendingSort.by];
+            const sortValue = (item: { region: Region | null; row: any[] }) => {
+              if (pendingSort.by === 'region') return item.region ?? '';
+              // 못 읽은 나이('-')는 빈 값으로 봐서 뒤로 보낸다.
+              if (pendingSort.by === 'age') {
+                const age = ageAt(item.row);
+                return age === '-' ? '' : age;
+              }
+              return item.row[pendingSort.by];
+            };
 
             const dir = pendingSort.order === 'asc' ? 1 : -1;
             list.sort((a, b) => {
@@ -370,10 +413,13 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
               <tr key={`${region}-${key}`} className={styles.pendingRow}>
                 {/* 주소를 못 읽은 자동분류 건은 지역이 없다 */}
                 <td className={styles.pendingRegionCell}>{region ?? '-'}</td>
-                {row.map((cell, i) => (
-                  <td key={i} className={styles.pendingDataCell}>
-                    {cell ?? '-'}
-                  </td>
+                {plan.order.map((colIdx, at) => (
+                  <Fragment key={colIdx}>
+                    {at === plan.ageAt && (
+                      <td className={styles.pendingRegionCell}>{ageAt(row)}</td>
+                    )}
+                    <td className={styles.pendingDataCell}>{row[colIdx] ?? '-'}</td>
+                  </Fragment>
                 ))}
                 <td className={styles.pendingDeptCell}>
                   <div className={styles.pendingSelectWrap}>

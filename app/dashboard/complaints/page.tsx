@@ -7,7 +7,7 @@ function ComplaintsPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1>민원</h1>
+        <h1>민원관리</h1>
       </div>
 
       <div className={styles.contentWrapper}>

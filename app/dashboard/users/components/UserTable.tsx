@@ -16,6 +16,7 @@ const ROLE_LABEL: Record<string, string> = {
   agent: '설계사',
   staff: 'DB담당자',
   complaint: '민원담당자',
+  gift: '사은품담당자',
 };
 const ROLE_BADGE_CLASS: Record<string, string> = {
   admin: 'admin',
@@ -24,6 +25,7 @@ const ROLE_BADGE_CLASS: Record<string, string> = {
   agent: 'agent',
   staff: 'staff',
   complaint: 'complaint',
+  gift: 'complaint',
 };
 
 interface UserTableProps {

@@ -9,6 +9,7 @@ import { useDeployFlow } from '@/app/hooks/useDeployFlow';
 import { usePendingPicks } from '@/app/hooks/usePendingPicks';
 import ExcelPreviewModal from '../../download/components/ExcelPreviewModal';
 import { toDuplicateBadges } from '@/lib/duplicateSummary';
+import { withAgeColumn } from '@/lib/previewAge';
 import FilePager from './FilePager';
 import FileSummaryButtons from './FileSummaryButtons';
 import DeployActions from './DeployActions';
@@ -188,7 +189,13 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
       {preview && current && (
         <ExcelPreviewModal
           title={preview.title}
-          data={{ headers: preview.headers, rows: preview.rows }}
+          /*
+            나이를 맨 앞에 붙여 보여준다. 배정이 지역과 나이로 갈리므로,
+            "이 사람이 왜 저 지사로 갔나"를 보려면 생년월일이 아니라 나이가
+            눈에 들어와야 한다. 원본 열은 그대로 두고 여기서만 얹는다 —
+            배포되는 파일에는 들어가지 않는다.
+          */
+          data={withAgeColumn(preview.headers, preview.rows)}
           // 중복이 갈래별로 몇 건인지 총 건수 옆에 같이 보여준다.
           // 총 건수만 있으면 왜 빠졌는지 알려면 표를 훑어야 한다.
           summary={toDuplicateBadges(current.duplicateRows)}

@@ -11,7 +11,12 @@ import {
   isAgentRole,
 } from '@/lib/roles';
 import { isAssignableGroup } from '@/lib/departments';
-import { COMPLAINT_COLUMNS, isUntouchedComplaint } from '@/lib/complaints';
+import {
+  COMPLAINT_COLUMNS,
+  canDeleteComplaint,
+  canEditComplaint,
+  type ComplaintLockInput,
+} from '@/lib/complaints';
 import { readComplaintInput, toComplaintRow } from '@/lib/complaintIntake';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -28,6 +33,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  *   assign_dept   담당 지사를 못 찾은 건에 관리자가 지사를 지정한다
  *   return        관리자가 민원담당자에게 사유와 함께 되돌린다
  *   assign_agent  지사가 소속 설계사를 고른다
+ *   read          지사·설계사가 봤다고 표시한다
  *   handle        처리 내용을 적고 완료로 바꾼다
  *   update        넣은 사람이 잘못 적은 것을 고친다
  *
@@ -35,10 +41,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * 같은 기준으로 물어야 한다.
  */
 
-type Action = 'assign_dept' | 'return' | 'assign_agent' | 'handle' | 'update';
+type Action = 'assign_dept' | 'return' | 'assign_agent' | 'handle' | 'read' | 'update';
 
 /** 목록·상세를 만질 때 함께 봐야 하는 값. 무엇을 물어야 하는지가 여기 다 있다. */
-const GUARD_COLUMNS = 'id, status, assigned_group, assign_type, agent_id, handled_at, created_by_id';
+const GUARD_COLUMNS =
+  'id, status, assigned_group, assign_type, agent_id, handled_at, read_at, created_by_id, thread_key';
 
 /**
  * 넣은 사람이 고치거나 지울 수 있는 건인가.
@@ -47,8 +54,9 @@ const GUARD_COLUMNS = 'id, status, assigned_group, assign_type, agent_id, handle
  * 않았는가. 화면에서도 같은 기준으로 버튼을 감추지만, 요청은 직접 만들 수 있다.
  */
 function checkOwnEditable(
-  complaint: { created_by_id: number | null; status: any; assign_type: any; agent_id: number | null; handled_at: string | null },
-  user: { id: number; role: string }
+  complaint: ComplaintLockInput & { created_by_id: number | null },
+  user: { id: number; role: string },
+  intent: 'edit' | 'delete'
 ): NextResponse | null {
   if (!canRegisterComplaints(user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -56,11 +64,18 @@ function checkOwnEditable(
   if (!canViewAllComplaints(user.role) && Number(complaint.created_by_id) !== user.id) {
     return NextResponse.json({ error: '내가 넣은 민원이 아닙니다.' }, { status: 403 });
   }
-  if (!isUntouchedComplaint(complaint)) {
-    return NextResponse.json(
-      { error: '이미 처리가 시작된 민원은 고치거나 지울 수 없습니다.' },
-      { status: 409 }
-    );
+
+  const allowed = intent === 'edit' ? canEditComplaint(complaint) : canDeleteComplaint(complaint);
+  if (!allowed) {
+    /*
+     * 왜 안 되는지를 말해 준다. 반려된 건을 지우려 한 경우가 특히 그렇다 —
+     * "처리가 시작됐다"고만 하면 반려는 처리가 아닌데 왜 막히나 싶다.
+     */
+    const reason =
+      intent === 'delete' && complaint.status === 'returned'
+        ? '반려된 민원은 지울 수 없습니다. 내용을 고쳐서 다시 보내세요.'
+        : `이미 처리가 시작된 민원은 ${intent === 'edit' ? '고칠' : '지울'} 수 없습니다.`;
+    return NextResponse.json({ error: reason }, { status: 409 });
   }
   return null;
 }
@@ -177,6 +192,25 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return NextResponse.json({ error: '반려 사유가 너무 깁니다.' }, { status: 400 });
       }
 
+      /*
+       * 이력을 먼저 쌓는다.
+       *
+       * 민원 행의 return_* 칸은 '지금 반려 상태인가'만 나타낸다 — 등록자가
+       * 고쳐서 다시 보내면 비워진다. 그때 사유까지 사라지면 몇 번 오갔는지
+       * 아무도 모르게 되므로, 지워지지 않는 자리에 따로 남긴다.
+       */
+      const { error: historyError } = await supabase.from('complaint_returns').insert({
+        complaint_id: complaintId,
+        reason,
+        returned_by_id: user.id,
+        returned_by: user.username,
+        returned_at: now,
+      });
+      if (historyError) {
+        console.error('Complaint return history error:', historyError);
+        return NextResponse.json({ error: '반려 기록을 남기지 못했습니다.' }, { status: 500 });
+      }
+
       return await applyUpdate(complaintId, {
         status: 'returned',
         return_reason: reason,
@@ -234,6 +268,41 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       });
     }
 
+    /* ── 확인 표시 ─────────────────────────────────────────────── */
+    if (action === 'read') {
+      if (!canHandleComplaint(user.role)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      if (!(await ownsThis())) {
+        return NextResponse.json({ error: '내 민원이 아닙니다.' }, { status: 403 });
+      }
+
+      /*
+       * 이미 본 건은 그대로 둔다.
+       *
+       * 다시 눌렀다고 시각과 사람을 덮어쓰면 "처음 본 사람이 누구였나"가
+       * 사라진다. 관리자가 보려는 건 첫 확인 시점이다.
+       */
+      if (complaint.read_at) {
+        return NextResponse.json({ error: '이미 확인한 민원입니다.' }, { status: 400 });
+      }
+
+      // 같은 건의 다른 회차도 함께 확인 처리한다. 아직 안 본 것만 찍힌다.
+      await applyToThread(complaint.thread_key, complaintId, {
+        read_at: now,
+        read_by_id: user.id,
+        read_by: user.username,
+        updated_at: now,
+      });
+
+      return await applyUpdate(complaintId, {
+        read_at: now,
+        read_by_id: user.id,
+        read_by: user.username,
+        updated_at: now,
+      });
+    }
+
     /* ── 처리 내용 기록 ────────────────────────────────────────── */
     if (action === 'handle') {
       if (!canHandleComplaint(user.role)) {
@@ -261,18 +330,45 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return NextResponse.json({ error: '처리 내용이 너무 깁니다.' }, { status: 400 });
       }
 
-      return await applyUpdate(complaintId, {
+      /*
+       * 같은 건의 남은 회차도 함께 끝낸다.
+       *
+       * 한 번 전화해서 다 푸는 일이라, 한 건만 완료로 두면 나머지가 계속
+       * 미처리로 떠 있다. 처리 내용은 같은 글을 그대로 남긴다 — 어느 회차를
+       * 열어도 결론이 보여야 한다.
+       */
+      const alsoClosed = await applyToThread(complaint.thread_key, complaintId, {
         status: 'done',
         handled_note: note,
         handled_by: user.username,
         handled_at: now,
+        read_at: now,
+        read_by_id: user.id,
+        read_by: user.username,
         updated_at: now,
       });
+
+      return await applyUpdate(
+        complaintId,
+        {
+          status: 'done',
+          handled_note: note,
+          handled_by: user.username,
+          handled_at: now,
+          // 처리했다면 본 것이다. 확인을 따로 누르지 않았어도 그렇게 남긴다.
+          ...(complaint.read_at
+            ? {}
+            : { read_at: now, read_by_id: user.id, read_by: user.username }),
+          updated_at: now,
+        },
+        // 이번 건까지 세어 넘긴다 — 화면은 "몇 건이 끝났나"만 알면 된다.
+        { closed: alsoClosed + 1 }
+      );
     }
 
     /* ── 넣은 사람이 고치기 ────────────────────────────────────── */
     if (action === 'update') {
-      const denied = checkOwnEditable(complaint as any, user);
+      const denied = checkOwnEditable(complaint as any, user, 'edit');
       if (denied) return denied;
 
       const parsed = readComplaintInput(body);
@@ -284,8 +380,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
        * 배정도 다시 찾는다. 주문번호를 잘못 적어 '담당 지사 없음'이 된 건을
        * 고쳤는데 그대로 남으면, 고친 보람이 없고 관리자가 계속 들고 있게 된다.
        */
+      /*
+       * 반려 상태를 푼다.
+       *
+       * 고쳐서 다시 보낸 것이므로 지금은 반려가 아니다. 지나간 반려는
+       * complaint_returns에 그대로 남아 있어 이력이 사라지지는 않는다.
+       */
       return await applyUpdate(complaintId, {
         ...(await toComplaintRow(supabase, parsed.fields)),
+        return_reason: null,
+        returned_by: null,
+        returned_at: null,
         updated_at: now,
       });
     }
@@ -334,7 +439,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return NextResponse.json({ error: '없는 민원입니다.' }, { status: 404 });
     }
 
-    const denied = checkOwnEditable(complaint as any, user);
+    const denied = checkOwnEditable(complaint as any, user, 'delete');
     if (denied) return denied;
 
     const { error } = await supabase.from('complaints').delete().eq('id', complaintId);
@@ -350,7 +455,46 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   }
 }
 
-async function applyUpdate(id: number, patch: Record<string, unknown>) {
+
+/**
+ * 같은 묶음의 아직 안 끝난 건들에도 같은 손질을 한다.
+ *
+ * 같은 주문·같은 고객의 민원은 한 번 전화해서 함께 푸는 것이 맞다. 그런데
+ * 기록만 한 건에 남으면 나머지는 계속 미처리로 떠 있고, 지사는 이미 끝낸 일을
+ * 다시 붙들게 된다. 확인도 마찬가지다 — 같은 건을 두 번 확인하라는 것은 뜻이
+ * 없고, 하나만 찍히면 배지가 안 내려간다.
+ *
+ * 이미 끝난 건은 건드리지 않는다. 지난 처리 내용을 이번 것으로 덮으면
+ * "그때 뭐라고 안내했나"가 사라진다.
+ */
+async function applyToThread(
+  threadKey: string | null,
+  exceptId: number,
+  patch: Record<string, unknown>
+): Promise<number> {
+  if (!threadKey) return 0;
+  const { data, error } = await supabase
+    .from('complaints')
+    .update(patch)
+    .eq('thread_key', threadKey)
+    .neq('id', exceptId)
+    .in('status', ['branch', 'agent'])
+    .select('id');
+  // 묶음까지 못 고쳐도 이번 건은 끝난 것이다. 남은 건은 다시 눌러 처리할 수 있다.
+  if (error) {
+    console.error('Complaint thread patch error:', error);
+    return 0;
+  }
+  // 몇 건이 함께 끝났는지. 화면이 "3건이 함께 처리되었습니다"라고 말해 준다.
+  return data?.length ?? 0;
+}
+
+async function applyUpdate(
+  id: number,
+  patch: Record<string, unknown>,
+  /** 화면에 함께 알려 줄 값. 지금은 '몇 건이 함께 끝났는가'만 쓴다. */
+  extra?: Record<string, unknown>
+) {
   const { data, error } = await supabase
     .from('complaints')
     .update(patch)
@@ -363,5 +507,5 @@ async function applyUpdate(id: number, patch: Record<string, unknown>) {
     return NextResponse.json({ error: '민원을 바꾸지 못했습니다.' }, { status: 500 });
   }
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ data, ...extra });
 }

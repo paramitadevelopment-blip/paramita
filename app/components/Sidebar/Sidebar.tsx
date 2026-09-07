@@ -5,7 +5,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/app/store/authStore';
 import { usePendingRequestCount } from '@/app/hooks/usePendingRequestCount';
 import { useUnreadReapplyCount } from '@/app/hooks/useReapplyNotices';
-import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck, MdBlock, MdPersonSearch, MdLogin, MdDriveFolderUpload, MdEditNote, MdSupportAgent } from 'react-icons/md';
+import { useUnreadComplaintCount } from '@/app/hooks/useComplaints';
+import { useGiftBadgeCount } from '@/app/hooks/useGifts';
+import { MdDashboard, MdPeople, MdCloudUpload, MdFileDownload, MdInsertDriveFile, MdHistory, MdDeleteSweep, MdLogout, MdPerson, MdVerifiedUser, MdSearch, MdFactCheck, MdBlock, MdPersonSearch, MdLogin, MdDriveFolderUpload, MdEditNote, MdSupportAgent, MdCardGiftcard, MdLocalShipping } from 'react-icons/md';
 import {
   canManageUsers,
   canViewDashboard,
@@ -16,6 +18,8 @@ import {
   canViewReapplyNotices,
   canRegisterComplaints,
   canViewComplaints,
+  canViewGiftRequests,
+  canManageGiftRequests,
   canReviewDownloadRequests,
   canUseGlobalSearch,
   canViewAccessLogs,
@@ -36,6 +40,24 @@ export default function Sidebar() {
   const { data: pendingCount = 0 } = usePendingRequestCount(canReviewDownloadRequests(role));
   // 재신청 알림은 지사도 본다. 로그인만 되어 있으면 자기 소속 건수를 센다.
   const { data: reapplyCount = 0 } = useUnreadReapplyCount(Boolean(user));
+  /*
+   * 민원 배지. 무엇을 세는지는 서버가 정하고, 메뉴마다 다른 숫자가 온다 —
+   * 관리자는 두 메뉴가 다 보이는데 한 숫자를 나눠 쓰면 한쪽은 헛것이 된다.
+   */
+  const { data: complaintBadge } = useUnreadComplaintCount(
+    canRegisterComplaints(role) || canViewComplaints(role)
+  );
+  const registerCount = complaintBadge?.register ?? 0;
+  const manageCount = complaintBadge?.manage ?? 0;
+  /*
+   * 사은품 배지. 메뉴마다 자기 몫만 센다 — 신청 메뉴는 지사가 전달할 것(설계사는
+   * 보완 요청 받은 것), 관리 메뉴는 담당자가 발주할 것.
+   */
+  const { data: giftBadge } = useGiftBadgeCount(
+    canViewGiftRequests(role) || canManageGiftRequests(role)
+  );
+  const giftRequestCount = giftBadge?.requests ?? 0;
+  const giftManageCount = giftBadge?.manage ?? 0;
 
   // 쿠키 만료를 서버에 요청하므로 완료 후 이동한다.
   const handleLogout = async () => {
@@ -147,6 +169,12 @@ export default function Sidebar() {
               >
                 <MdEditNote className={styles.icon} />
                 <span>민원 등록</span>
+                {/* 반려돼 돌아온 건. 내가 고쳐서 다시 보내야 끝난다. */}
+                {registerCount > 0 && (
+                  <span className={styles.badge}>
+                    {registerCount > 99 ? '99+' : registerCount}
+                  </span>
+                )}
               </Link>
             </li>
           )}
@@ -157,7 +185,48 @@ export default function Sidebar() {
                 className={`${styles.navLink} ${pathname === '/dashboard/complaints' ? styles.active : ''}`}
               >
                 <MdSupportAgent className={styles.icon} />
-                <span>민원</span>
+                <span>민원관리</span>
+                {manageCount > 0 && (
+                  <span className={styles.badge}>
+                    {manageCount > 99 ? '99+' : manageCount}
+                  </span>
+                )}
+              </Link>
+            </li>
+          )}
+          {/*
+            사은품 신청은 설계사·지사가, 사은품 관리는 사은품담당자가 쓴다.
+            민원과 같은 구조로 갈라 둔다 — 한 사람이 둘 다 보는 일은 관리자뿐이다.
+          */}
+          {canViewGiftRequests(role) && (
+            <li>
+              <Link
+                href="/dashboard/gift-requests"
+                className={`${styles.navLink} ${pathname === '/dashboard/gift-requests' ? styles.active : ''}`}
+              >
+                <MdCardGiftcard className={styles.icon} />
+                <span>사은품 신청</span>
+                {giftRequestCount > 0 && (
+                  <span className={styles.badge}>
+                    {giftRequestCount > 99 ? '99+' : giftRequestCount}
+                  </span>
+                )}
+              </Link>
+            </li>
+          )}
+          {canManageGiftRequests(role) && (
+            <li>
+              <Link
+                href="/dashboard/gift-manage"
+                className={`${styles.navLink} ${pathname === '/dashboard/gift-manage' ? styles.active : ''}`}
+              >
+                <MdLocalShipping className={styles.icon} />
+                <span>사은품 관리</span>
+                {giftManageCount > 0 && (
+                  <span className={styles.badge}>
+                    {giftManageCount > 99 ? '99+' : giftManageCount}
+                  </span>
+                )}
               </Link>
             </li>
           )}

@@ -1,15 +1,27 @@
 'use client';
 
 import React, { memo, useState } from 'react';
-import { MdAdd } from 'react-icons/md';
-import { useComplaints, useRegisterComplaint, type ComplaintInput } from '@/app/hooks/useComplaints';
+import { MdAdd, MdContentPaste, MdExpandMore } from 'react-icons/md';
+import {
+  useComplaints,
+  useUnreadComplaintCount,
+  useRegisterComplaint,
+  useRegisterComplaints,
+  type ComplaintInput,
+} from '@/app/hooks/useComplaints';
 import { useAlert } from '@/app/components/Alert/Alert';
-import { COMPLAINT_STATUS_LABEL, type ComplaintRow } from '@/lib/complaints';
+import {
+  COMPLAINT_STATUS_LABEL,
+  type ComplaintRow,
+  type ComplaintStatus,
+} from '@/lib/complaints';
 import Spinner from '@/app/components/Spinner/Spinner';
 import SearchBar from '@/app/components/SearchBar';
 import Pagination from '@/app/components/Pagination/Pagination';
 import EmptyState from '@/app/components/EmptyState/EmptyState';
 import ComplaintFormModal from '../components/ComplaintFormModal';
+import ComplaintPasteModal from '../components/ComplaintPasteModal';
+import ComplaintDetailModal from '@/app/components/ComplaintDetail/ComplaintDetailModal';
 import RegisteredTable from '../components/RegisteredTable';
 import styles from '../page.module.css';
 
@@ -22,24 +34,46 @@ import styles from '../page.module.css';
  * 넣은 직후에는 어느 지사로 갔는지를 목록 위에 한 번 더 알린다 — 목록 맨 위에
  * 그 줄이 뜨긴 하지만, 잘못 적었을 때 바로 알아채려면 눈에 띄어야 한다.
  */
+/*
+ * 넣은 사람이 볼 상태.
+ *
+ * '지사 확인 대기'와 '설계사 처리 중'은 가른다 — 넣은 사람 입장에서는 둘 다
+ * "넘어가서 진행 중"이고, 어느 단계인지는 지사 사정이다. 대신 '진행 중' 하나로
+ * 묶어 낸다면 탭이 늘 뿐이라, 여기서는 내가 무언가 해야 하는 것만 세운다.
+ */
+const REGISTER_TABS: ComplaintStatus[] = ['unassigned', 'returned', 'done'];
+
 const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent() {
   const { showAlert } = useAlert();
   const list = useComplaints();
+  // 사이드바 배지와 같은 값을 쓴다. 따로 세면 둘이 어긋난 숫자를 말하게 된다.
+  const { data: badge } = useUnreadComplaintCount();
+  const returnedCount = badge?.register ?? 0;
   const register = useRegisterComplaint();
+  const registerMany = useRegisterComplaints();
   const [isFormOpen, setFormOpen] = useState(false);
+  const [isPasteOpen, setPasteOpen] = useState(false);
   // 고치는 중인 건. 없으면 새로 넣는 것이다.
   const [editing, setEditing] = useState<ComplaintRow | null>(null);
-  const [lastResult, setLastResult] = useState<{ ok: boolean; message: string } | null>(null);
+  // 상세로 열어 둔 건. 목록에 없는 값(상품·통화일시·처리 내용 등)을 여기서 본다.
+  const [detail, setDetail] = useState<ComplaintRow | null>(null);
+  const [lastResult, setLastResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
   const handleSubmit = async (input: ComplaintInput) => {
     const created = await register.mutateAsync(input);
     setLastResult(
       created.assigned_group
-        ? { ok: true, message: `${created.customer_name} 님 민원이 담당 지사로 전달되었습니다.` }
+        ? {
+            ok: true,
+            message: `${created.customer_name} 님 민원이 담당 지사로 전달되었습니다.`,
+          }
         : {
             ok: false,
             message: `${created.customer_name} 님은 배포 기록에서 찾지 못했습니다. 관리자가 확인 후 지사를 정합니다.`,
-          }
+          },
     );
     setFormOpen(false);
     return created;
@@ -59,11 +93,14 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
     if (row) {
       setLastResult(
         row.assigned_group
-          ? { ok: true, message: `${row.customer_name} 님 민원이 담당 지사로 전달되었습니다.` }
+          ? {
+              ok: true,
+              message: `${row.customer_name} 님 민원이 담당 지사로 전달되었습니다.`,
+            }
           : {
               ok: false,
               message: `${row.customer_name} 님은 배포 기록에서 찾지 못했습니다. 관리자가 확인 후 지사를 정합니다.`,
-            }
+            },
       );
     }
     setEditing(null);
@@ -108,6 +145,11 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
           onReset={() => list.setSearch('')}
           placeholder="고객명 · 주문번호 · 전화번호"
         />
+        {/* 여러 건은 붙여넣기, 한 건은 직접 입력. 둘 다 남겨 둔다. */}
+        <button type="button" className={styles.ghostBtn} onClick={() => setPasteOpen(true)}>
+          <MdContentPaste />
+          붙여넣기로 등록
+        </button>
         <button type="button" className={styles.submitBtn} onClick={() => setFormOpen(true)}>
           <MdAdd />
           민원 등록
@@ -115,30 +157,67 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
       </div>
 
       <div className={styles.controlsSection}>
-        <select
-          className={styles.select}
-          value={list.sort.by}
-          onChange={(e) => list.setSortBy(e.target.value)}
-        >
-          <option value="created_at">등록일순</option>
-          <option value="received_at">접수일자순</option>
-          <option value="called_at">통화일시순</option>
-          <option value="customer_name">수령인순</option>
-          <option value="phone">전화번호순</option>
-          <option value="order_no">주문번호순</option>
-          <option value="status">상태순</option>
-        </select>
+        {/* 화살표는 다른 화면과 같이 react-icons 를 쓴다. */}
+        <div className={styles.selectWrapper}>
+          <select
+            className={styles.select}
+            value={list.sort.by}
+            onChange={(e) => list.setSortBy(e.target.value)}
+          >
+            <option value="created_at">등록일순</option>
+            <option value="customer_name">수령인순</option>
+            <option value="phone">전화번호순</option>
+            <option value="order_no">주문번호순</option>
+            <option value="received_at">접수일자순</option>
+            <option value="order_confirmed_at">발주확인일순</option>
+            <option value="called_at">통화일시순</option>
+            <option value="status">상태순</option>
+          </select>
+          <MdExpandMore className={styles.selectIcon} />
+        </div>
 
-        <select
-          className={styles.select}
-          value={list.limit}
-          onChange={(e) => list.setLimit(Number(e.target.value))}
+        <div className={styles.selectWrapper}>
+          <select
+            className={styles.select}
+            value={list.limit}
+            onChange={(e) => list.setLimit(Number(e.target.value))}
+          >
+            <option value="10">10개씩보기</option>
+            <option value="20">20개씩보기</option>
+            <option value="30">30개씩보기</option>
+            <option value="50">50개씩보기</option>
+          </select>
+          <MdExpandMore className={styles.selectIcon} />
+        </div>
+      </div>
+
+      {/*
+        상태로 거르기.
+        넣은 건이 쌓이면 "반려돼서 내가 고쳐야 할 게 뭐였지"를 목록에서 눈으로
+        찾게 된다. 반려 탭에는 건수를 함께 적는다 — 다른 탭과 달리 지나치면
+        그 민원은 아무 데도 가지 않고 멈춰 있다.
+      */}
+      <div className={styles.statusTabs}>
+        <button
+          type="button"
+          className={`${styles.statusTab} ${list.status === '' ? styles.active : ''}`}
+          onClick={() => list.setStatus('')}
         >
-          <option value="10">10개씩보기</option>
-          <option value="20">20개씩보기</option>
-          <option value="30">30개씩보기</option>
-          <option value="50">50개씩보기</option>
-        </select>
+          전체
+        </button>
+        {REGISTER_TABS.map((status) => (
+          <button
+            key={status}
+            type="button"
+            className={`${styles.statusTab} ${list.status === status ? styles.active : ''}`}
+            onClick={() => list.setStatus(status)}
+          >
+            {COMPLAINT_STATUS_LABEL[status]}
+            {status === 'returned' && returnedCount > 0 && (
+              <span className={styles.tabCount}>{returnedCount}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {lastResult && (
@@ -159,6 +238,7 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
             sortBy={list.sort.by}
             sortOrder={list.sort.order}
             onSort={list.toggleSort}
+            onOpen={setDetail}
             onEdit={setEditing}
             onDelete={askDelete}
           />
@@ -179,11 +259,33 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
         />
       )}
 
+      {/* 넣은 사람에게는 배정 근거를 보여주지 않는다 — 남의 지사 사정이다. */}
+      {detail && (
+        <ComplaintDetailModal row={detail} isAdmin={false} onClose={() => setDetail(null)} />
+      )}
+
+      {isPasteOpen && (
+        <ComplaintPasteModal
+          onClose={() => {
+            setPasteOpen(false);
+            setLastResult(null);
+          }}
+          isSubmitting={registerMany.isPending}
+          onSubmit={async (rows) => {
+            const done = await registerMany.mutateAsync(rows);
+            setLastResult(null);
+            return done;
+          }}
+        />
+      )}
+
       {editing && (
+        /* 반려된 건을 고치는 것은 '수정'이 아니라 '재요청'이다 — 저장하는 순간 다시 넘어간다. */
         <ComplaintFormModal
           onClose={() => setEditing(null)}
           onSubmit={handleEdit}
           initial={toInput(editing)}
+          mode={editing.status === 'returned' ? 'resubmit' : 'edit'}
           isSubmitting={list.isPatching}
         />
       )}

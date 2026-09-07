@@ -45,3 +45,8 @@ next-env.d.ts
 
 # Supabase CLI 작업 파일
 supabase/.temp/
+
+# 도구가 내려받는 스킬 파일. 프로젝트 소스가 아니다.
+.claude/skills/
+.agents/skills/
+skills-lock.json

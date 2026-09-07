@@ -116,6 +116,35 @@ describe('주문번호로 못 찾으면 이름 + 전화번호', () => {
   });
 });
 
+/**
+ * 신청한 날과 배정된 날은 다르다. 고객이 8월 20일에 신청해도 우리가 8월 25일에
+ * 배정했을 수 있다. 되짚을 때 둘 다 필요해서 함께 담는다.
+ */
+describe('직전 건의 두 날짜', () => {
+  it('주문번호로 찾으면 신청일과 배정일을 함께 돌려준다', () => {
+    const match = matchComplaint(target, [
+      record({ receivedAt: day('2026-07-08'), assignedAt: day('2026-07-11') }),
+    ]);
+    expect(match?.at).toEqual(day('2026-07-08'));
+    expect(match?.assignedAt).toEqual(day('2026-07-11'));
+  });
+
+  it('이름·전화번호로 찾아도 마찬가지다', () => {
+    const match = matchComplaint({ ...target, orderNo: '' }, [
+      record({ orderNo: '', receivedAt: day('2026-07-08'), assignedAt: day('2026-07-11') }),
+    ]);
+    expect(match?.matchKey).toBe('name_phone');
+    expect(match?.assignedAt).toEqual(day('2026-07-11'));
+  });
+
+  /** 배정날짜 열을 못 읽은 옛 파일도 있다. 그때는 신청일만 남는다. */
+  it('배정일을 못 읽었으면 null', () => {
+    const match = matchComplaint(target, [record({ assignedAt: null })]);
+    expect(match?.at).toEqual(day('2026-07-08'));
+    expect(match?.assignedAt).toBeNull();
+  });
+});
+
 describe('못 찾는 경우', () => {
   it('기록에 없는 고객이면 null — 관리자가 직접 정한다', () => {
     expect(matchComplaint(target, [])).toBeNull();

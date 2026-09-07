@@ -48,6 +48,14 @@ export interface LastAssignment {
   dept: string;
   /** 그때 신청한 날. 이번 신청일과 같은 축이라 나란히 놓고 볼 수 있다. */
   at: Date;
+  /**
+   * 그때 실제로 지사에 배정된 날(배정날짜 열).
+   *
+   * 신청한 날과 다르다 — 신청은 고객이 한 일이고 배정은 우리가 한 일이라
+   * 며칠 벌어질 수 있다. 되짚을 때 둘 다 필요해서 함께 들고 간다.
+   * 그 열을 못 읽었으면 null이다.
+   */
+  assignedAt: Date | null;
   fileId: string | null;
   fileName: string | null;
 }
@@ -134,6 +142,7 @@ export function findLastAssignment(
   return {
     dept: String(best.assignedTo).trim(),
     at: whenApplied(best),
+    assignedAt: best.assignedAt ?? null,
     fileId: best.fileId ?? null,
     fileName: best.fileName ?? null,
   };

@@ -28,6 +28,12 @@ import {
   canAssignComplaintAgent,
   canResolveUnassignedComplaints,
   canHandleComplaint,
+  isGiftStaffRole,
+  canViewGiftRequests,
+  canRequestGift,
+  canForwardGiftRequests,
+  canManageGiftRequests,
+  canViewAllGiftRequests,
   getLandingRoute,
   getAllowedDashboardRoutes,
 } from '@/lib/roles';
@@ -40,7 +46,7 @@ import {
  * 항목에서 "이 역할은 되는가"를 정해야 테스트가 통과한다 — 빠뜨리고 넘어갈
  * 수가 없다. 그게 이 표의 목적이다.
  */
-const ROLES: Role[] = ['admin', 'subadmin', 'staff', 'complaint', 'user', 'agent'];
+const ROLES: Role[] = ['admin', 'subadmin', 'staff', 'complaint', 'user', 'agent', 'gift'];
 
 const MATRIX: Array<{ name: string; fn: (r?: string | null) => boolean; allowed: Role[] }> = [
   // 역할 자체를 묻는 것
@@ -49,10 +55,11 @@ const MATRIX: Array<{ name: string; fn: (r?: string | null) => boolean; allowed:
   { name: 'isComplaintStaffRole', fn: isComplaintStaffRole, allowed: ['complaint'] },
   { name: 'isAgentRole', fn: isAgentRole, allowed: ['agent'] },
   { name: 'isProtectedAccount', fn: isProtectedAccount, allowed: ['admin'] },
+  { name: 'isGiftStaffRole', fn: isGiftStaffRole, allowed: ['gift'] },
   {
     name: 'hasFixedDepartment',
     fn: hasFixedDepartment,
-    allowed: ['subadmin', 'staff', 'complaint'],
+    allowed: ['subadmin', 'staff', 'complaint', 'gift'],
   },
   // 설계사도 실제 조직(지사)에 속한다. 소속이 아니라 역할로 지사와 갈린다.
   { name: 'belongsToOrganization', fn: belongsToOrganization, allowed: ['user', 'agent'] },
@@ -119,6 +126,30 @@ const MATRIX: Array<{ name: string; fn: (r?: string | null) => boolean; allowed:
     name: 'canHandleComplaint',
     fn: canHandleComplaint,
     allowed: ['admin', 'subadmin', 'user', 'agent'],
+  },
+
+  // 사은품 — 설계사가 신청하고, 지사가 전달하고, 사은품담당자가 발주한다.
+  // 사은품담당자는 신청 화면에 못 들어가고, 설계사는 전달하지 못한다.
+  {
+    name: 'canViewGiftRequests',
+    fn: canViewGiftRequests,
+    allowed: ['admin', 'subadmin', 'user', 'agent'],
+  },
+  { name: 'canRequestGift', fn: canRequestGift, allowed: ['admin', 'subadmin', 'user', 'agent'] },
+  {
+    name: 'canForwardGiftRequests',
+    fn: canForwardGiftRequests,
+    allowed: ['admin', 'subadmin', 'user'],
+  },
+  {
+    name: 'canManageGiftRequests',
+    fn: canManageGiftRequests,
+    allowed: ['admin', 'subadmin', 'gift'],
+  },
+  {
+    name: 'canViewAllGiftRequests',
+    fn: canViewAllGiftRequests,
+    allowed: ['admin', 'subadmin', 'gift'],
   },
 ];
 
@@ -191,6 +222,7 @@ describe('화면 접근', () => {
       '/dashboard/download',
       '/dashboard/reapply',
       '/dashboard/complaints',
+      '/dashboard/gift-requests',
     ]);
   });
 
@@ -198,8 +230,16 @@ describe('화면 접근', () => {
    * 설계사는 지사 밑이지만 배포된 DB를 받는 사람이 아니다.
    * 파일 다운로드가 열리면 자기 고객이 아닌 명단까지 통째로 가져간다.
    */
-  it('설계사는 민원 화면만 들어간다', () => {
-    expect(getAllowedDashboardRoutes('agent')).toEqual(['/dashboard/complaints']);
+  it('설계사는 민원·사은품 신청 화면만 들어간다', () => {
+    expect(getAllowedDashboardRoutes('agent')).toEqual([
+      '/dashboard/complaints',
+      '/dashboard/gift-requests',
+    ]);
+  });
+
+  /** 사은품담당자는 전달된 것만 본다. 지사 안에서 오가는 신청 화면은 열지 않는다. */
+  it('사은품담당자는 사은품 관리 화면만 들어간다', () => {
+    expect(getAllowedDashboardRoutes('gift')).toEqual(['/dashboard/gift-manage']);
   });
 
   /** 민원담당자는 자기가 넣은 건만 본다. 남의 지사 처리 상황은 보지 않는다. */

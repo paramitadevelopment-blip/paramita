@@ -19,10 +19,11 @@
  * - staff     : DB담당자 (파일전달로 원본만 넘긴다)
  * - complaint : 민원담당자 (민원을 입력하고 그 처리 결과만 본다)
  * - user      : 지사 (배포된 파일 다운로드, 재신청 고객·민원 열람)
- * - agent     : 설계사 (지사 밑. 자기에게 넘어온 민원만 보고 처리한다)
+ * - agent     : 설계사 (지사 밑. 자기에게 넘어온 민원을 처리하고 사은품을 신청한다)
+ * - gift      : 사은품담당자 (지사가 전달한 사은품 신청을 받아 발주한다)
  */
 
-export type Role = 'admin' | 'subadmin' | 'staff' | 'complaint' | 'user' | 'agent';
+export type Role = 'admin' | 'subadmin' | 'staff' | 'complaint' | 'user' | 'agent' | 'gift';
 
 /** DB·JWT에서 온 값은 아직 문자열이라 좁혀서 받는다. */
 type MaybeRole = Role | string | null | undefined;
@@ -45,7 +46,7 @@ export const UPLOAD_ROLES = ['admin', 'subadmin', 'staff'] as const;
  * 만드는 쪽(POST)과 바꾸는 쪽(PATCH)이 같은 목록을 봐야 한다. 따로 적어 두면
  * 역할이 늘 때 한쪽만 고쳐져서, 만들 수는 있는데 바꿀 수는 없는 역할이 생긴다.
  */
-export const ASSIGNABLE_ROLES = ['user', 'agent', 'staff', 'complaint', 'subadmin'] as const;
+export const ASSIGNABLE_ROLES = ['user', 'agent', 'staff', 'complaint', 'gift', 'subadmin'] as const;
 
 /** 사용자 관리 화면에서 지정할 수 있는 역할인가. */
 export function isAssignableRole(role?: MaybeRole): boolean {
@@ -74,6 +75,11 @@ export function isComplaintStaffRole(role?: MaybeRole): boolean {
   return is(role, 'complaint');
 }
 
+/** 사은품담당자인지. 민원담당자와 같은 담당자 계열이다. */
+export function isGiftStaffRole(role?: MaybeRole): boolean {
+  return is(role, 'gift');
+}
+
 /**
  * 설계사인지.
  *
@@ -95,7 +101,7 @@ export function isAgentRole(role?: MaybeRole): boolean {
  * 자기 정보를 고칠 때 소속이 통째로 덮인다.
  */
 export function hasFixedDepartment(role?: MaybeRole): boolean {
-  return is(role, 'staff', 'complaint', 'subadmin');
+  return is(role, 'staff', 'complaint', 'gift', 'subadmin');
 }
 
 /**
@@ -263,6 +269,51 @@ export function canHandleComplaint(role?: MaybeRole): boolean {
   return is(role, 'admin', 'subadmin', 'user', 'agent');
 }
 
+/* ── 사은품 ───────────────────────────────────────────────────── */
+
+/**
+ * 사은품 신청 화면을 볼 수 있는가.
+ *
+ * 설계사는 자기 것만, 지사는 자기 소속 설계사 것까지 본다(canViewAllGiftRequests
+ * 참고). 사은품담당자는 여기 못 들어온다 — 전달되기 전 신청은 지사 안의 일이고,
+ * 담당자에게는 전달된 것만 사은품 관리 화면으로 온다.
+ */
+export function canViewGiftRequests(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'user', 'agent');
+}
+
+/**
+ * 사은품을 신청할 수 있는가.
+ *
+ * 설계사가 기본이지만 지사도 직접 넣을 수 있다 — 설계사 계정이 아직 없는
+ * 지사가 있고, 지사가 대신 넣어 주는 일이 흔하다.
+ */
+export function canRequestGift(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'user', 'agent');
+}
+
+/**
+ * 소속 설계사의 신청을 사은품담당자에게 전달할 수 있는가.
+ *
+ * 지사의 일이다. 설계사는 자기 것을 넣기만 하고 넘기지는 못한다 — 지사가
+ * 한 번 보고 묶어서 보내는 것이 이 흐름의 뜻이다.
+ */
+export function canForwardGiftRequests(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'user');
+}
+
+/**
+ * 사은품 관리 화면(전달받은 신청을 발주하고 보완을 요청하는 곳)을 쓸 수 있는가.
+ */
+export function canManageGiftRequests(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'gift');
+}
+
+/** 사은품 신청을 소속 구분 없이 전부 볼 수 있는가. */
+export function canViewAllGiftRequests(role?: MaybeRole): boolean {
+  return is(role, 'admin', 'subadmin', 'gift');
+}
+
 /* ── 화면 접근 ────────────────────────────────────────────────── */
 
 /**
@@ -275,7 +326,8 @@ export function getLandingRoute(role?: MaybeRole): string {
   if (isAdminRole(role)) return '/dashboard';
   if (isStaffRole(role)) return '/dashboard/file-transfer';
   if (isComplaintStaffRole(role)) return '/dashboard/complaint-register';
-  // 설계사는 파일을 받지 않는다. 민원이 유일한 화면이다.
+  if (isGiftStaffRole(role)) return '/dashboard/gift-manage';
+  // 설계사는 파일을 받지 않는다. 민원과 사은품 신청만 본다.
   if (isAgentRole(role)) return '/dashboard/complaints';
   return '/dashboard/download';
 }
@@ -298,6 +350,13 @@ export function getAllowedDashboardRoutes(role?: MaybeRole): string[] | null {
   // 민원담당자는 자기가 넣은 민원만 본다. 배정된 민원 화면('/dashboard/complaints')은
   // 남의 지사 처리 상황이라 열지 않는다 — 경로를 형제로 둔 이유가 이것이다.
   if (isComplaintStaffRole(role)) return ['/dashboard/complaint-register'];
-  if (isAgentRole(role)) return ['/dashboard/complaints'];
-  return ['/dashboard/download', '/dashboard/reapply', '/dashboard/complaints'];
+  // 사은품담당자는 전달된 신청만 본다. 지사 안에서 오가는 신청 화면은 열지 않는다.
+  if (isGiftStaffRole(role)) return ['/dashboard/gift-manage'];
+  if (isAgentRole(role)) return ['/dashboard/complaints', '/dashboard/gift-requests'];
+  return [
+    '/dashboard/download',
+    '/dashboard/reapply',
+    '/dashboard/complaints',
+    '/dashboard/gift-requests',
+  ];
 }

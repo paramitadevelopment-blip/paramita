@@ -36,8 +36,16 @@ export function usePendingPicks(classifiedFiles: ClassifiedFile[], currentIndex:
    * '자동선택'으로 보이면, 서울은 비어 있는데 채워진 줄 안다.
    */
   const [pickMode, setPickMode] = useState<Record<number, Record<string, 'manual' | 'auto'>>>({});
-  /** 선택 대기 표의 정렬. 'region'이거나 미리보기 열의 인덱스다. */
-  const [pendingSort, setPendingSort] = useState<{ by: 'region' | number; order: 'asc' | 'desc' }>({
+  /**
+   * 선택 대기 표의 정렬. 'region'·'age'이거나 미리보기 열의 인덱스다.
+   *
+   * 지역과 나이는 파일에 있는 열이 아니라 우리가 계산해 붙인 것이라 인덱스가
+   * 없다. 그래서 이름으로 가리킨다.
+   */
+  const [pendingSort, setPendingSort] = useState<{
+    by: 'region' | 'age' | number;
+    order: 'asc' | 'desc';
+  }>({
     by: 'region',
     order: 'asc',
   });
@@ -146,7 +154,7 @@ export function usePendingPicks(classifiedFiles: ClassifiedFile[], currentIndex:
     }));
   };
 
-  const togglePendingSort = (by: 'region' | number) => {
+  const togglePendingSort = (by: 'region' | 'age' | number) => {
     setPendingSort((prev) =>
       prev.by === by
         ? { by, order: prev.order === 'asc' ? 'desc' : 'asc' }

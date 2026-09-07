@@ -2,7 +2,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizePhone } from '@/lib/insurance';
 import { matchComplaint } from '@/lib/complaintMatch';
 import { loadComplaintCandidates } from '@/lib/complaintHistory';
-import { parseDateInput, toDateOnly } from '@/lib/complaints';
+import {
+  THREAD_MATCH_KEY,
+  complaintThreadKey,
+  parseDateInput,
+  toDateOnly,
+  validateComplaintInput,
+} from '@/lib/complaints';
 
 /**
  * 민원을 받아 적고 담당 지사를 찾는 부분.
@@ -28,8 +34,16 @@ export type ReadResult =
   | { ok: true; fields: ComplaintFields }
   | { ok: false; error: string };
 
-/** 요청 본문에서 값을 읽고 검사한다. 화면에서 막았더라도 여기서 다시 본다. */
+/**
+ * 요청 본문에서 값을 읽고 검사한다.
+ *
+ * 화면에서 막았더라도 여기서 다시 본다 — 요청은 화면을 거치지 않고도 만들 수
+ * 있다. 검사 자체는 화면과 같은 함수(validateComplaintInput)를 쓴다.
+ */
 export function readComplaintInput(body: Record<string, unknown>): ReadResult {
+  const error = validateComplaintInput(body);
+  if (error) return { ok: false, error };
+
   const fields: ComplaintFields = {
     product: String(body.product ?? '').trim(),
     customerName: String(body.customerName ?? '').trim(),
@@ -40,26 +54,6 @@ export function readComplaintInput(body: Record<string, unknown>): ReadResult {
     calledAt: parseDateInput(body.calledAt),
     callMemo: String(body.callMemo ?? '').trim(),
   };
-
-  if (!fields.customerName) {
-    return { ok: false, error: '수령인 이름을 입력해 주세요.' };
-  }
-  /*
-   * 주문번호도 전화번호도 없으면 고객을 찾을 방법이 아예 없다. 이름만으로
-   * 찾으면 동명이인에게 남의 민원이 간다 — 그래서 저장 자체를 막는다.
-   */
-  if (!fields.orderNo && !fields.phone) {
-    return {
-      ok: false,
-      error: '주문번호나 전화번호 중 하나는 있어야 고객을 찾을 수 있습니다.',
-    };
-  }
-  if (fields.customerName.length > 50 || fields.phone.length > 30 || fields.orderNo.length > 50) {
-    return { ok: false, error: '입력값이 너무 깁니다.' };
-  }
-  if (fields.callMemo.length > 2000 || fields.product.length > 200) {
-    return { ok: false, error: '입력값이 너무 깁니다.' };
-  }
 
   return { ok: true, fields };
 }
@@ -75,6 +69,9 @@ export async function toComplaintRow(
   supabase: SupabaseClient,
   fields: ComplaintFields
 ): Promise<Record<string, unknown>> {
+  // 같은 건의 반복 민원을 묶는 열쇠. 아래 '앞 건이 간 지사'를 찾을 때도 쓴다.
+  const threadKey = complaintThreadKey(fields.orderNo, fields.phone);
+
   const candidates = await loadComplaintCandidates(supabase, {
     orderNo: fields.orderNo,
     name: fields.customerName,
@@ -103,6 +100,35 @@ export async function toComplaintRow(
     assignedGroup = dept?.group_name ?? null;
   }
 
+  /*
+   * 같은 건의 2차 민원은 앞과 같은 지사로 보낸다.
+   *
+   * 배포 기록을 매번 새로 뒤지면, 그 사이 기록이 늘거나 바뀌어 다른 지사가
+   * 나올 수 있다. 같은 주문에 대한 민원이 지사마다 흩어지면 받은 쪽은 앞의
+   * 사정을 모른 채 처음부터 다시 파악해야 한다. 앞 건이 간 곳이 있으면
+   * 그곳이 맞다.
+   */
+  const { data: previous } = await supabase
+    .from('complaints')
+    .select('assigned_group')
+    .eq('thread_key', threadKey)
+    .not('assigned_group', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  /*
+   * 물려받은 경우에는 매칭 근거가 없다.
+   *
+   * 배포 기록에서 찾은 게 아니라 앞 민원을 따라간 것이므로, '찾은 방법'과
+   * 근거 파일·직전 신청일은 이번 건의 근거가 아니다. 앞 건의 근거를 그대로
+   * 베껴 놓으면 되짚을 때 이번 건이 스스로 찾아진 것처럼 보인다.
+   */
+  const inherited = !!previous?.assigned_group && previous.assigned_group !== assignedGroup;
+  if (previous?.assigned_group) {
+    assignedGroup = previous.assigned_group;
+  }
+  const foundHere = !!assignedGroup && !!match && !inherited;
+
   const now = new Date().toISOString();
   const phoneKey = normalizePhone(fields.phone);
 
@@ -116,14 +142,17 @@ export async function toComplaintRow(
     order_confirmed_at: fields.orderConfirmedAt ? toDateOnly(fields.orderConfirmedAt) : null,
     called_at: fields.calledAt ? fields.calledAt.toISOString() : null,
     call_memo: fields.callMemo || null,
+    thread_key: threadKey,
 
     assigned_group: assignedGroup,
     assign_type: assignedGroup ? 'auto' : null,
     assigned_at: assignedGroup ? now : null,
-    match_key: assignedGroup ? match!.matchKey : null,
-    source_file_id: assignedGroup ? match!.fileId : null,
-    source_file_name: assignedGroup ? match!.fileName : null,
-    previous_applied_at: assignedGroup ? match!.at.toISOString() : null,
+    // 배포 기록에서 찾은 것과, 앞 민원을 따라간 것을 구별해 적는다.
+    match_key: foundHere ? match!.matchKey : assignedGroup ? THREAD_MATCH_KEY : null,
+    source_file_id: foundHere ? match!.fileId : null,
+    source_file_name: foundHere ? match!.fileName : null,
+    previous_applied_at: foundHere ? match!.at.toISOString() : null,
+    previous_assigned_at: foundHere ? (match!.assignedAt?.toISOString() ?? null) : null,
     status: assignedGroup ? 'branch' : 'unassigned',
   };
 }
