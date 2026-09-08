@@ -325,20 +325,24 @@ async function createOne(
     .neq('status', 'withdrawn');
   const duplicate = (prior ?? []).length > 0;
   const checkReason = String(raw.checkReason ?? '').trim();
+  /*
+   * 붙여넣기부터 가른다. 붙여넣기에는 사유를 적을 자리가 없어서 "사유를 적으면
+   * 된다"는 말이 틀린 안내가 된다 — 어디로 가야 하는지만 말한다.
+   */
+  if (duplicate && opts.bulk) {
+    return {
+      ok: false,
+      status: 409,
+      code: 'duplicate',
+      error: '이미 신청된 주문번호입니다. 붙여넣기 말고 사은품 신청을 통해 접수해 주세요.',
+    };
+  }
   if (duplicate && !checkReason) {
     return {
       ok: false,
       status: 409,
       code: 'duplicate',
       error: `이미 신청된 주문번호입니다(${prior!.length}건). 왜 다시 보내는지 사유를 적으면 관리자 확인 후 진행됩니다.`,
-    };
-  }
-  if (duplicate && opts.bulk) {
-    return {
-      ok: false,
-      status: 409,
-      code: 'duplicate',
-      error: '이미 신청된 주문번호입니다. 붙여넣기로는 다시 넣을 수 없습니다 — [사은품 신청]에서 사유를 적어 등록해 주세요.',
     };
   }
 
