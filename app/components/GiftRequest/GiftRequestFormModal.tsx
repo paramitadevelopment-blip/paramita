@@ -292,7 +292,8 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
             </div>
           )}
 
-          <div className={styles.formSection}>고객 — 기록에서 가져온 값이라 고칠 수 없습니다</div>
+          {/* 잠긴 칸은 자물쇠 표시가 말한다. 머리에 또 적으면 같은 말이 두 번이다. */}
+          <div className={styles.formSection}>고객</div>
           <div className={styles.formGrid}>
             <label className={`${styles.modalField} ${styles.lockedField}`}>
               <span>
@@ -318,9 +319,7 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
             주소. 기본 주소는 검색으로만 들어온다 — 손으로 치는 칸이 없으니 오타가
             날 자리가 없다. 상세(동·호수)만 적는다.
           */}
-          <div className={styles.formSection}>
-            배송 주소 — 손으로 치지 않고 검색해서 고릅니다. 이사했으면 [주소 검색]으로 바꿔 주세요
-          </div>
+          <div className={styles.formSection}>배송 주소</div>
           <div className={styles.formGrid}>
             <label className={`${styles.modalField} ${styles.lockedField}`}>
               <span>
