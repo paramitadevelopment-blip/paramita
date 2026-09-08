@@ -7,12 +7,14 @@ import {
   buildBaseCounts,
   clearPicksInScope,
   collectAddedRows,
+  collectMovedRows,
   findUnpicked,
   keysInScope,
   pickAllInScope,
   rowsInScope,
   scopeKey,
   type PendingReason,
+  type PendingSortKey,
   type PickScope,
 } from '@/lib/pendingPicks';
 import type { ClassifiedFile } from '@/app/hooks/useAutoClassify';
@@ -43,7 +45,7 @@ export function usePendingPicks(classifiedFiles: ClassifiedFile[], currentIndex:
    * 없다. 그래서 이름으로 가리킨다.
    */
   const [pendingSort, setPendingSort] = useState<{
-    by: 'region' | 'age' | number;
+    by: PendingSortKey;
     order: 'asc' | 'desc';
   }>({
     by: 'region',
@@ -154,7 +156,7 @@ export function usePendingPicks(classifiedFiles: ClassifiedFile[], currentIndex:
     }));
   };
 
-  const togglePendingSort = (by: 'region' | 'age' | number) => {
+  const togglePendingSort = (by: PendingSortKey) => {
     setPendingSort((prev) =>
       prev.by === by
         ? { by, order: prev.order === 'asc' ? 'desc' : 'asc' }
@@ -167,6 +169,11 @@ export function usePendingPicks(classifiedFiles: ClassifiedFile[], currentIndex:
     () => collectAddedRows(current, rowPicks[currentIndex]),
     [current, rowPicks, currentIndex]
   );
+  // 옮겨 나간 쪽. 더한 만큼 어디선가 빠져야 배포되는 숫자와 맞는다.
+  const movedWithPicks = useMemo(
+    () => collectMovedRows(current, rowPicks[currentIndex]),
+    [current, rowPicks, currentIndex]
+  );
 
   const unpicked = findUnpicked(classifiedFiles, rowPicks);
 
@@ -174,8 +181,16 @@ export function usePendingPicks(classifiedFiles: ClassifiedFile[], currentIndex:
     setRegionTab((prev) => ({ ...prev, [fileIdx]: region }));
   };
 
+  /*
+   * 사유가 1차 필터다. 바꾸면 지역은 '전체'로 되돌린다.
+   *
+   * 지역 탭은 고른 사유 안에서만 세우므로, '지사 중복'에서 경기남부를 보다가
+   * '자동분류'로 옮기면 경기남부 탭이 사라질 수 있다. 그때 지역을 그대로 두면
+   * 아무 탭도 켜지지 않은 채 빈 표가 뜬다.
+   */
   const handleReasonTab = (fileIdx: number, reason: PendingReason | 'all') => {
     setReasonTab((prev) => ({ ...prev, [fileIdx]: reason }));
+    setRegionTab((prev) => ({ ...prev, [fileIdx]: 'all' }));
   };
 
   /**
@@ -202,6 +217,7 @@ export function usePendingPicks(classifiedFiles: ClassifiedFile[], currentIndex:
     handleReasonTab,
     handlePickAll,
     resultWithPicks,
+    movedWithPicks,
     unpicked,
     handlePickMode,
     handlePickRow,

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizePhone } from '@/lib/insurance';
 import { matchComplaint } from '@/lib/complaintMatch';
 import { loadComplaintCandidates } from '@/lib/complaintHistory';
+import { refusedGroups } from '@/lib/complaintTransfers';
 import {
   THREAD_MATCH_KEY,
   complaintThreadKey,
@@ -123,6 +124,26 @@ export async function toComplaintRow(
    * 근거 파일·직전 신청일은 이번 건의 근거가 아니다. 앞 건의 근거를 그대로
    * 베껴 놓으면 되짚을 때 이번 건이 스스로 찾아진 것처럼 보인다.
    */
+  /*
+   * "우리 건 아니다"로 되돌린 지사에는 기록만 믿고 다시 보내지 않는다.
+   *
+   * 되돌아온 건을 넣은 사람이 고치면 배정을 다시 찾는데, 기록은 그대로라
+   * 같은 지사가 또 나온다. 그러면 지사는 또 되돌리고, 넣은 사람은 또 고치고 —
+   * 끝이 없다. 기록이 가리키는 지사가 이미 거절한 지사면 관리자가 정하도록
+   * 남긴다. 같은 묶음(같은 주문·고객)의 다른 회차가 되돌린 것도 같은 뜻이다.
+   *
+   * 다만 아래 '앞 건을 따라가기'보다 먼저 본다. 거절 뒤에 관리자가 그 지사로
+   * 다시 보냈다면 앞 건이 그 지사에 있고, 그건 사람이 정한 것이라 따른다.
+   */
+  const { data: past } = await supabase
+    .from('complaint_transfers')
+    .select('kind, from_group, complaints!inner(thread_key)')
+    .eq('complaints.thread_key', threadKey);
+  const refused = refusedGroups((past ?? []) as any);
+  if (assignedGroup && refused.has(assignedGroup)) {
+    assignedGroup = null;
+  }
+
   const inherited = !!previous?.assigned_group && previous.assigned_group !== assignedGroup;
   if (previous?.assigned_group) {
     assignedGroup = previous.assigned_group;

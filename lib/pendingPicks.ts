@@ -262,6 +262,15 @@ export function clearPicksInScope(
 export type RowPicks = Record<number, Record<string, string>>;
 
 /**
+ * 직접분류 표에서 세울 수 있는 것.
+ *
+ * 숫자는 파일에 있는 열의 자리다. 나머지 셋은 파일에 없는 값이라 이름으로
+ * 부른다 — 지역과 나이는 주소·생년월일에서 계산한 것이고, 'dept'는 지금 그
+ * 행에 골라져 있는 소속이다.
+ */
+export type PendingSortKey = 'region' | 'age' | 'dept' | number;
+
+/**
  * 지금 고른 것까지 반영한 소속별 행 목록.
  *
  * 규칙 배정 그리드는 규칙이 정한 것만 보여준다. 사람이 고른 건이 어디로 몇 건 가는지는
@@ -298,6 +307,54 @@ export function collectAddedRows(
   }
 
   return addedRows;
+}
+
+/**
+ * 규칙이 정한 소속에서 **빠져나간** 행들. 소속명 → 그 소속을 떠난 행.
+ *
+ * collectAddedRows의 반대쪽이다. 옮긴 건은 새 소속에 더해지는 동시에 원래
+ * 소속에서 빠져야 한다 — 더하기만 하면 파라인슈 10건에서 1건을 굿모닝으로
+ * 옮겨도 파라인슈가 그대로 10건이고, 배포되는 숫자와 화면이 어긋난다.
+ *
+ * 규칙과 같은 소속을 고른 것은 옮긴 게 아니다. 빠지지 않는다.
+ */
+export function collectMovedRows(
+  file: PickableFile | null,
+  picks: Record<string, string> | undefined
+): Record<string, any[][]> | null {
+  if (!file) return null;
+
+  const moved: Record<string, any[][]> = {};
+  for (const entry of file.assignedRows ?? []) {
+    const dept = picks?.[entry.key];
+    if (!dept || dept === entry.dept) continue;
+    (moved[entry.dept] ??= []).push(entry.row);
+  }
+  return moved;
+}
+
+/**
+ * 규칙 배정 행에서 옮겨 나간 행을 뺀다.
+ *
+ * 규칙 배정 행에는 키가 안 실려 있어 값으로 맞춘다. 두 목록 다 같은
+ * previewHeaders 순서로 같은 함수(formatCellValue)를 거쳐 만들어져 같은
+ * 행이면 값이 정확히 같다. 같은 값의 행이 둘이면 그중 하나만 뺀다 —
+ * 옮긴 건 하나에 하나만 빠져야 한다.
+ */
+export function withoutMovedRows(ruleRows: any[][], movedRows: any[][]): any[][] {
+  if (movedRows.length === 0) return ruleRows;
+  const leftToDrop = new Map<string, number>();
+  for (const row of movedRows) {
+    const sig = JSON.stringify(row);
+    leftToDrop.set(sig, (leftToDrop.get(sig) ?? 0) + 1);
+  }
+  return ruleRows.filter((row) => {
+    const sig = JSON.stringify(row);
+    const n = leftToDrop.get(sig) ?? 0;
+    if (n === 0) return true;
+    leftToDrop.set(sig, n - 1);
+    return false;
+  });
 }
 
 /**

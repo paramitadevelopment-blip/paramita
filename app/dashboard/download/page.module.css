@@ -967,3 +967,177 @@
 .dupBadgeZero strong {
   color: #bbb;
 }
+
+/* ── 기간 조회 ─────────────────────────────────────────────
+   두 날짜 사이에 배포된 행을 한 표로 본다. 검색줄 바로 아래 한 줄이다. */
+.rangeBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.rangeIcon {
+  font-size: 22px;
+  color: #db1a62;
+}
+
+.rangeLabel {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.rangeInput {
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  font-size: 16px;
+  color: #333;
+}
+
+.rangeInput:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.rangeTilde {
+  color: #999;
+  font-size: 18px;
+}
+
+.rangeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 8px;
+  background: #db1a62;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rangeBtn:hover {
+  background: #c0154f;
+}
+
+.rangeBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/*
+ * 눈으로만 보는 표.
+ *
+ * 글자를 긁을 수도, 끌 수도 없게 한다. 미리보기 창 전체를 감싸므로 그 안의
+ * 표·머리글이 다 따른다. 실수나 손버릇을 막는 정도지 사진까지 막지는 못한다.
+ */
+.eyesOnly,
+.eyesOnly * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* [이번달 조회]. [조회]와 같은 높이·글자, 색만 물러서 있다. 주가 되는 건 날짜 조회다. */
+.rangeGhostBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid #db1a62;
+  border-radius: 8px;
+  background: white;
+  color: #db1a62;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rangeGhostBtn:hover {
+  background: #fff0f5;
+}
+
+.rangeGhostBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── 기간 조회 창 안의 소속 단추 ─────────────────────────────
+   누르면 그 소속 건만 남는다. 건수와 하루 평균이 단추에 같이 적혀 있어
+   표를 세로로 훑어 셀 필요가 없다. */
+.rangeChips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  /* 머리말·본문과 같은 좌우 여백. 없으면 단추가 창 왼쪽 벽에 붙는다. */
+  padding: 12px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.rangeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 18px;
+  border: 1px solid #e0e0e0;
+  border-radius: 100px;
+  background: white;
+  color: #444;
+  /* 화면 기본 글씨(18px)와 같게. 창 안에서 이 줄만 작으면 덜 중요한 것처럼 보인다. */
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rangeChip:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.rangeChipActive,
+.rangeChipActive:hover {
+  background: #db1a62;
+  border-color: #db1a62;
+  color: white;
+}
+
+.rangeChipCount {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.rangeChipAvg {
+  font-size: 17px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* 소속이 하나뿐일 때의 한 줄. 단추 모양이 아니라 눌러 보려 하지 않는다. */
+.rangeStat {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 4px;
+  color: #444;
+  font-size: 18px;
+  font-weight: 600;
+}

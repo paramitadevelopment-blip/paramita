@@ -4,11 +4,13 @@ import { Fragment, memo, useState } from 'react';
 import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import { REGIONS, type Region } from '@/lib/assignmentRegions';
 import {
+  ALL_SCOPE,
   commonChoicesInScope,
   rowsInScope,
   scopeKey,
   summarizePendingReasons,
   type PendingReason,
+  type PendingSortKey,
   type PickScope,
 } from '@/lib/pendingPicks';
 import type { ClassifiedFile } from '@/app/hooks/useAutoClassify';
@@ -21,8 +23,8 @@ interface PendingAssignTableProps {
   /** 지역 탭 → 선택 방식. 탭마다 따로 기억한다 */
   pickMode: Record<string, 'manual' | 'auto'>;
   onPickMode: (fileIdx: number, mode: 'manual' | 'auto', scope: PickScope) => void;
-  pendingSort: { by: 'region' | 'age' | number; order: 'asc' | 'desc' };
-  onToggleSort: (by: 'region' | 'age' | number) => void;
+  pendingSort: { by: PendingSortKey; order: 'asc' | 'desc' };
+  onToggleSort: (by: PendingSortKey) => void;
   /** 주문번호 → 소속명 */
   rowPicks: Record<string, string>;
   onPickRow: (key: string, dept: string) => void;
@@ -81,8 +83,16 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
    */
   const plan = previewPlan(current.previewHeaders ?? []);
   const ageAt = (row: any[]) => (plan.juminAt < 0 ? '-' : ageOf(row[plan.juminAt]));
-  // 건이 실제로 있는 지역만. 지역은 18개지만 한 파일에 다 나오는 일은 없다.
-  const activeRegions = REGIONS.filter((region) => (current.pendingByRegion?.[region] ?? 0) > 0);
+  /*
+   * 건이 실제로 있는 지역만. 지역은 18개지만 한 파일에 다 나오는 일은 없다.
+   *
+   * 고를 건(pending)뿐 아니라 규칙이 이미 정한 건(assigned)도 센다 — 표에는
+   * 둘 다 나오는데 탭에서 그 지역이 빠지면 자동분류 건만 있는 지역은 걸러 볼
+   * 수가 없다.
+   */
+  const activeRegions = REGIONS.filter(
+    (region) => rowsInScope(current, { region, reason: 'all' }).length > 0
+  );
 
   // 고를 것이 없으면 이 영역 자체를 그리지 않는다.
   if (activeRegions.length === 0) return null;
@@ -92,13 +102,19 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
   const shownRegion = showRegionTabs ? regionTab : 'all';
 
   /*
-   * 사유 필터는 지역 안에 어떤 사유가 실제로 있을 때만 보여준다.
-   * 한 가지뿐이면 눌러 봐야 걸러지는 게 없어 자리만 차지한다.
+   * 사유가 1차 필터다.
+   *
+   * 손이 갈리는 기준은 지역이 아니라 사유다 — 지사가 겹친 건은 나눠 담고,
+   * 담당 지사가 없는 건은 한 곳으로 몰아주고, 규칙이 정한 건은 그냥 둔다.
+   * 그래서 사유를 먼저 고르고 그 안에서 지역으로 좁힌다.
+   *
+   * 파일 전체에서 뽑는다. 지역 안에서 뽑으면 지역을 바꿀 때마다 1차 탭이
+   * 늘었다 줄었다 해서 무엇을 고르고 있었는지 놓친다.
    */
-  const reasonsInRegion = summarizePendingReasons(current, { region: shownRegion, reason: 'all' })
+  const reasonsInFile = summarizePendingReasons(current, ALL_SCOPE)
     .map((g) => g.reason)
     .filter((r, i, arr) => arr.indexOf(r) === i);
-  const showReasonTabs = reasonsInRegion.length > 1;
+  const showReasonTabs = reasonsInFile.length > 1;
   const shownReason = showReasonTabs ? reasonTab : 'all';
 
   const scope: PickScope = { region: shownRegion, reason: shownReason };
@@ -139,16 +155,24 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
           배정할 소속을 선택해주세요
         </div>
         <div style={{ fontSize: '20px', color: '#666', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+          {/*
+            여기는 '사람이 골라야 하는 건'만 센다. 규칙이 정한 건까지 세면
+            "왜 골라야 하나"라는 물음에 답이 안 된다. 아래 지역 탭은 표에
+            실제로 뜨는 줄을 세므로 자동분류 건이 있는 지역은 숫자가 더 크다 —
+            무엇을 센 숫자인지 이름을 붙여 둬야 둘이 어긋나 보이지 않는다.
+          */}
           <span style={{ color: '#db1a62', fontWeight: 700 }}>
-            총 {Object.values(current.pendingByRegion ?? {}).reduce((a, b) => a + b, 0)}건
+            골라야 할 건 {Object.values(current.pendingByRegion ?? {}).reduce((a, b) => a + b, 0)}건
           </span>
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
             {/* 건수가 있는 지역만. 지역이 18개라 0건까지 늘어놓으면 읽을 수가 없다. */}
-            {activeRegions.map((region) => (
-              <span key={region}>
-                {region} : {current.pendingByRegion?.[region] ?? 0}건
-              </span>
-            ))}
+            {activeRegions
+              .filter((region) => (current.pendingByRegion?.[region] ?? 0) > 0)
+              .map((region) => (
+                <span key={region}>
+                  {region} : {current.pendingByRegion?.[region] ?? 0}건
+                </span>
+              ))}
           </div>
         </div>
       </div>
@@ -186,18 +210,46 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
     </div>
 
     {/*
-      지역 탭. 지역이 여럿 걸렸을 때만 나온다.
+      사유 필터 — 1차. 지사가 겹친 건과 담당 지사가 없는 건은 손이 다르다 —
+      겹친 건은 나눠 담고, 없는 건은 한 곳으로 몰아주는 일이 많다.
+      섞어 두면 한 건씩 눌러 골라내야 한다.
+
+      파일 전체에서 센다. 아래 지역 탭이 이 안에서 다시 좁히는 구조라,
+      여기까지 지역에 매이면 두 줄이 서로를 좁혀 무엇이 기준인지 흐려진다.
+    */}
+    {showReasonTabs && (
+      <div className={`${styles.pickModeTabs} ${styles.reasonTabs}`}>
+        {(['all', ...reasonsInFile] as Array<PendingReason | 'all'>).map((reason) => {
+          const active = shownReason === reason;
+          const count = rowsInScope(current, { region: 'all', reason }).length;
+          return (
+            <button
+              key={reason}
+              type="button"
+              className={`${styles.pickModeTab} ${styles.reasonTab} ${active ? styles.pickModeTabActive : ''}`}
+              onClick={() => onReasonTab(currentIndex, reason)}
+            >
+              {reason === 'all' ? '총' : REASON_LABEL[reason]} {count}건
+            </button>
+          );
+        })}
+      </div>
+    )}
+
+    {/*
+      지역 탭 — 2차. 위에서 고른 사유 안에서만 센다.
+      '총'을 고르면 자동분류 건까지 들어가고, '지사 중복'을 고르면 그 건은 빠진다.
+
       탭은 보이는 행만 거를 뿐이고, 안 고른 건이 남았는지 보는 배포 게이트는
       전체를 본다 — 탭에 가려진 건이 조용히 빠지면 안 된다.
     */}
     {showRegionTabs && (
       <div className={styles.pickModeTabs} style={{ flexWrap: 'wrap' }}>
         {(['all', ...activeRegions] as Array<Region | 'all'>).map((region) => {
+          const count = rowsInScope(current, { region, reason: shownReason }).length;
+          // 고른 사유에 한 건도 없는 지역은 내지 않는다. 눌러도 빈 표다.
+          if (region !== 'all' && count === 0) return null;
           const active = shownRegion === region;
-          const count =
-            region === 'all'
-              ? activeRegions.reduce((sum, r) => sum + (current.pendingByRegion?.[r] ?? 0), 0)
-              : current.pendingByRegion?.[region] ?? 0;
           return (
             <button
               key={region}
@@ -207,30 +259,6 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
             >
               {/* '충북 1'은 1번인지 1건인지 헷갈린다. 단위를 붙여 둔다. */}
               {region === 'all' ? '전체' : region} {count}건
-            </button>
-          );
-        })}
-      </div>
-    )}
-
-    {/*
-      사유 필터. 지사가 겹친 건과 담당 지사가 없는 건은 손이 다르다 —
-      겹친 건은 나눠 담고, 없는 건은 한 곳으로 몰아주는 일이 많다.
-      섞어 두면 한 건씩 눌러 골라내야 한다.
-    */}
-    {showReasonTabs && (
-      <div className={styles.pickModeTabs} style={{ flexWrap: 'wrap' }}>
-        {(['all', ...reasonsInRegion] as Array<PendingReason | 'all'>).map((reason) => {
-          const active = shownReason === reason;
-          const count = rowsInScope(current, { region: shownRegion, reason }).length;
-          return (
-            <button
-              key={reason}
-              type="button"
-              className={`${styles.pickModeTab} ${active ? styles.pickModeTabActive : ''}`}
-              onClick={() => onReasonTab(currentIndex, reason)}
-            >
-              {reason === 'all' ? '전체' : REASON_LABEL[reason]} {count}건
             </button>
           );
         })}
@@ -349,7 +377,21 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
                 </th>
               </Fragment>
             ))}
-            <th className={styles.pendingDeptTh}>배정 소속</th>
+            {/*
+              배정 소속도 세울 수 있어야 한다. 한 소속으로 몰아준 뒤 "그래서
+              어디로 몇 건이 가나"를 보려면 같은 소속끼리 붙어 있어야 하고,
+              아직 안 고른 건(빈 값)은 언제나 뒤로 밀려 눈에 띈다.
+            */}
+            <th
+              className={`${styles.pendingDeptTh} ${styles.pendingSortableTh}`}
+              onClick={() => onToggleSort('dept')}
+            >
+              <span className={styles.pendingThInner}>
+                배정 소속
+                {pendingSort.by === 'dept' &&
+                  (pendingSort.order === 'asc' ? <MdArrowDropUp /> : <MdArrowDropDown />)}
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -382,12 +424,25 @@ const PendingAssignTable = memo(function PendingAssignTableComponent({
             // 정렬. 숫자로 읽히면 숫자로, 아니면 한국어 기준 문자열로 비교한다.
             // 값이 비어 있는 행은 항상 뒤로 보낸다 — 오름/내림을 오갈 때마다
             // 빈 칸이 맨 위로 올라오면 정작 볼 것이 가려진다.
-            const sortValue = (item: { region: Region | null; row: any[] }) => {
+            const sortValue = (item: {
+              key: string;
+              region: Region | null;
+              row: any[];
+              assignedDept?: string;
+            }) => {
               if (pendingSort.by === 'region') return item.region ?? '';
               // 못 읽은 나이('-')는 빈 값으로 봐서 뒤로 보낸다.
               if (pendingSort.by === 'age') {
                 const age = ageAt(item.row);
                 return age === '-' ? '' : age;
+              }
+              /*
+               * 드롭다운에 지금 떠 있는 값으로 센다. 규칙이 정한 소속이 아니라
+               * 사람이 고른 것이 우선이다 — 화면에 보이는 것과 다른 기준으로
+               * 세우면 옮겨 놓고도 줄이 안 움직인 것처럼 보인다.
+               */
+              if (pendingSort.by === 'dept') {
+                return rowPicks[item.key] ?? item.assignedDept ?? '';
               }
               return item.row[pendingSort.by];
             };

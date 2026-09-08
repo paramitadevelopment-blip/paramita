@@ -21,6 +21,8 @@ interface ExcelPreviewModalProps {
   title?: string;
   /** 총 건수 옆에 붙일 갈래별 건수. 비면 아무것도 안 그린다 */
   summary?: Array<{ sheet: string; count: number }>;
+  /** 머리말과 표 사이에 끼울 것. 기간 조회가 소속 고르는 단추를 여기 둔다 */
+  toolbar?: React.ReactNode;
   onClose: () => void;
 }
 
@@ -29,6 +31,7 @@ const ExcelPreviewModal = memo(function ExcelPreviewModal({
   data: providedData,
   title,
   summary,
+  toolbar,
   onClose,
 }: ExcelPreviewModalProps) {
   const [allSheets, setAllSheets] = useState<Record<string, PreviewData>>({});
@@ -195,6 +198,8 @@ const ExcelPreviewModal = memo(function ExcelPreviewModal({
             <MdClose />
           </button>
         </div>
+
+        {toolbar}
 
         {Object.keys(allSheets).length > 1 && (
           <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e0e0e0', paddingBottom: '8px', marginBottom: '12px' }}>

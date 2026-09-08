@@ -19,6 +19,7 @@ import Pagination from '@/app/components/Pagination/Pagination';
 import EmptyState from '@/app/components/EmptyState/EmptyState';
 import SearchBar from '@/app/components/SearchBar';
 import ExcelPreviewModal from '../components/ExcelPreviewModal';
+import DateRangeViewer from '../components/DateRangeViewer';
 import DownloadLogsModal from '../components/DownloadLogsModal';
 import AllDeleteModal from '../components/AllDeleteModal';
 import DeleteConfirmModal from '../components/DeleteConfirmModal';
@@ -607,6 +608,14 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
           </button>
         </div>
       )}
+
+      {/*
+        기간 조회. 파일 단위 목록으로는 "이달 우리 지사에 온 건"을 훑을 수 없어
+        두 날짜 사이의 배포 건을 한 표로 본다. 거르는 줄들 아래, 표 바로 위에
+        둔다 — 소속·상태를 고른 뒤 "그럼 이 기간엔"으로 이어지는 자리다.
+        원본파일 관리에는 안 둔다. 원본은 배포 전 파일이라 소속별로 나뉜 행이 아니다.
+      */}
+      {!showOriginal && <DateRangeViewer />}
 
       {filesWithFormattedDate.length === 0 ? (
         <EmptyState message={search ? '검색 결과가 없습니다.' : '파일이 없습니다.'} />

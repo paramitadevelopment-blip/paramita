@@ -2,6 +2,7 @@
 
 import { memo } from 'react';
 import { isAssignableDepartmentGroup } from '@/lib/departments';
+import { withoutMovedRows } from '@/lib/pendingPicks';
 import styles from '../page.module.css';
 
 interface Department {
@@ -18,6 +19,8 @@ interface DeptResultGridsProps {
   rowsByDeptId: Record<number, any[][]>;
   /** 소속명 → 선택으로 추가된 행들 */
   addedRowsByDept: Record<string, any[][]> | null;
+  /** 소속명 → 규칙은 여기로 보냈는데 사람이 다른 곳으로 옮긴 행들 */
+  movedRowsByDept: Record<string, any[][]> | null;
   onPreview: (preview: { title: string; headers: string[]; rows: any[][] }) => void;
 }
 
@@ -32,6 +35,7 @@ const DeptResultGrids = memo(function DeptResultGridsComponent({
   classificationByDeptId,
   rowsByDeptId,
   addedRowsByDept,
+  movedRowsByDept,
   onPreview,
 }: DeptResultGridsProps) {
   /*
@@ -97,12 +101,19 @@ const DeptResultGrids = memo(function DeptResultGridsComponent({
             {visibleDepartments
               .map((dept) => {
                 const added = addedRowsByDept?.[dept.name] ?? [];
-                const ruleRows = rowsByDeptId[dept.id] ?? [];
-                const finalCount = (classificationByDeptId[dept.id] || 0) + added.length;
+                const moved = movedRowsByDept?.[dept.name] ?? [];
+                /*
+                 * 규칙이 보낸 것에서 사람이 다른 데로 옮긴 것을 빼고, 다른 데서
+                 * 옮겨 온 것을 더한다. 빼는 쪽을 잊으면 옮겨 놓고도 원래 소속
+                 * 숫자가 그대로라 배포되는 숫자와 어긋난다.
+                 */
+                const staying = withoutMovedRows(rowsByDeptId[dept.id] ?? [], moved);
+                const finalCount =
+                  (classificationByDeptId[dept.id] || 0) - moved.length + added.length;
                 // 어느 건이 규칙으로 왔고 어느 건이 사람 손을 거쳤는지 표시한다.
                 // 배포하고 나면 소속만 남아 근거를 되짚을 수 없다.
                 const finalRows = [
-                  ...ruleRows.map((row: any[]) => ['자동분류', ...row]),
+                  ...staying.map((row: any[]) => ['자동분류', ...row]),
                   ...added.map((row: any[]) => ['직접분류', ...row]),
                 ];
                 return (
@@ -122,9 +133,12 @@ const DeptResultGrids = memo(function DeptResultGridsComponent({
                     <div className={styles.resultDeptName}>{dept.name}</div>
                     <div className={styles.resultCountWrapper}>
                       <span className={styles.resultCount}>{finalCount}건</span>
-                      {/* 늘어난 만큼을 짚어준다. 총합만 보면 뭘 바꿨는지 안 보인다. */}
+                      {/* 늘고 준 만큼을 짚어준다. 총합만 보면 뭘 바꿨는지 안 보인다. */}
                       {added.length > 0 && (
                         <span className={styles.pickedDelta}>+{added.length}</span>
+                      )}
+                      {moved.length > 0 && (
+                        <span className={styles.pickedDeltaMinus}>−{moved.length}</span>
                       )}
                       <span className={styles.checkMark}>✓</span>
                     </div>

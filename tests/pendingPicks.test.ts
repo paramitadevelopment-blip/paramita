@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   collectAddedRows,
+  collectMovedRows,
+  withoutMovedRows,
   findUnpicked,
   buildRowAssignments,
   buildBaseCounts,
@@ -528,9 +530,113 @@ describe('자동분류된 건 다루기', () => {
     expect(added!['경기']).toBeUndefined();
   });
 
+  /*
+   * 옮긴 건은 새 소속에 더해지는 만큼 원래 소속에서 빠져야 한다.
+   * 더하기만 하면 파라인슈 10건에서 1건을 굿모닝으로 옮겨도 파라인슈가
+   * 그대로 10건이라, 화면 숫자와 배포되는 숫자가 어긋난다.
+   */
+  it('자동분류 건을 옮기면 원래 소속에서 빠진다', () => {
+    const moved = collectMovedRows(FILE, { A1: '파라인슈' });
+    expect(moved!['경기']).toEqual([['서울자동']]);
+    expect(moved!['파라인슈']).toBeUndefined();
+  });
+
+  it('규칙과 같은 소속을 고른 것은 빠지지 않는다', () => {
+    expect(collectMovedRows(FILE, { A1: '경기' })).toEqual({});
+  });
+
+  it('더한 것과 뺀 것이 짝을 이룬다 — 총합은 그대로', () => {
+    const picks = { A1: '파라인슈', A2: '굿모닝제너럴' };
+    const added = collectAddedRows(FILE, picks)!;
+    const moved = collectMovedRows(FILE, picks)!;
+    const sum = (m: Record<string, any[][]>) =>
+      Object.values(m).reduce((n, rows) => n + rows.length, 0);
+    expect(sum(added)).toBe(sum(moved));
+  });
+
+  it('파일이 없으면 null', () => {
+    expect(collectMovedRows(null, { A1: '파라인슈' })).toBeNull();
+  });
+
+  describe('규칙 배정 행에서 옮긴 것을 뺀다 (withoutMovedRows)', () => {
+    const rule = [['a', '1'], ['b', '2'], ['b', '2'], ['c', '3']];
+
+    it('값이 같은 행을 뺀다', () => {
+      expect(withoutMovedRows(rule, [['b', '2']])).toEqual([['a', '1'], ['b', '2'], ['c', '3']]);
+    });
+
+    it('같은 값이 둘이면 옮긴 수만큼만 뺀다', () => {
+      expect(withoutMovedRows(rule, [['b', '2'], ['b', '2']])).toEqual([['a', '1'], ['c', '3']]);
+    });
+
+    it('옮긴 게 없으면 그대로', () => {
+      expect(withoutMovedRows(rule, [])).toBe(rule);
+    });
+
+    it('없는 행을 빼려 해도 아무것도 안 빠진다', () => {
+      expect(withoutMovedRows(rule, [['z', '9']])).toEqual(rule);
+    });
+  });
+
   /* 배포 게이트는 '아직 안 고른 건'만 본다. 자동분류 건은 이미 정해져 있다. */
   it('자동분류 건은 배포를 막지 않는다', () => {
     expect(findUnpicked([FILE], {})).toHaveLength(1);
     expect(findUnpicked([FILE], { 0: { P1: '경기' } })).toEqual([]);
+  });
+});
+
+/**
+ * 화면에 나란히 서는 두 줄의 숫자가 맞는가.
+ *
+ * 지역 탭과 사유 필터는 같은 표를 다른 각도로 거른다. 서로 다른 함수로 세면
+ * 사유가 '전체'인데도 위는 3건 아래는 4건으로 갈린다 — 실제로 그랬다.
+ * 둘 다 rowsInScope를 쓰므로 여기서 그 셈이 맞는지 지킨다.
+ */
+describe('지역 탭과 사유 필터의 건수가 맞는다', () => {
+  const FILE: SummarizableFile & PickableFile = {
+    fileName: '섞인파일.xlsx',
+    // 경기남부: 고를 건 3 + 규칙이 정한 건 1 = 표에 4줄
+    pendingKeysByRegion: { 경기남부: ['P1', 'P2', 'P3'], 서울: ['P4'] },
+    pendingRowsByRegion: { 경기남부: [['a'], ['b'], ['c']], 서울: [['d']] },
+    pendingReasonsByRegion: {
+      경기남부: ['multiple', 'multiple', 'multiple'],
+      서울: ['unmatched'],
+    },
+    pendingChoicesByRegion: {
+      경기남부: [['경기', '파라인슈'], ['경기', '파라인슈'], ['경기', '파라인슈']],
+      서울: [['굿모닝제너럴']],
+    },
+    assignedRows: [{ key: 'A1', region: '경기남부', dept: '파라인슈', row: ['자동'] }],
+    assignableDepts: ['경기', '파라인슈', '굿모닝제너럴'],
+  };
+
+  it("사유가 '전체'면 지역 탭도 자동분류 건까지 센다", () => {
+    expect(rowsInScope(FILE, { region: '경기남부', reason: 'all' })).toHaveLength(4);
+  });
+
+  it("사유를 '지사 중복'으로 좁히면 그만큼만", () => {
+    expect(rowsInScope(FILE, { region: '경기남부', reason: 'multiple' })).toHaveLength(3);
+  });
+
+  it("사유를 '자동분류'로 좁히면 한 건", () => {
+    expect(rowsInScope(FILE, { region: '경기남부', reason: 'assigned' })).toHaveLength(1);
+  });
+
+  /** 한 지역에서 사유별로 쪼갠 합은 그 지역 전체와 같아야 한다. */
+  it('사유별 합 = 그 지역 전체', () => {
+    const all = rowsInScope(FILE, { region: '경기남부', reason: 'all' }).length;
+    const sum = (['assigned', 'multiple', 'unmatched'] as const)
+      .map((reason) => rowsInScope(FILE, { region: '경기남부', reason }).length)
+      .reduce((a, b) => a + b, 0);
+    expect(sum).toBe(all);
+  });
+
+  /** 지역별 합은 전체와 같아야 한다 — 지역이 없는 건이 없을 때. */
+  it('지역별 합 = 전체', () => {
+    const all = rowsInScope(FILE, ALL_SCOPE).length;
+    const sum = (['경기남부', '서울'] as const)
+      .map((region) => rowsInScope(FILE, { region, reason: 'all' }).length)
+      .reduce((a, b) => a + b, 0);
+    expect(sum).toBe(all);
   });
 });

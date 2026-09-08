@@ -78,6 +78,7 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
     regionTab,
     reasonTab,
     resultWithPicks,
+    movedWithPicks,
     unpicked,
     handlePickMode,
     handlePickRow,
@@ -153,6 +154,7 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
                   classificationByDeptId={current.classificationByDeptId}
                   rowsByDeptId={current.rowsByDeptId}
                   addedRowsByDept={resultWithPicks}
+                  movedRowsByDept={movedWithPicks}
                   onPreview={setPreview}
                 />
               </div>

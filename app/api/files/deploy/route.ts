@@ -64,6 +64,7 @@ import {
 import { recordReapplyNotices, type ReapplyCandidate } from '@/lib/reapplyStore';
 import { loadAssignmentRules } from '@/lib/assignmentRulesStore';
 import { isAssignableDepartmentGroup } from '@/lib/departments';
+import { deployedStoragePath } from '@/lib/storagePath';
 import * as XLSX from 'xlsx';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -755,12 +756,22 @@ export async function POST(request: NextRequest) {
         bookType: 'xlsx',
       });
 
+      /*
+       * 같은 경로에 덮어쓰지 않는다.
+       *
+       * 저장소 앞에 캐시가 있어, 같은 경로를 덮어쓰면 몇 초 동안 옛 파일을
+       * 돌려준다(직접 재어 보니 3초까지는 옛것, 10초 뒤에야 새것). 그 사이에
+       * 원본파일 관리에서 프리뷰를 열면 시트 한 장짜리 업로드 원본이 열려,
+       * 배포했는데 분류 결과·중복 시트가 "안 생긴" 것처럼 보인다.
+       *
+       * 새 경로에 쓰고 DB가 그 경로를 가리키게 한 뒤 옛 파일을 지운다.
+       * 새 경로는 캐시가 본 적이 없어 첫 요청부터 새 내용이 온다.
+       */
+      const rebuiltPath = deployedStoragePath(originalFile.storage_path);
+
       const { error: rebuildUploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(originalFile.storage_path, rebuiltBuffer, {
-          contentType: xlsxMimeType,
-          upsert: true,
-        });
+        .upload(rebuiltPath, rebuiltBuffer, { contentType: xlsxMimeType });
 
       if (rebuildUploadError) {
         console.error('Failed to rewrite original file:', rebuildUploadError);
@@ -770,14 +781,33 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 시트가 늘어 용량이 바뀌었으므로 갱신한다.
-      const { error: sizeUpdateError } = await supabase
+      // DB가 새 파일을 가리키게 한다. 시트가 늘어 용량도 바뀌었다.
+      const { error: pathUpdateError } = await supabase
         .from('files')
-        .update({ size: rebuiltBuffer.byteLength, file_content: originalContent })
+        .update({
+          storage_path: rebuiltPath,
+          size: rebuiltBuffer.byteLength,
+          file_content: originalContent,
+        })
         .eq('id', originalFiles[fileIdx].id);
 
-      if (sizeUpdateError) {
-        console.error('Failed to update original file size:', sizeUpdateError);
+      if (pathUpdateError) {
+        // DB가 옛 경로를 그대로 가리키므로 새 파일은 주인 없는 물건이다. 치운다.
+        console.error('Failed to point original at rebuilt file:', pathUpdateError);
+        await supabase.storage.from(STORAGE_BUCKET).remove([rebuiltPath]);
+        return NextResponse.json(
+          { error: `${originalFile.name}: 원본 파일 정보 갱신에 실패했습니다.` },
+          { status: 500 }
+        );
+      }
+
+      // 시트 한 장짜리 업로드 원본은 이제 아무도 안 가리킨다. 남겨 두면
+      // 고객 정보가 든 파일이 화면에서 찾을 수도 지울 수도 없는 채로 쌓인다.
+      const { error: oldRemoveError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .remove([originalFile.storage_path]);
+      if (oldRemoveError) {
+        console.error('Failed to remove pre-deploy original:', oldRemoveError);
       }
 
       // 각 부서별로 해당 행만 담은 파일 생성
