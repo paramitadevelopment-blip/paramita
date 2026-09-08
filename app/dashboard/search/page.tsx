@@ -13,6 +13,8 @@ import DownloadRequestsSection from './components/DownloadRequestsSection';
 import DeletionHistorySection from './components/DeletionHistorySection';
 import BlacklistSection from './components/BlacklistSection';
 import ReapplySection from './components/ReapplySection';
+import ComplaintSection from './components/ComplaintSection';
+import GiftRequestSection from './components/GiftRequestSection';
 import styles from './page.module.css';
 
 function SearchPage() {
@@ -113,6 +115,13 @@ function SearchPage() {
               />
               <BlacklistSection searchQuery={searchQuery} formatDateTime={formatDateTime} />
               <ReapplySection searchQuery={searchQuery} formatDateTime={formatDateTime} />
+              {/*
+                민원·사은품도 같은 검색어로 훑는다. 두 목록 API가 이미 모든 칸을
+                보므로(lib/listSearch.ts) 여기서는 그 API를 부르기만 한다.
+                볼 수 없는 사람에게는 서버가 걸러 빈 결과가 온다.
+              */}
+              <ComplaintSection searchQuery={searchQuery} formatDateTime={formatDateTime} />
+              <GiftRequestSection searchQuery={searchQuery} formatDateTime={formatDateTime} />
             </div>
           )}
 
