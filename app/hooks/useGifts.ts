@@ -144,11 +144,13 @@ export function useGiftRequests(
   });
 
   const removeMutation = useMutation({
-    mutationFn: async (id: number) => {
+    // 관리자가 지울 때는 사유가 붙는다. 지사는 빈 채로 보낸다.
+    mutationFn: async ({ id, reason }: { id: number; reason?: string }) => {
       const response = await fetch(`/api/gift-requests/${id}`, {
         method: 'DELETE',
         credentials: 'include',
-        headers: { 'X-CSRF-Token': getCsrfToken() },
+        headers: headers(),
+        body: JSON.stringify({ reason: reason ?? '' }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || '지우지 못했습니다.');

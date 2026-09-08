@@ -28,7 +28,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 /** 무엇을 해도 되는지 판단하는 데 필요한 값. */
 const GUARD_COLUMNS =
   'id, status, requester_id, group_name, order_no, read_at, order_id, ' +
-  'checked_at, check_reason, ship_read_at';
+  'checked_at, check_reason, ship_read_at, courier, tracking_no';
 
 interface Guard {
   id: number;
@@ -42,6 +42,9 @@ interface Guard {
   checked_at: string | null;
   check_reason: string | null;
   ship_read_at: string | null;
+  /** 지금 적혀 있는 송장. 같은 값으로 다시 저장하면 지사 확인을 건드리지 않는다. */
+  courier: string | null;
+  tracking_no: string | null;
 }
 
 async function departmentOf(userId: number): Promise<string | null> {
@@ -272,23 +275,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
       const orderDate = String(body.orderDate ?? '').trim();
       const memo = String(body.deliveryMemo ?? '').trim();
+      const courier = String(body.courier).trim();
+      const trackingNo = String(body.trackingNo).trim();
+      /*
+       * 지사의 확인은 **송장이 바뀌었을 때만** 다시 받는다.
+       *
+       * 바뀐 값은 다시 봐야 한다 — 운송장번호가 바뀌었는데 지사 화면에 이미
+       * '확인'이 붙어 있으면 바뀐 줄 모르고 지나간다. 반대로 같은 값을 다시
+       * 저장했을 뿐인데 확인이 풀리면, 지사는 이미 본 송장을 또 확인하라는
+       * 배지를 받는다. 배지가 거짓말을 하기 시작하면 아무도 안 본다.
+       */
+      const changed = courier !== (guard.courier ?? '') || trackingNo !== (guard.tracking_no ?? '');
       return await applyUpdate(giftId, {
         status: 'shipped',
-        courier: String(body.courier).trim(),
-        tracking_no: String(body.trackingNo).trim(),
+        courier,
+        tracking_no: trackingNo,
         // 적었을 때만 덮어쓴다. 안 적으면 묶을 때 찍힌 발주일·신청 때 적은 메세지가 그대로다.
         ...(orderDate ? { order_date: orderDate } : {}),
         ...(memo ? { delivery_memo: memo } : {}),
         shipped_by: user.username,
         shipped_at: now,
-        /*
-         * 지사의 확인은 다시 받는다.
-         *
-         * 고친 값은 다시 봐야 한다 — 운송장번호가 바뀌었는데 지사 화면에 이미
-         * '확인함'이 붙어 있으면 바뀐 줄 모르고 지나간다.
-         */
-        ship_read_at: null,
-        ship_read_by: null,
+        ...(changed ? { ship_read_at: null, ship_read_by: null } : {}),
         updated_at: now,
       });
     }
@@ -375,10 +382,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 /**
- * 신청을 지운다. 전달 전(requested)에 신청한 쪽만.
+ * 신청을 지운다.
  *
- * 보완 요청을 받은 것은 못 지운다 — 사은품담당자가 되돌린 기록이 함께 사라진다.
- * 고쳐서 다시 올리는 것이 맞다.
+ * 신청한 쪽은 담당자가 아직 손대지 않은 것만 지운다. 보완 요청을 받은 것은
+ * 못 지운다 — 사은품담당자가 되돌린 기록이 함께 사라진다. 고쳐서 다시 올린다.
+ *
+ * 관리자(admin·subadmin)는 상태와 무관하게 지운다. 대신 사유를 받아 그 줄을
+ * 통째로 보관본에 남긴다 — 민원의 관리자 삭제와 같은 방식이다.
  */
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -412,12 +422,62 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     if (!(await ownsThis(guard, user))) {
       return NextResponse.json({ error: '내 신청이 아닙니다.' }, { status: 403 });
     }
-    if (!canDeleteGiftRequest(guard)) {
+
+    /*
+     * 관리자가 지울 때는 사유를 받아 보관본을 남긴다.
+     *
+     * 관리자는 발주가 나간 건도, 송장이 찍힌 건도 지울 수 있다. 그냥 지우면
+     * 그 건이 있었다는 사실조차 남지 않는다. 지우는 것은 그대로 하되 무엇을
+     * 누가 왜 지웠는지는 남긴다.
+     *
+     * 지사가 아무도 안 본 건을 물릴 때는 사유를 묻지 않는다. 그건 잘못 적은
+     * 것을 바로 지우는 일이라 남길 사정이 없다.
+     */
+    const isAdmin = isAdminRole(user.role);
+    if (!canDeleteGiftRequest(guard, isAdmin)) {
       const reason =
         guard.status === 'supplement'
           ? '보완 요청을 받은 신청은 지울 수 없습니다. 고쳐서 다시 올리거나 철회하세요.'
-          : '사은품담당자가 이미 확인한 신청은 지울 수 없습니다.';
+          : guard.status === 'ordered' || guard.status === 'shipped'
+            ? '이미 발주리스트에 담겨 나간 신청은 지울 수 없습니다.'
+            : '사은품담당자가 이미 확인한 신청은 지울 수 없습니다.';
       return NextResponse.json({ error: reason }, { status: 409 });
+    }
+
+    if (isAdmin) {
+      const body = await request.json().catch(() => ({}));
+      const reason = String((body as Record<string, unknown>)?.reason ?? '').trim();
+      if (!reason) {
+        return NextResponse.json({ error: '삭제 사유를 적어 주세요.' }, { status: 400 });
+      }
+      if (reason.length > 500) {
+        return NextResponse.json({ error: '삭제 사유가 너무 깁니다.' }, { status: 400 });
+      }
+
+      const { data: full } = await supabase
+        .from('gift_requests')
+        .select(GIFT_COLUMNS)
+        .eq('id', giftId)
+        .maybeSingle();
+
+      const { error: archiveError } = await supabase.from('deleted_gift_requests').insert({
+        gift_request_id: giftId,
+        snapshot: full ?? guard,
+        reason,
+        deleted_by_id: user.id,
+        deleted_by: user.username,
+      });
+      /*
+       * 보관에 실패하면 지우지 않는다. 여기서 그냥 넘어가면 되짚을 것 없이
+       * 사라지는데, 그건 지운 사람도 나중에 답을 못 하는 상태다.
+       */
+      if (archiveError) {
+        console.error('Gift request archive error:', archiveError);
+        return NextResponse.json(
+          { error: '삭제 기록을 남기지 못해 지우지 않았습니다.' },
+          { status: 500 }
+        );
+      }
     }
 
     const { error } = await supabase.from('gift_requests').delete().eq('id', giftId);

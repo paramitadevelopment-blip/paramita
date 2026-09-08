@@ -16,6 +16,7 @@ import { toAssignableDepartmentGroups } from '@/lib/departments';
 import {
   GIFT_STATUSES,
   GIFT_STATUS_LABEL,
+  needsShipCheck,
   type GiftRequestRow,
   type GiftStatus,
 } from '@/lib/gifts';
@@ -107,27 +108,60 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
     });
   };
 
+  /*
+   * 삭제. 관리자는 상태와 무관하게 지우되 사유를 남긴다 — 발주가 나간 건을
+   * 지우는 일이라 "왜"가 없으면 나중에 아무도 답을 못 한다. 지사는 담당자가
+   * 아직 안 본 것만 지우고, 그건 잘못 적은 걸 물리는 일이라 사유를 묻지 않는다.
+   */
   const askDelete = (row: GiftRequestRow) => {
+    let reason = '';
     showAlert({
       type: 'warning',
       title: '신청 삭제',
-      message: `${row.customer_name} 님 ${row.gift_name} 신청을 정말 삭제하시겠습니까?`,
+      message: isAdmin ? (
+        <>
+          <p>
+            {row.customer_name} 님 {row.gift_name} 신청을 삭제합니다. 발주·배송 기록도 함께
+            사라집니다. 되돌릴 수 없습니다.
+          </p>
+          <label className={styles.withdrawField}>
+            <span>삭제 사유</span>
+            <input
+              type="text"
+              maxLength={500}
+              placeholder="예: 시험 삼아 넣은 건"
+              onChange={(e) => {
+                reason = e.target.value;
+              }}
+            />
+          </label>
+        </>
+      ) : (
+        `${row.customer_name} 님 ${row.gift_name} 신청을 정말 삭제하시겠습니까?`
+      ),
       showCancelButton: true,
-      onConfirm: () => list.remove(row.id),
+      onConfirm: () => {
+        if (isAdmin && !reason.trim()) {
+          showAlert({ type: 'warning', title: '신청 삭제', message: '삭제 사유를 적어 주세요.' });
+          return;
+        }
+        list.remove({ id: row.id, reason: reason.trim() });
+      },
     });
   };
 
-  /** 채워진 배송 정보를 봤다고 표시한다. 누르면 배지에서 내려간다. */
-  const askConfirmShip = (row: GiftRequestRow) => {
-    showAlert({
-      type: 'info',
-      title: '배송 정보 확인',
-      message: `${row.customer_name} 님 ${row.gift_name} — ${[row.courier, row.tracking_no]
-        .filter(Boolean)
-        .join(' · ')}. 확인하셨습니까?`,
-      showCancelButton: true,
-      onConfirm: () => list.patch({ id: row.id, body: { action: 'confirmShip' } }),
-    });
+  /*
+   * 상세를 여는 것이 곧 배송 정보 확인이다.
+   *
+   * 송장이 채워진 건은 지사가 봐야 배지에서 내려간다. 버튼을 따로 두면 안 누르고
+   * 지나가서 배지가 안 내려간다. 열어 본 순간 찍는다 — 민원·담당자 확인과 같은
+   * 규칙이다. 관리자는 찍지 않는다. 송장을 기다린 쪽은 신청한 지사다.
+   */
+  const openDetail = (row: GiftRequestRow) => {
+    setDetail(row);
+    if (isAdmin || !needsShipCheck(row)) return;
+    // 보러 온 사람에게 오류창을 띄우지 않는다. 실패하면 목록이 '미확인' 그대로다.
+    list.patch({ id: row.id, body: { action: 'confirmShip' } }).catch(() => {});
   };
 
   const askWithdraw = (row: GiftRequestRow) => {
@@ -316,11 +350,11 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
               <GiftTable
                 rows={list.rows}
                 showGroup={isAdmin}
+                isAdmin={isAdmin}
                 actions={{
-                  onOpen: setDetail,
+                  onOpen: openDetail,
                   onEdit: setEditing,
                   onDelete: askDelete,
-                  onConfirmShip: askConfirmShip,
                   onWithdraw: askWithdraw,
                 }}
                 sortBy={list.sort.by}

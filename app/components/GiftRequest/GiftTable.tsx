@@ -7,7 +7,6 @@ import {
   canDeleteGiftRequest,
   canEditGiftRequest,
   canWithdrawGiftRequest,
-  needsShipCheck,
   type GiftRequestRow,
 } from '@/lib/gifts';
 import styles from './GiftRequest.module.css';
@@ -71,18 +70,20 @@ export interface GiftTableActions {
     onToggle: (id: number) => void;
     onToggleAll: (ids: number[]) => void;
   };
+  /**
+   * 상세 열기. **여는 것이 곧 확인이다** — 담당자가 발주 대기 건을 열면 확인이
+   * 찍히고(지사는 그 뒤로 못 고친다), 지사가 배송 정보 입력됨 건을 열면 송장을
+   * 봤다고 찍힌다. 확인 버튼은 따로 없다. 화면이 여기서 그 처리를 한다.
+   */
   onOpen: (row: GiftRequestRow) => void;
   onEdit?: (row: GiftRequestRow) => void;
   onDelete?: (row: GiftRequestRow) => void;
   onWithdraw?: (row: GiftRequestRow) => void;
-  /** 사은품담당자: 확인·배송 정보·보완. */
-  onRead?: (row: GiftRequestRow) => void;
+  /** 사은품담당자: 배송 정보·보완. */
   onShip?: (row: GiftRequestRow) => void;
   onSupplement?: (row: GiftRequestRow) => void;
   /** 관리자: 기록 없이 들어온 건을 확인한다. */
   onCheck?: (row: GiftRequestRow) => void;
-  /** 지사: 채워진 배송 정보를 확인한다. */
-  onConfirmShip?: (row: GiftRequestRow) => void;
   /** 담당자: 그 건이 실린 발주리스트 엑셀을 다시 받는다. */
   onDownloadOrder?: (orderId: number) => void;
 }
@@ -91,6 +92,8 @@ interface GiftTableProps {
   rows: GiftRequestRow[];
   /** 소속 열을 보이는가. 지사는 자기 소속뿐이라 필요 없다. */
   showGroup: boolean;
+  /** 관리자(admin·subadmin)인가. 관리자는 상태와 무관하게 지울 수 있다. */
+  isAdmin?: boolean;
   actions: GiftTableActions;
   sortBy: string;
   sortOrder: 'asc' | 'desc';
@@ -100,6 +103,7 @@ interface GiftTableProps {
 const GiftTable = memo(function GiftTableComponent({
   rows,
   showGroup,
+  isAdmin = false,
   actions,
   sortBy,
   sortOrder,
@@ -188,6 +192,35 @@ const GiftTable = memo(function GiftTableComponent({
                     <span className={`${styles.statusBadge} ${styles[`status_${row.status}`]}`}>
                       {GIFT_STATUS_LABEL[row.status]}
                     </span>
+                    {/*
+                      담당자가 봤는가. 지사는 이걸로 "아직 고칠 수 있다"를 알고,
+                      담당자는 아직 안 연 건을 안다. 상세를 열면 '확인'으로 바뀐다.
+                    */}
+                    {row.status === 'forwarded' && (
+                      <span
+                        className={`${styles.statusBadge} ${styles.readBadge} ${row.read_at ? styles.read_yes : styles.read_no}`}
+                        title={
+                          row.read_at
+                            ? `담당자 확인 ${dateText(row.read_at)}`
+                            : '담당자가 아직 열지 않음 — 지사가 고칠 수 있음'
+                        }
+                      >
+                        {row.read_at ? '확인' : '미확인'}
+                      </span>
+                    )}
+                    {/* 채워진 송장을 지사가 봤는가. 안 봤으면 그 줄이 아직 지사의 할 일이다. */}
+                    {row.status === 'shipped' && (
+                      <span
+                        className={`${styles.statusBadge} ${styles.readBadge} ${row.ship_read_at ? styles.read_yes : styles.read_no}`}
+                        title={
+                          row.ship_read_at
+                            ? `지사 확인 ${dateText(row.ship_read_at)}`
+                            : '지사가 아직 열지 않음'
+                        }
+                      >
+                        {row.ship_read_at ? '확인' : '미확인'}
+                      </span>
+                    )}
                     {/* 보완 사유는 목록에서 바로 보여야 한다. 상세를 열어야 알면 늦다. */}
                     {row.status === 'supplement' && row.supplement_reason && (
                       <div className={styles.supplementNote} title={row.supplement_reason}>
@@ -199,14 +232,6 @@ const GiftTable = memo(function GiftTableComponent({
                       <div className={styles.shipNote}>
                         {[row.courier, row.tracking_no].filter(Boolean).join(' · ')}
                       </div>
-                    )}
-                    {/* 지사가 봤는가. 안 봤으면 그 줄이 아직 할 일이라는 뜻이다. */}
-                    {row.status === 'shipped' && !row.ship_read_at && (
-                      <div className={styles.unreadNote}>배송 정보 확인 전</div>
-                    )}
-                    {/* 담당자가 아직 안 본 전달 건. 지사는 이걸 보고 "아직 고칠 수 있다"를 안다. */}
-                    {row.status === 'forwarded' && !row.read_at && (
-                      <div className={styles.unreadNote}>담당자 확인 전</div>
                     )}
                     {/* 재신청 사유. 확인 대기 줄에서 바로 읽혀야 한다. */}
                     {row.status === 'pending_check' && row.check_reason && (
@@ -246,23 +271,13 @@ const GiftTable = memo(function GiftTableComponent({
                         철회
                       </button>
                     )}
-                    {actions.onDelete && canDeleteGiftRequest(row) && (
+                    {actions.onDelete && canDeleteGiftRequest(row, isAdmin) && (
                       <button
                         type="button"
                         className={styles.ghostBtn}
                         onClick={() => actions.onDelete!(row)}
                       >
                         삭제
-                      </button>
-                    )}
-                    {actions.onConfirmShip && needsShipCheck(row) && (
-                      <button
-                        type="button"
-                        className={styles.unreadBtn}
-                        onClick={() => actions.onConfirmShip!(row)}
-                        title="채워진 택배사·운송장번호를 확인합니다"
-                      >
-                        배송 정보 확인
                       </button>
                     )}
                     {actions.onCheck && row.status === 'pending_check' && (
@@ -282,16 +297,6 @@ const GiftTable = memo(function GiftTableComponent({
                         onClick={() => actions.onSupplement!(row)}
                       >
                         보완 요청
-                      </button>
-                    )}
-                    {actions.onRead && row.status === 'forwarded' && !row.read_at && (
-                      <button
-                        type="button"
-                        className={styles.unreadBtn}
-                        onClick={() => actions.onRead!(row)}
-                        title="확인하면 지사가 더 이상 고칠 수 없습니다"
-                      >
-                        확인
                       </button>
                     )}
                     {actions.onShip && (row.status === 'ordered' || row.status === 'shipped') && (

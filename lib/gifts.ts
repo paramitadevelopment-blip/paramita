@@ -380,13 +380,30 @@ export function canEditGiftRequest(row: GiftLockInput): boolean {
 }
 
 /**
- * 지울 수 있는가. 담당자가 아직 손대지 않은 것만이다.
+ * 지울 수 있는가.
  *
- * 고칠 수 있는 것과 같은 선이되 보완 요청은 뺀다 — 되돌아온 건을 지우면
- * 보완 이력까지 사라진다. 그건 고쳐 올리거나 철회한다.
+ * 신청한 쪽은 담당자가 아직 손대지 않은 것만 지운다. 고칠 수 있는 것과 같은
+ * 선이되 보완 요청은 뺀다 — 되돌아온 건을 지우면 보완 이력까지 사라진다.
+ * 그건 고쳐 올리거나 철회한다.
+ *
+ * 관리자(admin·subadmin)는 상태와 무관하게 지운다. 잘못 들어간 개인정보나
+ * 시험 삼아 넣은 건은 닫아 두는 것으로 안 되고 없애야 한다. 대신 사유를 받아
+ * 보관본을 남긴다(deleted_gift_requests) — 민원의 관리자 삭제와 같은 방식이다.
  */
-export function canDeleteGiftRequest(row: GiftLockInput): boolean {
+export function canDeleteGiftRequest(row: GiftLockInput, isAdmin = false): boolean {
+  if (isAdmin) return true;
   if (row.status === 'pending_check') return true;
+  return row.status === 'forwarded' && !row.read_at;
+}
+
+/**
+ * 담당자가 아직 안 본 발주 대기 건인가.
+ *
+ * 상세를 여는 것이 곧 확인이다 — 버튼을 따로 두면 안 누르고 지나가고, 그동안
+ * 지사가 내용을 고쳐 담당자가 본 것과 다른 건이 발주된다. 민원의 '상세 열기 =
+ * 확인'과 같은 규칙이다. 이 함수는 "열었을 때 확인을 찍어야 하는가"를 가른다.
+ */
+export function needsStaffRead(row: GiftLockInput): boolean {
   return row.status === 'forwarded' && !row.read_at;
 }
 

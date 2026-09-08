@@ -3,6 +3,7 @@ import {
   canEditGiftRequest,
   canDeleteGiftRequest,
   canWithdrawGiftRequest,
+  needsStaffRead,
   validateShipInput,
   needsShipCheck,
   settlementFor,
@@ -54,6 +55,16 @@ describe('지우기·철회', () => {
 
   it('보완 요청을 받은 것은 못 지운다 — 지우면 보완 이력까지 사라진다', () => {
     expect(canDeleteGiftRequest({ status: 'supplement' })).toBe(false);
+  });
+
+  it('관리자는 상태와 무관하게 지운다 — 사유를 받아 보관본을 남기는 쪽이 서버다', () => {
+    for (const status of ['pending_check', 'forwarded', 'ordered', 'shipped', 'supplement', 'withdrawn'] as const) {
+      expect(canDeleteGiftRequest({ status, read_at: '2026-09-08T00:00:00Z' }, true)).toBe(true);
+    }
+  });
+
+  it('관리자 아님을 명시해도 지사 규칙 그대로', () => {
+    expect(canDeleteGiftRequest({ status: 'ordered' }, false)).toBe(false);
   });
 
   it('철회는 보완 요청 받은 것만', () => {
@@ -184,5 +195,27 @@ describe('정산구분', () => {
 
     const other = prefillFromRecord(record, file, { name: '신청자', groupName: '한울부원' });
     expect(other.fields.settlement).toBe('정산해당');
+  });
+});
+
+/**
+ * 상세를 여는 것이 곧 확인이다. 담당자가 발주 대기 건을 열면 확인이 찍힌다 —
+ * 이 함수는 "열었을 때 찍어야 하는가"를 가른다.
+ */
+describe('담당자가 열면 확인을 찍어야 하는가', () => {
+  it('발주 대기이고 아직 안 봤으면 찍는다', () => {
+    expect(needsStaffRead({ status: 'forwarded', read_at: null })).toBe(true);
+    expect(needsStaffRead({ status: 'forwarded' })).toBe(true);
+  });
+
+  it('이미 봤으면 다시 안 찍는다 — 처음 본 시각이 진짜 확인 시각이다', () => {
+    expect(needsStaffRead({ status: 'forwarded', read_at: '2026-09-08T00:00:00Z' })).toBe(false);
+  });
+
+  it('발주된 뒤·보완·확인 대기는 담당자 확인 자리가 아니다', () => {
+    expect(needsStaffRead({ status: 'ordered' })).toBe(false);
+    expect(needsStaffRead({ status: 'shipped' })).toBe(false);
+    expect(needsStaffRead({ status: 'supplement' })).toBe(false);
+    expect(needsStaffRead({ status: 'pending_check' })).toBe(false);
   });
 });

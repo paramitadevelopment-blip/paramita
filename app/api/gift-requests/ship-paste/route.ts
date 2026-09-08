@@ -19,6 +19,9 @@ interface Candidate {
   customer_name: string;
   status: string;
   order_id: number | null;
+  /** 지금 적혀 있는 송장. 같은 값이 다시 오면 지사 확인을 건드리지 않는다. */
+  courier: string | null;
+  tracking_no: string | null;
 }
 
 /**
@@ -70,7 +73,7 @@ export async function POST(request: NextRequest) {
      */
     const { data: found, error: findError } = await supabase
       .from('gift_requests')
-      .select('id, order_no, gift_name, quantity, customer_name, status, order_id')
+      .select('id, order_no, gift_name, quantity, customer_name, status, order_id, courier, tracking_no')
       .in('order_no', orderNos.length > 0 ? orderNos : [''])
       .in('status', ['ordered', 'shipped'])
       .order('id', { ascending: true });
@@ -119,6 +122,14 @@ export async function POST(request: NextRequest) {
         candidates.find((c) => (c.gift_name ?? '').trim() === giftName) ?? candidates[0];
       used.add(target.id);
 
+      /*
+       * 발주처는 누적 표를 보낸다 — 지난주 줄이 이번 주 표에도 그대로 있다.
+       * 그 줄을 또 붙여넣었다고 지사 확인을 풀면, 지사는 이미 본 송장을 또
+       * 확인하라는 배지를 받는다. 송장이 실제로 바뀐 줄만 다시 보게 한다.
+       */
+      const changed =
+        courier !== (target.courier ?? '') || trackingNo !== (target.tracking_no ?? '');
+
       const { data, error } = await supabase
         .from('gift_requests')
         .update({
@@ -130,9 +141,7 @@ export async function POST(request: NextRequest) {
           ...(deliveryMemo ? { delivery_memo: deliveryMemo } : {}),
           shipped_by: user.username,
           shipped_at: now,
-          // 바뀐 값은 지사가 다시 봐야 한다.
-          ship_read_at: null,
-          ship_read_by: null,
+          ...(changed ? { ship_read_at: null, ship_read_by: null } : {}),
           updated_at: now,
         })
         .eq('id', target.id)

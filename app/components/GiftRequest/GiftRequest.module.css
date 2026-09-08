@@ -175,19 +175,25 @@
 }
 
 /*
- * 아직 안 본 건. 이 글자가 곧 버튼이다 — 눌러야 할 것이 눈에 띄는 자리에
- * 그대로 있어야, 어디를 눌러 확인 처리하는지 찾지 않는다.
+ * 확인 배지. 상태 배지 옆에 붙는다 — 담당자가 봤는가(발주 대기), 지사가
+ * 송장을 봤는가(배송 정보 입력됨). 민원의 [미처리] [미확인]과 같은 모양이다.
  */
 .readBadge {
-  display: inline-block;
-  padding: 6px 14px;
-  border: 1px solid #a5d6a7;
-  border-radius: 100px;
-  background: #e8f5e9;
-  color: #2e7d32;
-  font-size: 16px;
-  font-weight: 700;
-  white-space: nowrap;
+  margin-left: 8px;
+}
+
+/* 아직 안 본 것. 상태 배지보다 이쪽이 눈에 먼저 들어와야 한다. */
+.read_no {
+  background: #fdf2f6;
+  border: 1px solid #f3c3d4;
+  color: #db1a62;
+}
+
+/* 본 것. 할 일이 끝난 자리라 물러나 있다. */
+.read_yes {
+  background: #f1f8f2;
+  border: 1px solid #c3ddc6;
+  color: #3d7a44;
 }
 
 .unreadBtn {
@@ -1247,13 +1253,6 @@
   margin-top: 4px;
   font-size: 14px;
   color: #2e7d32;
-}
-
-/* 담당자가 아직 안 본 전달 건. 지사는 이걸로 "아직 고칠 수 있다"를 안다. */
-.unreadNote {
-  margin-top: 4px;
-  font-size: 13px;
-  color: #ad6800;
 }
 
 /* 발주 보냄 상태 배지 */

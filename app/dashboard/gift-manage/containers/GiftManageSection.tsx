@@ -12,7 +12,12 @@ import {
 } from '@/app/hooks/useGifts';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { toAssignableDepartmentGroups } from '@/lib/departments';
-import { GIFT_STATUS_LABEL, type GiftRequestRow, type GiftStatus } from '@/lib/gifts';
+import {
+  GIFT_STATUS_LABEL,
+  needsStaffRead,
+  type GiftRequestRow,
+  type GiftStatus,
+} from '@/lib/gifts';
 import Spinner from '@/app/components/Spinner/Spinner';
 import SearchBar from '@/app/components/SearchBar';
 import Pagination from '@/app/components/Pagination/Pagination';
@@ -80,17 +85,18 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
     });
 
   /*
-   * 확인. 눌린 순간 지사는 그 건을 더 못 고친다 — 그래서 한 번 묻는다.
-   * 발주 묶기·보완 요청도 같은 효과가 있지만 그건 이미 확인창을 거친다.
+   * 상세를 여는 것이 곧 확인이다.
+   *
+   * 버튼을 따로 두면 안 누르고 지나가고, 그동안 지사가 내용을 고쳐 담당자가
+   * 본 것과 다른 건이 발주된다. 열어 본 순간 확인이 찍히고 지사의 수정은
+   * 닫힌다 — 민원의 '상세 열기 = 확인'과 같은 규칙이다. 발주 묶기·보완
+   * 요청도 같은 효과가 있지만, 그 전에 열어 보는 것이 보통의 순서다.
    */
-  const askRead = (row: GiftRequestRow) => {
-    showAlert({
-      type: 'info',
-      title: '신청 확인',
-      message: `${row.customer_name} 님 ${row.gift_name} 신청을 확인하셨습니까? 확인하면 지사가 더 이상 고칠 수 없습니다.`,
-      showCancelButton: true,
-      onConfirm: () => list.patch({ id: row.id, body: { action: 'read' } }),
-    });
+  const openDetail = (row: GiftRequestRow) => {
+    setDetail(row);
+    if (!needsStaffRead(row)) return;
+    // 보러 온 사람에게 오류창을 띄우지 않는다. 실패하면 목록이 '미확인' 그대로다.
+    list.patch({ id: row.id, body: { action: 'read' } }).catch(() => {});
   };
 
   /*
@@ -173,7 +179,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
       {view === 'orders' ? (
         <GiftOrdersPanel
           initialOrderId={openOrderId}
-          onOpenRow={setDetail}
+          onOpenRow={openDetail}
           onShip={(row) => setTarget({ row, kind: 'ship' })}
           onDownload={redownload}
         />
@@ -316,8 +322,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
                 onToggle: togglePick,
                 onToggleAll: toggleAll,
               },
-              onOpen: setDetail,
-              onRead: askRead,
+              onOpen: openDetail,
               onShip: (row) => setTarget({ row, kind: 'ship' }),
               onSupplement: (row) => setTarget({ row, kind: 'supplement' }),
               onDownloadOrder: redownload,

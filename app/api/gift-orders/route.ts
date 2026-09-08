@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { canManageGiftRequests } from '@/lib/roles';
+import { koreanDay } from '@/lib/rangeRows';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -10,10 +11,14 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ORDER_LIMIT = 500;
 
-/** 오늘. 발주일은 날짜만 적는다 — 거래처 파일이 날짜 열이다. */
+/**
+ * 오늘 — 한국 날짜다. 발주일은 날짜만 적는다(거래처 파일이 날짜 열이다).
+ *
+ * 서버 시계로 재면 안 된다. 배포된 서버는 UTC라 아침 아홉 시 전에 만든
+ * 발주리스트가 전날 날짜로 나간다.
+ */
 function today(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return koreanDay(new Date().toISOString());
 }
 
 /**
