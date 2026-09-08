@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { koreanDay } from '@/lib/rangeRows';
 import type { GiftRequestRow } from '@/lib/gifts';
 
 /**
@@ -175,8 +176,7 @@ export async function orderWorkbookBuffer(rows: GiftRequestRow[]): Promise<Buffe
  * '추가'는 거래처 쪽 표기라 빼고 건수만 적는다.
  */
 export function orderSheetFileName(count: number, at: Date = new Date()): string {
-  const yy = String(at.getFullYear()).slice(-2);
-  const mm = String(at.getMonth() + 1).padStart(2, '0');
-  const dd = String(at.getDate()).padStart(2, '0');
-  return `${yy}${mm}${dd}_파라미타_GA코리아_사은품 발주리스트(${count}건).xlsx`;
+  // 한국 날짜. 서버 시계(UTC)로 재면 아침 아홉 시 전에 만든 파일이 전날 이름으로 나간다.
+  const day = koreanDay(at.toISOString()).replace(/-/g, '').slice(2);
+  return `${day}_파라미타_GA코리아_사은품 발주리스트(${count}건).xlsx`;
 }
