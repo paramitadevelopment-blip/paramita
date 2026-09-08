@@ -5,8 +5,10 @@ export interface User {
   id: number;
   username: string;
   name: string;
-  role: 'admin' | 'subadmin' | 'user' | 'staff';
+  role: 'admin' | 'subadmin' | 'user' | 'staff' | 'agent' | 'complaint' | 'gift';
   department?: string;
+  /** 계정별 추가 권한. 로그인 응답에 실려 온다. */
+  perms?: string[];
 }
 
 interface AuthState {

@@ -44,20 +44,51 @@ beforeEach(() => {
 
 const base = { username: 'staff01', password: 'pw123456', name: '홍담당' };
 
-describe('DB담당자는 소속을 고르지 않는다', () => {
-  it("department를 안 보내도 201 — 소속은 'DB담당자'로 서버가 채운다", async () => {
-    const res = await POST(postReq({ ...base, role: 'staff' }));
+describe('담당자는 소속을 고르지 않는다', () => {
+  /*
+   * 담당자는 담당 업무(extra_permissions)가 곧 하는 일이라 하나 이상 있어야 한다.
+   * 소속은 서버가 '담당자'로 채운다.
+   */
+  it("department를 안 보내도 201 — 소속은 '담당자'로 서버가 채운다", async () => {
+    const res = await POST(postReq({ ...base, role: 'staff', extra_permissions: ['file_transfer'] }));
 
     expect(res.status).toBe(201);
     expect(insertedRows[0]).toMatchObject({ role: 'staff', department: STAFF_DEPARTMENT });
   });
 
   /** 관리자 계정 소속이 '관리자'인 것과 같은 자리라, 다른 값을 보내도 서버가 덮어쓴다. */
-  it('department를 다른 값으로 보내도 무시하고 DB담당자로 채운다', async () => {
-    const res = await POST(postReq({ ...base, role: 'staff', department: '파라인슈' }));
+  it('department를 다른 값으로 보내도 무시하고 담당자로 채운다', async () => {
+    const res = await POST(
+      postReq({ ...base, role: 'staff', department: '파라인슈', extra_permissions: ['gift_manage'] })
+    );
 
     expect(res.status).toBe(201);
     expect(insertedRows[0]).toMatchObject({ department: STAFF_DEPARTMENT });
+  });
+});
+
+describe('담당자는 담당 업무가 있어야 만들어진다', () => {
+  it('하나도 안 고르면 400', async () => {
+    const res = await POST(postReq({ ...base, role: 'staff' }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/담당 업무/);
+  });
+
+  it('모르는 값은 400', async () => {
+    const res = await POST(postReq({ ...base, role: 'staff', extra_permissions: ['admin'] }));
+    expect(res.status).toBe(400);
+  });
+
+  it('셋을 다 고를 수 있다', async () => {
+    const res = await POST(
+      postReq({
+        ...base,
+        role: 'staff',
+        extra_permissions: ['file_transfer', 'complaint_register', 'gift_manage'],
+      })
+    );
+    expect(res.status).toBe(201);
+    expect(insertedRows[0].extra_permissions).toHaveLength(3);
   });
 });
 

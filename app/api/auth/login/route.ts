@@ -79,8 +79,10 @@ export async function POST(request: NextRequest) {
     await recordLogin(supabase, { username, success: true, user, device });
 
     // JWT 토큰 생성
+    // 추가 권한도 역할과 같은 자리에 싣는다. 바꾸면 다시 로그인해야 하는 것도 역할과 같다.
+    const perms = Array.isArray(user.extra_permissions) ? user.extra_permissions : [];
     const token = jwt.sign(
-      { id: user.id, username: user.username, name: user.name, role: user.role },
+      { id: user.id, username: user.username, name: user.name, role: user.role, perms },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -99,6 +101,7 @@ export async function POST(request: NextRequest) {
         username: user.username,
         name: user.name,
         role: user.role,
+        perms,
       },
     });
 

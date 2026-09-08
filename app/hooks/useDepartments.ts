@@ -10,7 +10,17 @@ interface Department {
   group_name: string;
   /** 업로드한 원본이 들어가는 자리. 사람이 배정받거나 파일이 배포되는 소속이 아니다. */
   is_admin: boolean;
+  /** 지사에 연락할 곳. 비어 있을 수 있다 — 역할 전용 소속에는 없다. */
+  phone: string | null;
+  email: string | null;
   created_at: string;
+}
+
+/** 소속을 만들 때 보내는 값. 연락처·이메일은 비워도 된다. */
+export interface DepartmentInput {
+  name: string;
+  phone?: string;
+  email?: string;
 }
 
 /**
@@ -38,7 +48,7 @@ export function useCreateDepartment() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async (input: DepartmentInput) => {
       const csrfToken = getCsrfToken();
       const response = await fetch('/api/departments', {
         method: 'POST',
@@ -46,7 +56,7 @@ export function useCreateDepartment() {
           'Content-Type': 'application/json',
           'X-CSRF-Token': csrfToken,
         },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(input),
         credentials: 'include',
       });
       const data = await response.json();
@@ -59,6 +69,35 @@ export function useCreateDepartment() {
       // 지역설정 표의 열은 소속 목록에서 만들어진다. 안 비우면 방금 만든
       // 소속이 새로고침 전까지 안 보인다 (staleTime이 5분이라 그동안 안 받아온다).
       queryClient.invalidateQueries({ queryKey: ASSIGNMENT_RULES_KEY });
+    },
+  });
+}
+
+/**
+ * 소속의 연락처·이메일을 고친다.
+ *
+ * 소속 목록만 다시 받는다. 이름이 안 바뀌므로 파일·사용자·배정 규칙은 그대로다.
+ */
+export function useUpdateDepartmentContact() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { id: number; phone: string; email: string }) => {
+      const response = await fetch('/api/departments', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
+        body: JSON.stringify(input),
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '연락처를 저장하지 못했습니다.');
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
     },
   });
 }

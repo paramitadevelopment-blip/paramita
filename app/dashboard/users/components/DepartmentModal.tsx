@@ -1,11 +1,13 @@
 'use client';
 
 import React, { memo, useCallback, useState } from 'react';
-import { MdClose, MdDelete } from 'react-icons/md';
+import { MdClose, MdDelete, MdEdit } from 'react-icons/md';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { useDeleteDepartment } from '@/app/hooks/useDepartments';
 import { getUndeletableReason, isHiddenDepartment } from '@/lib/departments';
 import DepartmentForm from './DepartmentForm';
+import DepartmentContactEditor from './DepartmentContactEditor';
+import type { DepartmentInput } from '@/app/hooks/useDepartments';
 import Pagination from '@/app/components/Pagination/Pagination';
 import styles from './DepartmentModal.module.css';
 
@@ -19,17 +21,22 @@ interface Department {
   group_name: string;
   /** 업로드한 원본이 들어가는 자리. 목록에서 뺀다. */
   is_admin?: boolean;
+  phone?: string | null;
+  email?: string | null;
   created_at: string;
 }
 
 interface DepartmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (name: string) => Promise<void>;
+  onSubmit: (input: DepartmentInput) => Promise<void>;
   isLoading: boolean;
   departments?: Department[];
   onDelete?: (id: number) => Promise<void>;
   isDeleting?: boolean;
+  /** 이미 있는 소속의 연락처를 고친다. 실패하면 던진다 — 편집 상태를 유지하려고. */
+  onSaveContact?: (id: number, contact: { phone: string; email: string }) => Promise<void>;
+  isSavingContact?: boolean;
 }
 
 const DepartmentModal = memo(function DepartmentModal({
@@ -40,8 +47,12 @@ const DepartmentModal = memo(function DepartmentModal({
   departments,
   onDelete,
   isDeleting,
+  onSaveContact,
+  isSavingContact,
 }: DepartmentModalProps) {
   const [page, setPage] = useState(1);
+  // 연락처를 고치는 중인 소속. 한 번에 하나만 연다 — 둘을 열어 두면 어느 걸 저장했는지 헷갈린다.
+  const [editingContactId, setEditingContactId] = useState<number | null>(null);
   const itemsPerPage = 5;
   const [deptToDelete, setDeptToDelete] = useState<{ id: number; name: string } | null>(null);
   const [pendingUserCount, setPendingUserCount] = useState(0);
@@ -223,18 +234,56 @@ const DepartmentModal = memo(function DepartmentModal({
                   // 툴팁으로 알려준다 — 회색 버튼만 보여주면 고장으로 읽힌다.
                   const undeletable = getUndeletableReason(departments, dept.name);
 
+                  const editing = editingContactId === dept.id;
+
                   return (
                     <div key={dept.id} className={styles.departmentItem}>
-                      <span>{dept.name}</span>
-                      <button
-                        className={styles.deleteBtn}
-                        onClick={() => handleDelete(dept.id, dept.name)}
-                        disabled={isDeleting || !!undeletable}
-                        title={undeletable ?? '삭제'}
-                      >
-                        <MdDelete />
-                        <span>삭제</span>
-                      </button>
+                      <div className={styles.departmentMain}>
+                        <span className={styles.departmentName}>{dept.name}</span>
+                        {/*
+                          연락처는 이름 아래 작게. 없으면 '연락처 없음'으로 알린다 —
+                          비워 두면 "안 적은 것"과 "못 불러온 것"이 구별되지 않는다.
+                        */}
+                        {editing ? (
+                          <DepartmentContactEditor
+                            phone={dept.phone ?? ''}
+                            email={dept.email ?? ''}
+                            isSaving={!!isSavingContact}
+                            onCancel={() => setEditingContactId(null)}
+                            onSave={async (contact) => {
+                              await onSaveContact?.(dept.id, contact);
+                              setEditingContactId(null);
+                            }}
+                          />
+                        ) : (
+                          <span className={styles.departmentContact}>
+                            {dept.phone || dept.email
+                              ? [dept.phone, dept.email].filter(Boolean).join(' · ')
+                              : '연락처 없음'}
+                          </span>
+                        )}
+                      </div>
+                      <div className={styles.departmentActions}>
+                        {!editing && onSaveContact && (
+                          <button
+                            className={styles.editBtn}
+                            onClick={() => setEditingContactId(dept.id)}
+                            title="연락처 수정"
+                          >
+                            <MdEdit />
+                            <span>연락처</span>
+                          </button>
+                        )}
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={() => handleDelete(dept.id, dept.name)}
+                          disabled={isDeleting || !!undeletable}
+                          title={undeletable ?? '삭제'}
+                        >
+                          <MdDelete />
+                          <span>삭제</span>
+                        </button>
+                      </div>
                     </div>
                   );
                 })

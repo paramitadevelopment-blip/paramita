@@ -5,7 +5,7 @@ import { MdEdit, MdDelete, MdInfoOutline, MdArrowDropUp, MdArrowDropDown, MdHist
 import EmptyState from '@/app/components/EmptyState/EmptyState';
 import { UserRow } from '../types';
 import DepartmentLogsModal from './DepartmentLogsModal';
-import { belongsToOrganization, isProtectedAccount } from '@/lib/roles';
+import { belongsToOrganization, isProtectedAccount, EXTRA_PERMISSION_LABEL, isExtraPermission } from '@/lib/roles';
 import styles from './UserTable.module.css';
 
 /** 역할값 → 화면에 보일 이름과 배지 색 클래스 */
@@ -14,9 +14,10 @@ const ROLE_LABEL: Record<string, string> = {
   subadmin: '서브관리자',
   user: '지사',
   agent: '설계사',
-  staff: 'DB담당자',
-  complaint: '민원담당자',
-  gift: '사은품담당자',
+  staff: '담당자',
+  // 담당자로 합쳐지기 전 역할. 옛 계정이 남아 있으면 그대로 보여준다.
+  complaint: '담당자',
+  gift: '담당자',
 };
 const ROLE_BADGE_CLASS: Record<string, string> = {
   admin: 'admin',
@@ -218,6 +219,12 @@ const UserTable = memo(function UserTable({ users, isLoading, onEdit, onDelete, 
                 <span className={`${styles.badge} ${styles[ROLE_BADGE_CLASS[user.role] ?? 'user']}`}>
                   {ROLE_LABEL[user.role] ?? user.role}
                 </span>
+                {/* 역할에 더 얹은 권한. 역할 배지만 보면 왜 그 메뉴가 열리는지 모른다. */}
+                {(user.extra_permissions ?? []).filter(isExtraPermission).map((perm) => (
+                  <span key={perm} className={`${styles.badge} ${styles.extraPerm}`}>
+                    +{EXTRA_PERMISSION_LABEL[perm]}
+                  </span>
+                ))}
               </td>
               <td>{user.employee_id || '-'}</td>
               <td>{new Date(user.created_at).toLocaleDateString('ko-KR').slice(0, -1)}</td>

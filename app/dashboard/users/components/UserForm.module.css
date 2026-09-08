@@ -171,3 +171,27 @@
   cursor: not-allowed;
   color: #999;
 }
+
+/* 추가 권한 체크. 한 줄에 가로로 세운다 — 둘뿐이라 세로로 쌓을 것이 없다. */
+.permList {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.permItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+}
+
+.permItem input {
+  width: 18px;
+  height: 18px;
+  accent-color: #db1a62;
+  cursor: pointer;
+}

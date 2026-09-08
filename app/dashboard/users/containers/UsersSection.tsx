@@ -136,6 +136,8 @@ const UsersSection = memo(function UsersSectionComponent({
           formData.department !== selectedUser.department ||
           formData.employee_id !== selectedUser.employee_id ||
           formData.role !== selectedUser.role ||
+          [...(formData.extra_permissions ?? [])].sort().join() !==
+            [...(selectedUser.extra_permissions ?? [])].sort().join() ||
           formData.password?.trim();
 
         if (!hasChanges) {
@@ -160,6 +162,7 @@ const UsersSection = memo(function UsersSectionComponent({
             department: formData.department,
             employee_id: formData.employee_id,
             role: formData.role,
+            extra_permissions: formData.extra_permissions ?? [],
           });
           showAlert({ type: 'success', title: '완료', message: '사용자가 추가되었습니다.' });
         }

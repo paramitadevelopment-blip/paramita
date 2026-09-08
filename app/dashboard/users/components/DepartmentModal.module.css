@@ -204,3 +204,111 @@
   color: #db1a62;
   font-weight: 600;
 }
+
+/* ── 소속 줄의 연락처 ─────────────────────────────────────── */
+
+/* 이름과 연락처를 세로로. 연락처는 이름보다 작게 — 훑을 때는 이름이 먼저다. */
+.departmentMain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.departmentName {
+  font-size: 18px;
+  color: #333;
+}
+
+.departmentContact {
+  font-size: 15px;
+  color: #777;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.departmentActions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+/* 연락처 수정. 삭제와 같은 모양이되 붉지 않다 — 위험한 동작이 아니다. */
+.editBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 15px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.editBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+/* 그 줄에서 여는 편집기. 두 칸과 저장·취소가 한 줄에 선다. */
+.contactEditor {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.contactInput {
+  flex: 1;
+  min-width: 140px;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+}
+
+.contactInput:focus {
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.contactSaveBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #db1a62;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.contactSaveBtn:disabled {
+  background: #e0e0e0;
+  cursor: default;
+}
+
+.contactCancelBtn {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+}
+
+.contactCancelBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}

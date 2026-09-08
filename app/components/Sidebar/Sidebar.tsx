@@ -45,7 +45,7 @@ export default function Sidebar() {
    * 관리자는 두 메뉴가 다 보이는데 한 숫자를 나눠 쓰면 한쪽은 헛것이 된다.
    */
   const { data: complaintBadge } = useUnreadComplaintCount(
-    canRegisterComplaints(role) || canViewComplaints(role)
+    canRegisterComplaints(user) || canViewComplaints(role)
   );
   const registerCount = complaintBadge?.register ?? 0;
   const manageCount = complaintBadge?.manage ?? 0;
@@ -54,7 +54,7 @@ export default function Sidebar() {
    * 보완 요청 받은 것), 관리 메뉴는 담당자가 발주할 것.
    */
   const { data: giftBadge } = useGiftBadgeCount(
-    canViewGiftRequests(role) || canManageGiftRequests(role)
+    canViewGiftRequests(role) || canManageGiftRequests(user)
   );
   const giftRequestCount = giftBadge?.requests ?? 0;
   const giftManageCount = giftBadge?.manage ?? 0;
@@ -110,7 +110,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {canUseFileTransfer(role) && (
+          {canUseFileTransfer(user) && (
             <li>
               <Link
                 href="/dashboard/file-transfer"
@@ -161,7 +161,7 @@ export default function Sidebar() {
             민원 등록은 민원담당자가, 민원은 지사·설계사가 쓴다. 한 사람이 둘 다
             보는 일은 관리자뿐이라, 메뉴도 역할을 따라 갈라 둔다.
           */}
-          {canRegisterComplaints(role) && (
+          {canRegisterComplaints(user) && (
             <li>
               <Link
                 href="/dashboard/complaint-register"
@@ -214,7 +214,7 @@ export default function Sidebar() {
               </Link>
             </li>
           )}
-          {canManageGiftRequests(role) && (
+          {canManageGiftRequests(user) && (
             <li>
               <Link
                 href="/dashboard/gift-manage"

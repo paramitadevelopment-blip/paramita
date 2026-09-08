@@ -3,7 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { isAssignableGroup, getFixedDepartment } from '@/lib/departments';
-import { canManageUsers, hasFixedDepartment, isAssignableRole } from '@/lib/roles';
+import {
+  canManageUsers,
+  hasFixedDepartment,
+  isAssignableRole,
+  isExtraPermission,
+  isStaffRole,
+  type ExtraPermission,
+} from '@/lib/roles';
 import { parsePagination } from '@/lib/pagination';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -44,6 +51,21 @@ async function rejectPendingRequestsOfDeletedUsers(userIds: number[], reviewer: 
   // 여기서 실패해도 삭제 자체는 막지 않는다. 큐에 남은 건은 관리자가 손으로 처리할 수 있지만,
   // 삭제가 반쯤 되다 마는 것이 더 나쁘다.
   if (error) console.error('Failed to auto-reject pending redownload requests:', error);
+}
+
+/**
+ * 요청에 실린 추가 권한을 읽는다. 배열이 아니거나 모르는 값이 섞였으면 null.
+ * 값을 안 보낸 것(undefined)은 빈 배열로 본다 — 만들 때는 아무것도 안 준 것이다.
+ */
+function readExtraPermissions(raw: unknown): ExtraPermission[] | null {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) return null;
+  const out: ExtraPermission[] = [];
+  for (const v of raw) {
+    if (!isExtraPermission(v)) return null;
+    if (!out.includes(v)) out.push(v);
+  }
+  return out;
 }
 
 export async function GET(request: NextRequest) {
@@ -90,7 +112,7 @@ export async function GET(request: NextRequest) {
     let adminData = null;
     const adminQuery = supabase
       .from('users')
-      .select('id, username, name, department, role, employee_id, created_at')
+      .select('id, username, name, department, role, employee_id, created_at, extra_permissions')
       .eq('username', 'admin');
 
     if (search) {
@@ -107,7 +129,7 @@ export async function GET(request: NextRequest) {
     // 나머지 사용자 조회
     let query = supabase
       .from('users')
-      .select('id, username, name, department, role, employee_id, created_at', { count: 'exact' })
+      .select('id, username, name, department, role, employee_id, created_at, extra_permissions', { count: 'exact' })
       .neq('username', 'admin');
 
     // name, username 정렬은 클라이언트에서 처리하므로 API에서는 제외
@@ -163,8 +185,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only admin can create users' }, { status: 403 });
     }
 
-    const { username, password, name, department: requestedDepartment, employee_id, role: requestedRole } = await request.json();
+    const {
+      username,
+      password,
+      name,
+      department: requestedDepartment,
+      employee_id,
+      role: requestedRole,
+      extra_permissions: requestedPerms,
+    } = await request.json();
 
+    // 추가 권한. 아는 값만 받는다 — 모르는 문자열은 아무 검사에도 안 걸려 있으나 마나다.
+    const extraPermissions = readExtraPermissions(requestedPerms);
+    if (extraPermissions === null) {
+      return NextResponse.json({ error: '지정할 수 없는 추가 권한입니다.' }, { status: 400 });
+    }
     if (!username || !password || !name) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -178,6 +213,14 @@ export async function POST(request: NextRequest) {
     const role = requestedRole ?? 'user';
     if (!isAssignableRole(role)) {
       return NextResponse.json({ error: '지정할 수 없는 역할입니다.' }, { status: 400 });
+    }
+
+    /*
+     * 담당자는 담당 업무가 곧 역할이다. 하나도 없으면 들어갈 화면이 없어
+     * 로그인해도 빈손이고, 권한 없는 'staff'는 합치기 전 토큰과 구별되지 않는다.
+     */
+    if (isStaffRole(role) && extraPermissions.length === 0) {
+      return NextResponse.json({ error: '담당 업무를 하나 이상 고르세요.' }, { status: 400 });
     }
 
     /*
@@ -257,7 +300,7 @@ export async function POST(request: NextRequest) {
     const password_hash = await bcrypt.hash(password, 10);
 
     const { data, error } = await supabase.from('users').insert([
-      { username, password_hash, name, department, role, employee_id },
+      { username, password_hash, name, department, role, employee_id, extra_permissions: extraPermissions },
     ]);
 
     if (error) {
@@ -288,7 +331,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
     }
 
-    const { id, username, name, department, password, employee_id, role } = await request.json();
+    const { id, username, name, department, password, employee_id, role, extra_permissions: requestedPerms } =
+      await request.json();
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -341,6 +385,27 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    /*
+     * 추가 권한도 역할과 같다 — 본인이 스스로 켤 수 없다. 관리자만 바꾼다.
+     * 안 보냈으면 지금 것 그대로다.
+     */
+    let extraPermissions: ExtraPermission[] | undefined;
+    if (requestedPerms !== undefined) {
+      if (!canManageUsers(user.role)) {
+        return NextResponse.json({ error: 'Only admin can change permissions' }, { status: 403 });
+      }
+      const parsed = readExtraPermissions(requestedPerms);
+      if (parsed === null) {
+        return NextResponse.json({ error: '지정할 수 없는 추가 권한입니다.' }, { status: 400 });
+      }
+      extraPermissions = parsed;
+    }
+
+    // 수정도 같다. 역할을 안 바꿨어도 지금 담당자면 업무가 비면 안 된다.
+    if (isStaffRole(role ?? targetUser.role) && extraPermissions?.length === 0) {
+      return NextResponse.json({ error: '담당 업무를 하나 이상 고르세요.' }, { status: 400 });
+    }
+
     // 필수 필드 검증
     if (name && !name.trim()) {
       return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
@@ -389,6 +454,7 @@ export async function PUT(request: NextRequest) {
     if (resolvedDepartment) updateData.department = resolvedDepartment;
     if (employee_id !== undefined) updateData.employee_id = employee_id;
     if (role !== undefined) updateData.role = role;
+    if (extraPermissions !== undefined) updateData.extra_permissions = extraPermissions;
 
     if (password) {
       const bcrypt = require('bcryptjs');

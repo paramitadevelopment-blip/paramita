@@ -7,7 +7,12 @@ import { useCheckEmployeeId } from '@/app/hooks/useCheckEmployeeId';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { UserForm as UserFormType } from '../types';
 import { STAFF_DEPARTMENT, ADMIN_DEPARTMENT, getFixedDepartment } from '@/lib/departments';
-import { hasFixedDepartment } from '@/lib/roles';
+import {
+  hasFixedDepartment,
+  EXTRA_PERMISSIONS,
+  EXTRA_PERMISSION_LABEL,
+  isStaffRole,
+} from '@/lib/roles';
 import DepartmentSelect from './DepartmentSelect';
 import styles from './UserForm.module.css';
 
@@ -35,6 +40,7 @@ const UserForm = memo(function UserForm({
       department: '',
       role: 'user',
       employee_id: '',
+      extra_permissions: [],
     }
   );
 
@@ -132,7 +138,14 @@ const UserForm = memo(function UserForm({
   const fixedDepartment = getFixedDepartment(formData.role);
 
   const errors = useMemo(() => {
-    const result: { username?: string; name?: string; password?: string; department?: string; employee_id?: string } = {};
+    const result: {
+      username?: string;
+      name?: string;
+      password?: string;
+      department?: string;
+      employee_id?: string;
+      extra_permissions?: string;
+    } = {};
     const username = formData.username.trim();
     const name = (formData.name || '').trim();
     const password = formData.password || '';
@@ -163,6 +176,13 @@ const UserForm = memo(function UserForm({
       if (password.length < 6 || password.length > 10) {
         result.password = '비밀번호는 6~10자여야 합니다.';
       }
+    }
+    /*
+     * 담당자는 담당 업무가 곧 역할이다. 하나도 안 고르면 들어갈 화면이 없어
+     * 로그인해도 빈손이 된다. 저장 자체를 막는다.
+     */
+    if (isStaffRole(formData.role) && (formData.extra_permissions ?? []).length === 0) {
+      result.extra_permissions = '담당 업무를 하나 이상 고르세요.';
     }
     if (!hasFixedDepartment(formData.role) && !formData.department) {
       result.department = '소속을 선택해주세요.';
@@ -327,12 +347,12 @@ const UserForm = memo(function UserForm({
             }}
             className={styles.select}
           >
+            {/* 역할 이름만 둔다. 무엇을 하는지는 설명이 길어질수록 오히려 안 읽힌다. */}
             <option value="user">지사</option>
-            <option value="agent">설계사 (지사 소속. 민원 처리·사은품 신청)</option>
+            <option value="agent">설계사</option>
             <option value="subadmin">서브관리자</option>
-            <option value="staff">DB담당자 (파일 업로드만 가능)</option>
-            <option value="complaint">민원담당자 (민원 등록만 가능)</option>
-            <option value="gift">사은품담당자 (전달된 사은품 신청 발주)</option>
+            {/* 담당자가 무슨 일을 하는지는 아래 '담당 업무' 체크가 정한다. */}
+            <option value="staff">담당자</option>
           </select>
           <MdExpandMore className={styles.selectIcon} />
         </div>
@@ -361,6 +381,50 @@ const UserForm = memo(function UserForm({
           />
         )}
       </div>
+
+      {/*
+        추가 권한. 역할이 주는 것 위에 이 계정에만 더 얹는다.
+        관리자급은 어차피 다 할 수 있어 낼 것이 없다. 역할을 바꿔도 체크는
+        그대로 둔다 — 지사로 내리면서 민원 등록을 남길 수도 있다.
+      */}
+      {/* 담당자를 만들 때만 낸다. 지사·설계사는 역할이 곧 하는 일이라 고를 게 없다. */}
+      {isStaffRole(formData.role) && (
+        <div className={styles.formGroup}>
+          <label>담당 업무 <span className={styles.required}>*</span></label>
+          <div className={styles.permList}>
+            {EXTRA_PERMISSIONS.map((perm) => {
+              const on = (formData.extra_permissions ?? []).includes(perm);
+              return (
+                <label key={perm} className={styles.permItem}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={(e) =>
+                      setFormData((prev) => {
+                        const cur = prev.extra_permissions ?? [];
+                        return {
+                          ...prev,
+                          extra_permissions: e.target.checked
+                            ? [...cur, perm]
+                            : cur.filter((p) => p !== perm),
+                        };
+                      })
+                    }
+                  />
+                  {EXTRA_PERMISSION_LABEL[perm]}
+                </label>
+              );
+            })}
+          </div>
+          {errors.extra_permissions ? (
+            <span className={styles.error}>{errors.extra_permissions}</span>
+          ) : (
+            <span className={styles.hint}>
+              맡을 일을 고릅니다. 바꾸면 그 사람이 다시 로그인해야 반영됩니다.
+            </span>
+          )}
+        </div>
+      )}
 
       <div className={styles.formActions}>
         <button type="submit" className={styles.submitBtn} disabled={isLoading || !isValid}>

@@ -2,7 +2,12 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
-import { getUndeletableReason, isHiddenDepartment } from '@/lib/departments';
+import {
+  getUndeletableReason,
+  isHiddenDepartment,
+  readDepartmentContact,
+  validateDepartmentContact,
+} from '@/lib/departments';
 import { canManageDepartments, isAdminRole } from '@/lib/roles';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -26,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('departments')
-      .select('id, name, group_name, is_admin, created_at')
+      .select('id, name, group_name, is_admin, phone, email, created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -55,7 +60,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only admin can create departments' }, { status: 403 });
     }
 
-    const { name } = await request.json();
+    const body = await request.json();
+    const { name } = body;
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Department name is required' }, { status: 400 });
@@ -71,12 +77,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Department name can only contain letters, numbers, spaces, and hyphens' }, { status: 400 });
     }
 
+    // 연락처·이메일은 비워도 되지만, 적었다면 모양은 맞아야 한다.
+    const contactError = validateDepartmentContact(body);
+    if (contactError) {
+      return NextResponse.json({ error: contactError }, { status: 400 });
+    }
+
     // 새로 만드는 소속은 자기 자신이 그룹이다. 여러 분류를 한 조직으로 묶는 건
     // 배정 규칙이 그 조직을 쪼갤 때만 생기는 일이라, 그때 group_name을 손대면 된다.
     const { data, error } = await supabase
       .from('departments')
-      .insert([{ name: name.trim(), group_name: name.trim() }])
-      .select();
+      .insert([{ name: name.trim(), group_name: name.trim(), ...readDepartmentContact(body) }])
+      .select('id, name, group_name, is_admin, phone, email, created_at');
 
     if (error) throw error;
 
@@ -87,6 +99,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '이미 존재하는 소속입니다.' }, { status: 400 });
     }
     return NextResponse.json({ error: 'Failed to create department' }, { status: 500 });
+  }
+}
+
+/**
+ * 소속의 연락처·이메일을 고친다.
+ *
+ * 이름은 여기서 못 바꾼다 — 이름은 배정 규칙·파일·사용자 소속이 전부 물고
+ * 있는 열쇠라, 바꾸려면 그 셋을 함께 옮겨야 한다(소속 삭제가 그 일을 한다).
+ * 연락처는 아무도 물고 있지 않아 그냥 덮어써도 된다.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!verifyCsrfToken(request)) {
+      return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
+    }
+    if (!canManageDepartments(user.role)) {
+      return NextResponse.json({ error: 'Only admin can update departments' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const id = Number(body.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
+    }
+
+    const contactError = validateDepartmentContact(body);
+    if (contactError) {
+      return NextResponse.json({ error: contactError }, { status: 400 });
+    }
+
+    const { data: target } = await supabase
+      .from('departments')
+      .select('name, is_admin')
+      .eq('id', id)
+      .maybeSingle();
+    if (!target) {
+      return NextResponse.json({ error: '없는 소속입니다.' }, { status: 404 });
+    }
+    // 역할 전용 자리('관리자'·'담당자')는 조직이 아니다. 연락처를 붙일 곳이 아니다.
+    if (target.is_admin || isHiddenDepartment(target.name)) {
+      return NextResponse.json({ error: '이 소속에는 연락처를 둘 수 없습니다.' }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from('departments')
+      .update(readDepartmentContact(body))
+      .eq('id', id)
+      .select('id, name, group_name, is_admin, phone, email, created_at')
+      .single();
+    if (error) throw error;
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    console.error('Department update error:', error);
+    return NextResponse.json({ error: 'Failed to update department' }, { status: 500 });
   }
 }
 

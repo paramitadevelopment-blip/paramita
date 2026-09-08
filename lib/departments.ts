@@ -9,8 +9,6 @@
 import {
   hasFixedDepartment,
   isStaffRole,
-  isComplaintStaffRole,
-  isGiftStaffRole,
 } from '@/lib/roles';
 
 export interface DepartmentLike {
@@ -67,11 +65,8 @@ export function isAssignableDepartmentGroup(groupName: string, isAdmin: boolean)
  */
 export function getFixedDepartment(role?: string | null): string | null {
   if (!hasFixedDepartment(role)) return null;
-  // 담당자 계열(DB담당자·민원담당자·사은품담당자)은 '담당자', 서브관리자는 '관리자'.
-  // 담당자 유형이 늘어도 소속 행은 그대로다 — 여기 한 줄만 늘어난다.
-  return isStaffRole(role) || isComplaintStaffRole(role) || isGiftStaffRole(role)
-    ? STAFF_DEPARTMENT
-    : ADMIN_DEPARTMENT;
+  // 담당자는 '담당자', 서브관리자는 '관리자'.
+  return isStaffRole(role) ? STAFF_DEPARTMENT : ADMIN_DEPARTMENT;
 }
 
 /**
@@ -172,4 +167,49 @@ export function getSubDepartments(
     .sort((a, b) => a.localeCompare(b));
 
   return subs.length > 1 ? subs : [];
+}
+
+/* ── 연락처·이메일 ────────────────────────────────────────────── */
+
+/** 소속 행에 붙는 연락처. 둘 다 비워 둘 수 있다. */
+export interface DepartmentContact {
+  phone: string;
+  email: string;
+}
+
+/**
+ * 연락처·이메일 검사. 화면과 서버가 같은 함수를 쓴다.
+ *
+ * 비어 있으면 통과다 — '관리자'·'담당자' 같은 역할 전용 소속에는 연락처가
+ * 있을 수 없고, 이미 있는 지사도 나중에 채운다. 필수로 걸면 없는 값을
+ * 지어내게 된다. 다만 적었다면 모양은 맞아야 한다: 틀린 번호로 전화를 걸어
+ * 보고 나서야 알면 늦다.
+ */
+export function validateDepartmentContact(raw: { phone?: unknown; email?: unknown }): string | null {
+  const phone = String(raw.phone ?? '').trim();
+  const email = String(raw.email ?? '').trim();
+
+  if (phone) {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 9 || digits.length > 11) return '연락처는 9~11자리 숫자여야 합니다.';
+    if (!/^[\d-]+$/.test(phone)) return '연락처에는 숫자와 하이픈만 쓸 수 있습니다.';
+  }
+
+  if (email) {
+    if (email.length > 100) return '이메일이 너무 깁니다.';
+    // 느슨하게 본다. 실재하는지는 보내 봐야 안다 — 여기서는 모양만 거른다.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return '이메일 형식이 올바르지 않습니다.';
+  }
+
+  return null;
+}
+
+/** 요청에서 연락처만 꺼낸다. 빈 값은 null로 — 빈 문자열이 쌓이면 "없음"과 구별이 안 된다. */
+export function readDepartmentContact(raw: { phone?: unknown; email?: unknown }): {
+  phone: string | null;
+  email: string | null;
+} {
+  const phone = String(raw.phone ?? '').trim();
+  const email = String(raw.email ?? '').trim();
+  return { phone: phone || null, email: email || null };
 }

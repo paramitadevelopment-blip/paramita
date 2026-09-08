@@ -78,7 +78,7 @@ export default function LoginPage() {
        * RSC 스트림이 중간에 끊겨 서버에 "Cannot write to a CLOSED writable
        * stream" 에러가 남는다.
        */
-      router.push(getLandingRoute(data.user.role));
+      router.push(getLandingRoute(data.user));
     },
     onError: (error: Error) => {
       // 로그인 실패 시 아이디 저장 체크 상태에 따라 처리

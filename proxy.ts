@@ -55,10 +55,13 @@ export async function proxy(request: NextRequest) {
    */
   if (pathname === '/') {
     let role: string | undefined;
+    let perms: string[] = [];
 
     try {
       const verified = await jwtVerify(token, secret);
-      role = (verified.payload as { role?: string }).role;
+      const payload = verified.payload as { role?: string; perms?: unknown };
+      role = payload.role;
+      perms = Array.isArray(payload.perms) ? payload.perms.map(String) : [];
     } catch {
       return NextResponse.redirect(new URL('/login', request.url));
     }
@@ -69,10 +72,13 @@ export async function proxy(request: NextRequest) {
   // 대시보드 페이지 접근 시 역할 기반 차단 (렌더링 전에 서버에서 처리)
   if (pathname.startsWith('/dashboard')) {
     let role: string | undefined;
+    let perms: string[] = [];
 
     try {
       const verified = await jwtVerify(token, secret);
-      role = (verified.payload as { role?: string }).role;
+      const payload = verified.payload as { role?: string; perms?: unknown };
+      role = payload.role;
+      perms = Array.isArray(payload.perms) ? payload.perms.map(String) : [];
     } catch {
       // 토큰이 유효하지 않으면 로그인 페이지로
       return NextResponse.redirect(new URL('/login', request.url));
@@ -82,12 +88,14 @@ export async function proxy(request: NextRequest) {
     // 아래 화이트리스트는 관리자급을 아예 안 보므로 이 검사를 먼저 해야 한다.
     const isUsersRoute =
       pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/');
-    if (isUsersRoute && !canManageUsers(role)) {
-      return NextResponse.redirect(new URL(getLandingRoute(role), request.url));
+    // 역할과 추가 권한을 함께 넘긴다. 역할만 넘기면 추가로 연 화면에서 튕긴다.
+    const actor = { role, perms };
+    if (isUsersRoute && !canManageUsers(actor)) {
+      return NextResponse.redirect(new URL(getLandingRoute(actor), request.url));
     }
 
     // 관리자급은 나머지 화면에 제한이 없다(null). 그 외는 역할별 화이트리스트를 본다.
-    const allowedRoutes = getAllowedDashboardRoutes(role);
+    const allowedRoutes = getAllowedDashboardRoutes(actor);
     if (allowedRoutes) {
       const isAllowed = allowedRoutes.some(
         (route) => pathname === route || pathname.startsWith(route + '/')
@@ -95,7 +103,7 @@ export async function proxy(request: NextRequest) {
 
       // 허용 목록에 없으면 각자의 기본 화면으로 (무한 리다이렉트 방지)
       if (!isAllowed) {
-        return NextResponse.redirect(new URL(getLandingRoute(role), request.url));
+        return NextResponse.redirect(new URL(getLandingRoute(actor), request.url));
       }
     }
   }

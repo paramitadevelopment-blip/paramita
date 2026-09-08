@@ -95,3 +95,41 @@
   cursor: not-allowed;
   color: #999;
 }
+
+/* ── 연락처·이메일 ────────────────────────────────────────── */
+
+/* 두 칸을 나란히. 좁은 창에서는 세로로 선다. */
+.contactRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.contactRow .formGroup {
+  margin: 0;
+}
+
+.contactRow .input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 검사 결과. 전에는 인라인 스타일이었다 — 규칙상 모듈로 옮긴다. */
+.feedback {
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+.feedbackBad {
+  color: #db1a62;
+}
+
+.feedbackOk {
+  color: #4a90e2;
+}
+
+@media (max-width: 640px) {
+  .contactRow {
+    grid-template-columns: 1fr;
+  }
+}

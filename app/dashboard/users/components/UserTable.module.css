@@ -211,3 +211,11 @@
   color: #999;
   margin: 0;
 }
+
+/* 역할 배지 옆에 붙는 추가 권한. 역할과 갈리도록 테두리만 두른다. */
+.badge.extraPerm {
+  margin-left: 6px;
+  background: white;
+  border: 1px solid #db1a62;
+  color: #db1a62;
+}
