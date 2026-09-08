@@ -201,3 +201,50 @@ describe('붙여넣은 발주일 읽기', () => {
     expect(normalizeShipDate('2026-02-30')).toBe('');
   });
 });
+
+/**
+ * 거래처 양식을 통째로 복사하면 머리글 위에 `*필수` 표시 줄이 같이 온다.
+ * 그 줄은 값이 아니다 — 문제 줄로 잡히면 안 된다.
+ */
+const REQUIRED_LINE = [
+  '*필수', '', '', '*필수', '*필수', '*필수', '', '*필수', '', '*필수', '*필수', '', '*필수', '*필수', '*필수', '', '', '',
+].join('\t');
+
+describe('*필수 표시 줄', () => {
+  it('엑셀 복사: 필수 줄 + 머리글 + 본문 → 본문만 읽고 문제 없음', () => {
+    const { rows, problems, skipped } = parseGiftPaste(
+      REQUIRED_LINE + '\n' + HEADER_LINE + '\n' + CELLS.join('\t')
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].orderNo).toBe('20647967');
+    expect(problems).toHaveLength(0);
+    expect(skipped).toBe(0);
+  });
+
+  it('웹 표 복사: 필수 줄이 칸마다 줄바꿈으로 와도 걷어낸다', () => {
+    const required = REQUIRED_LINE.split('\t');
+    const text =
+      HEADER_LINE + '\n\n' +
+      required.map((c) => (c === '' ? '　' : c)).join('\n\n') + '\n\n' +
+      CELLS.map((c) => (c === '' ? '　' : c)).join('\n\n') + '\n';
+    const { rows, problems } = parseGiftPaste(text);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].pastedName).toBe('이경덕');
+    expect(problems).toHaveLength(0);
+  });
+
+  it('발주처 표에도 같은 줄이 있다 — 버린 줄로 세지 않는다', () => {
+    const { rows, skipped } = parseShipPaste(
+      REQUIRED_LINE + '\n' + HEADER_LINE + '\n' + SHIPPED.join('\t')
+    );
+    expect(rows).toHaveLength(1);
+    expect(skipped).toBe(0);
+  });
+
+  it('필수 줄만 붙여넣으면 아무것도 없다', () => {
+    const { rows, problems, skipped } = parseGiftPaste(REQUIRED_LINE + '\n' + HEADER_LINE);
+    expect(rows).toHaveLength(0);
+    expect(problems).toHaveLength(0);
+    expect(skipped).toBe(0);
+  });
+});

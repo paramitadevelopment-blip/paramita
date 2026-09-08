@@ -41,10 +41,23 @@ const COLS = GIFT_PASTE_HEADERS.length;
 /** 줄 끝 정리. 전각 공백·nbsp 까지 뗀다 — 빈 칸 표시로 쓰이는 글자들이다. */
 const clean = (v: string) => v.replace(/\r/g, '').replace(/[　 ]/g, ' ').trim();
 
-/** 머리글 칸인가. 값이 아니라 칸 이름이면 건너뛴다. */
+/**
+ * 머리글 칸인가. 값이 아니라 칸 이름이면 건너뛴다.
+ *
+ * 거래처 양식은 머리글 위에 `*필수` 표시 줄이 한 줄 더 있다. 그 줄까지 같이
+ * 복사해 붙여넣는 것이 보통이라, 그 표시도 머리글로 본다 — 안 그러면 그 줄이
+ * "주문번호 없음"으로 잡혀 문제 줄에 낀다.
+ */
 function isHeaderCell(value: string): boolean {
   const normalized = clean(value).replace(/\s+/g, '');
+  if (normalized === '*필수' || normalized === '필수') return true;
   return (GIFT_PASTE_HEADERS as readonly string[]).some((h) => h.replace(/\s+/g, '') === normalized);
+}
+
+/** 이 칸 묶음이 통째로 머리글(또는 필수 표시)인가. 빈 칸은 상관없다. */
+function isHeaderGroup(cells: string[]): boolean {
+  const filled = cells.map(clean).filter((c) => c.length > 0);
+  return filled.length > 0 && filled.every(isHeaderCell);
 }
 
 function toRow(cells: string[]): GiftPasteRow {
@@ -87,16 +100,16 @@ function toCellGroups(text: string): string[][] {
    * 본문은 한 칸씩 줄바꿈으로 온다 — 머리글의 탭을 보고 전체를 "탭 모양"으로
    * 읽으면 본문이 한 칸짜리 조각으로 부서진다. 머리글을 뺀 뒤에 모양을 정한다.
    */
-  const rawLines = text
-    .replace(/\r/g, '')
-    .split('\n')
-    .filter((line) => !isHeaderLine(line));
+  const allLines = text.replace(/\r/g, '').split('\n');
+  const rawLines = allLines.filter((line) => !isHeaderLine(line));
 
   // 탭이 하나라도 있으면 '한 줄에 열여덟 칸' 모양이다.
   if (rawLines.some((line) => line.includes('\t'))) {
     return rawLines
       .map((line) => line.split('\t').map(clean))
-      .filter((cells) => cells.some((c) => c.length > 0));
+      .filter((cells) => cells.some((c) => c.length > 0))
+      // `*필수` 표시 줄처럼 값 없는 줄. 머리글 줄 걸러내기에서 빠졌어도 여기서 걷는다.
+      .filter((cells) => !isHeaderGroup(cells));
   }
 
   /*
@@ -104,12 +117,22 @@ function toCellGroups(text: string): string[][] {
    *
    * 아무것도 없는 줄은 칸 사이의 간격이라 버리고, 공백만 있는 줄(전각 공백 등)은
    * 빈 칸이라 남긴다. 둘을 같이 버리면 빈 칸 뒤의 값이 전부 앞으로 밀린다.
+   *
+   * 머리글·필수 표시가 칸마다 한 줄로 왔을 때는 **열여덟 줄 덩어리로** 걷어내야
+   * 한다(아래). 줄 하나씩 버리면 그 사이 빈 칸 줄만 남아 뒤 칸이 밀린다 — 그래서
+   * 여기서는 탭으로 붙은 머리글 줄만 빼고 나머지는 그대로 둔다.
    */
-  const lines = rawLines.filter((line) => line.length > 0).map(clean);
+  const lines = allLines
+    .filter((line) => !(line.includes('\t') && isHeaderLine(line)))
+    .filter((line) => line.length > 0)
+    .map(clean);
   if (lines.length === 0) return [];
 
-  // 머리글 열여덟 줄이 앞에 붙어 있으면 걷어낸다.
-  const start = lines.slice(0, COLS).every(isHeaderCell) ? COLS : 0;
+  // 앞에 붙은 머리글·필수 표시 덩어리를 걷어낸다. 둘 다 있으면 둘 다.
+  let start = 0;
+  while (start + COLS <= lines.length && isHeaderGroup(lines.slice(start, start + COLS))) {
+    start += COLS;
+  }
 
   const groups: string[][] = [];
   for (let at = start; at < lines.length; at += COLS) {
