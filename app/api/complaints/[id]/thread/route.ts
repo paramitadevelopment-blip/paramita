@@ -54,8 +54,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         .select('department')
         .eq('id', user.id)
         .single();
+      // 넣는 담당자는 사무실에서 넣은 건 전부, 지사는 자기 소속 건.
       const mine =
-        Number(complaint.created_by_id) === user.id ||
+        canRegisterComplaints(user) ||
         (complaint.assigned_group && complaint.assigned_group === me?.department);
       if (!mine) {
         return NextResponse.json({ error: '볼 수 없는 민원입니다.' }, { status: 403 });

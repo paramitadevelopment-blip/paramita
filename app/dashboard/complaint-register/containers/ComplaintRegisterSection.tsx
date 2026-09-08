@@ -28,7 +28,7 @@ import RegisteredTable from '../components/RegisteredTable';
 import styles from '../page.module.css';
 
 /**
- * 내가 넣은 민원과 그 결과.
+ * 사무실에서 넣은 민원과 그 결과. 누가 넣었든 여기서 같이 본다.
  *
  * 이 화면에서 오래 하는 일은 넣는 것이 아니라 "그래서 어떻게 됐나"를 보는
  * 것이다. 그래서 목록이 화면이고, 접수는 창으로 연다.

@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 민원담당자는 이 화면을 못 보지만 자기가 넣은 건은 봐야 한다.
+    // 민원을 넣는 담당자는 배정 화면은 못 보지만 넣은 건은 봐야 한다.
     if (!canViewComplaints(user.role) && !canRegisterComplaints(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -247,9 +247,14 @@ export async function GET(request: NextRequest) {
       const group = (searchParams.get('group') || '').trim();
       if (group) query = query.eq('assigned_group', group);
     } else if (!canViewComplaints(user.role) && canRegisterComplaints(user)) {
-      // 민원을 넣기만 하는 사람(민원담당자, 등록 권한을 더 받은 계정)은 자기가
-      // 넣은 것만. 남의 지사 처리 상황은 보지 않는다.
-      query = query.eq('created_by_id', user.id);
+      /*
+       * 민원을 넣기만 하는 사람(담당자)은 **전부** 본다.
+       *
+       * 넣는 자리는 사무실 공용이다 — 오늘은 관리자가 넣고 내일은 담당자가
+       * 넣는다. 자기가 넣은 것만 보이면 관리자가 넣은 건에 보완 요청이 와도
+       * 담당자가 못 고치고, 관리자가 자리에 없으면 그 건은 멈춘다. 지사는
+       * 민원을 넣지 않으므로 '전부'라 해도 사무실에서 넣은 것뿐이다.
+       */
     } else {
       const department = await departmentOf(user.id);
       // 소속을 못 읽으면 아무것도 안 보여준다. 조건을 빼면 전체가 나간다.

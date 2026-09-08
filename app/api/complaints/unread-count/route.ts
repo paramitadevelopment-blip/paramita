@@ -19,7 +19,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * 따로 센다 — 관리자는 두 메뉴가 다 보이는데 한 숫자를 나눠 쓰면, 민원 등록에
  * 붙은 배지를 누르고 들어가도 거기엔 아무것도 없다.
  *
- *   민원 등록  내가 넣었다가 반려돼 돌아온 건 (역할과 무관하게 '내가 넣은 것'만)
+ *   민원 등록  보완 요청을 받아 돌아온 건 전부 — 넣는 자리는 사무실 공용이라
+ *              누가 넣었든 담당자가 고쳐 보낸다
  *   민원관리   관리자  담당 지사를 못 찾은 건 — 관리자가 지정해야 넘어간다
  *              지사    아직 처리가 안 끝난 내 소속 민원 전부
  *
@@ -63,9 +64,7 @@ export async function GET(request: NextRequest) {
     let register = 0;
     const registerTabs: Partial<Record<ComplaintFilter, number>> = {};
     if (canRegisterComplaints(user)) {
-      register = await countOf(() =>
-        base().eq('created_by_id', user.id).eq('status', 'returned')
-      );
+      register = await countOf(() => base().eq('status', 'returned'));
       registerTabs.returned = register;
     }
 

@@ -234,7 +234,7 @@ describe('화면 접근', () => {
     expect(getAllowedDashboardRoutes('gift')).toEqual(['/dashboard/gift-manage']);
   });
 
-  /** 민원담당자는 자기가 넣은 건만 본다. 남의 지사 처리 상황은 보지 않는다. */
+  /** 민원을 넣는 담당자는 등록 화면에서 사무실 건을 본다. 지사별 처리 화면은 아니다. */
   it('민원담당자는 민원 등록 화면만 들어간다', () => {
     expect(getAllowedDashboardRoutes('complaint')).toEqual(['/dashboard/complaint-register']);
   });

@@ -66,11 +66,13 @@ function checkOwnEditable(
   user: { id: number; role: string },
   intent: 'edit' | 'delete' | 'withdraw'
 ): NextResponse | null {
+  /*
+   * 넣는 자리는 사무실 공용이다. 넣을 수 있는 사람이면 누가 넣은 건이든
+   * 고치고 물린다 — 관리자가 넣은 건에 보완 요청이 오면 담당자가 고쳐 보낸다.
+   * 무엇을 할 수 있는지는 상태가 정한다(아래).
+   */
   if (!canRegisterComplaints(user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-  if (!canViewAllComplaints(user.role) && Number(complaint.created_by_id) !== user.id) {
-    return NextResponse.json({ error: '내가 넣은 민원이 아닙니다.' }, { status: 403 });
   }
 
   const isAdmin = canViewAllComplaints(user.role);

@@ -301,8 +301,8 @@ export function canRegisterComplaints(role?: Who): boolean {
  * 배정된 민원 화면을 볼 수 있는가.
  *
  * 지사는 자기 소속 건, 설계사는 자기에게 넘어온 건만 본다
- * (canViewAllComplaints 참고). 민원담당자는 여기 못 들어온다 — 남의 지사
- * 처리 상황까지 보게 되므로, 자기가 넣은 건만 등록 화면에서 본다.
+ * (canViewAllComplaints 참고). 민원을 넣는 담당자는 여기 못 들어온다 —
+ * 지사별 처리 상황은 이 화면이고, 담당자는 등록 화면에서 넣은 건을 본다.
  */
 export function canViewComplaints(role?: Who): boolean {
   return is(role, 'admin', 'subadmin', 'user');
@@ -424,8 +424,8 @@ export function getAllowedDashboardRoutes(role?: Who): string[] | null {
   /*
    * 담당자는 켜 준 권한만큼만 열린다.
    *
-   * 민원 등록은 자기가 넣은 것만 보는 화면이다 — 배정된 민원
-   * ('/dashboard/complaints')은 남의 지사 처리 상황이라 열지 않는다.
+   * 민원 등록은 사무실에서 넣은 건을 보는 화면이다 — 배정된 민원
+   * ('/dashboard/complaints')은 지사별 처리 상황이라 열지 않는다.
    * 사은품 관리도 전달된 신청만 본다. 지사 안에서 오가는 신청 화면은 아니다.
    */
   if (isStaffRole(role)) base = [];
