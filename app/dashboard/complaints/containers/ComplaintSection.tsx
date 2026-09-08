@@ -80,7 +80,9 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
    */
   const openDetail = (row: ComplaintRow) => {
     setDetail(row);
-    if (isAdmin || row.status !== 'branch' || row.read_at) return;
+    if (isAdmin || row.status !== 'branch') return;
+    // 이번 건을 이미 봤어도 뒤에 들어온 회차가 안 본 채 남아 있으면 찍는다.
+    if (row.read_at && !(row.thread_unread ?? 0)) return;
     // 보러 온 사람에게 오류창을 띄우지 않는다. 실패하면 목록이 '미확인' 그대로다.
     list.patch({ id: row.id, body: { action: 'read' } }).catch(() => {});
   };

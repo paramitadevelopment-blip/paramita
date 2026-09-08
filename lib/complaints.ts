@@ -115,6 +115,12 @@ export interface ComplaintRow {
   thread_total?: number;
   /** 그 묶음에 아직 안 끝난 건이 있는가. 목록에서 붉게 칠할지를 여기서 정한다. */
   thread_open?: boolean;
+  /**
+   * 그 묶음에서 지사가 아직 안 본 회차 수(이번 건 포함).
+   * 상세를 열 때 "확인을 찍어야 하는가"를 여기서 안다 — 이번 건은 봤어도
+   * 나중에 들어온 회차가 안 본 채 남아 있을 수 있다.
+   */
+  thread_unread?: number;
   created_by: string;
   created_at: string;
   /** 지나간 반려들. 시간 순이 아닐 수 있어 화면에서 정렬해 쓴다. */

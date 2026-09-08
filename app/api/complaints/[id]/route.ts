@@ -386,29 +386,33 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
 
       /*
-       * 이미 본 건은 그대로 둔다.
+       * 같은 건의 다른 회차도 함께 확인 처리한다. **아직 안 본 것만** 찍는다.
        *
-       * 다시 눌렀다고 시각과 사람을 덮어쓰면 "처음 본 사람이 누구였나"가
-       * 사라진다. 관리자가 보려는 건 첫 확인 시점이다.
+       * 상세에 묶음 전체의 통화내역이 보이므로, 3차를 열어 본 사람은 1·2차도
+       * 본 것이다. 다만 이미 본 회차의 시각과 사람은 덮지 않는다 — "처음 본
+       * 사람이 누구였나"가 사라진다. 관리자가 보려는 건 첫 확인 시점이다.
+       */
+      const stamp = { read_at: now, read_by_id: user.id, read_by: user.username, updated_at: now };
+      const alsoRead = await markUnreadInThread(complaint.thread_key, complaintId, stamp);
+
+      /*
+       * 이번 건은 이미 봤는데 뒤에 들어온 회차가 안 본 채 남아 있던 경우.
+       * 위에서 그것들을 찍었으면 된 것이다. 찍을 것이 하나도 없었을 때만
+       * "이미 확인"으로 답한다.
        */
       if (complaint.read_at) {
-        return NextResponse.json({ error: '이미 확인한 민원입니다.' }, { status: 400 });
+        if (alsoRead === 0) {
+          return NextResponse.json({ error: '이미 확인한 민원입니다.' }, { status: 400 });
+        }
+        const { data } = await supabase
+          .from('complaints')
+          .select(COMPLAINT_COLUMNS)
+          .eq('id', complaintId)
+          .single();
+        return NextResponse.json({ data, alsoRead });
       }
 
-      // 같은 건의 다른 회차도 함께 확인 처리한다. 아직 안 본 것만 찍힌다.
-      await applyToThread(complaint.thread_key, complaintId, {
-        read_at: now,
-        read_by_id: user.id,
-        read_by: user.username,
-        updated_at: now,
-      });
-
-      return await applyUpdate(complaintId, {
-        read_at: now,
-        read_by_id: user.id,
-        read_by: user.username,
-        updated_at: now,
-      });
+      return await applyUpdate(complaintId, stamp, { alsoRead });
     }
 
     /* ── 처리 내용 기록 ────────────────────────────────────────── */
@@ -664,6 +668,28 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
  * 이미 끝난 건은 건드리지 않는다. 지난 처리 내용을 이번 것으로 덮으면
  * "그때 뭐라고 안내했나"가 사라진다.
  */
+/** 같은 건에서 지사가 아직 안 본 회차에만 확인 도장을 찍는다. 찍힌 건수를 돌려준다. */
+async function markUnreadInThread(
+  threadKey: string | null,
+  exceptId: number,
+  stamp: Record<string, unknown>
+): Promise<number> {
+  if (!threadKey) return 0;
+  const { data, error } = await supabase
+    .from('complaints')
+    .update(stamp)
+    .eq('thread_key', threadKey)
+    .neq('id', exceptId)
+    .eq('status', 'branch')
+    .is('read_at', null)
+    .select('id');
+  if (error) {
+    console.error('Complaint thread read error:', error);
+    return 0;
+  }
+  return data?.length ?? 0;
+}
+
 async function applyToThread(
   threadKey: string | null,
   exceptId: number,

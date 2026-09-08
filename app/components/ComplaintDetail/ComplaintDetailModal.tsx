@@ -11,6 +11,7 @@ import {
   type ComplaintRow,
 } from '@/lib/complaints';
 import { TRANSFER_KIND_LABEL, transferPath } from '@/lib/complaintTransfers';
+import { useComplaintThread } from '@/app/hooks/useComplaints';
 import styles from './ComplaintDetail.module.css';
 
 /**
@@ -59,6 +60,15 @@ const ComplaintDetailModal = memo(function ComplaintDetailModalComponent({
   );
   // 오간 이력. 서버가 순서를 보장하지 않아 오래된 것부터 세운다.
   const transfers = [...(row.complaint_transfers ?? [])].sort((a, b) => a.at.localeCompare(b.at));
+  /*
+   * 같은 건의 다른 회차. 묶음이 둘 이상일 때만 묻는다.
+   *
+   * 3차를 열었으면 1·2차에서 고객이 뭐라고 했고 우리가 뭐라고 안내했는지가
+   * 같이 보여야 한다. 이 창을 여는 것이 곧 확인이라, 여기서 안 보이면 "봤다"고
+   * 찍히면서 실제로는 못 본 것이 된다.
+   */
+  const { data: thread = [] } = useComplaintThread(row.id, (row.thread_total ?? 1) > 1);
+  const unfinished = thread.filter((e) => e.status === 'branch').length;
 
   return (
     <div className={styles.modalOverlay}>
@@ -87,6 +97,39 @@ const ComplaintDetailModal = memo(function ComplaintDetailModalComponent({
           <Line label="통화일시">{dateTimeText(row.called_at)}</Line>
           <Line label="통화내역">{row.call_memo}</Line>
         </dl>
+
+        {thread.length > 1 && (
+          <div className={styles.threadBox}>
+            <h4>
+              같은 건으로 접수된 민원 {thread.length}건
+              {unfinished > 1 && (
+                <span className={styles.threadNote}> · 아직 안 끝난 것 {unfinished}건</span>
+              )}
+            </h4>
+            <ol className={styles.threadList}>
+              {thread.map((entry) => (
+                <li key={entry.id} className={entry.id === row.id ? styles.threadCurrent : ''}>
+                  <div className={styles.threadHead}>
+                    <span className={styles.threadSeq}>{entry.sequence_no}차</span>
+                    <span className={styles.threadWhen}>{dateTimeText(entry.called_at)}</span>
+                    {entry.id === row.id && <span className={styles.threadHere}>이번 건</span>}
+                    {entry.status === 'done' && <span className={styles.threadDone}>처리 완료</span>}
+                  </div>
+                  <p className={styles.threadMemo}>{entry.call_memo || '(통화내역 없음)'}</p>
+                  {entry.handled_note && (
+                    <div className={styles.threadHandled}>
+                      <span className={styles.threadHandledLabel}>이 회차 처리 내용</span>
+                      <p className={styles.threadHandledBody}>{entry.handled_note}</p>
+                      <span className={styles.threadWhen}>
+                        {entry.handled_by} · {dateTimeText(entry.handled_at)}
+                      </span>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
 
         <h4 className={styles.detailTitle}>접수·전달</h4>
         <dl className={styles.detailList}>

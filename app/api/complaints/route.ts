@@ -116,7 +116,7 @@ async function withThreadInfo(rows: ComplaintRow[]): Promise<ComplaintRow[]> {
 
   const { data, error } = await supabase
     .from('complaints')
-    .select('thread_key, status')
+    .select('thread_key, status, read_at')
     .in('thread_key', keys);
 
   // 묶음 정보를 못 읽어도 목록은 나와야 한다. 표시만 빠진다.
@@ -127,6 +127,7 @@ async function withThreadInfo(rows: ComplaintRow[]): Promise<ComplaintRow[]> {
 
   const total = new Map<string, number>();
   const open = new Set<string>();
+  const unread = new Map<string, number>();
   for (const row of data ?? []) {
     const key = row.thread_key as string;
     total.set(key, (total.get(key) ?? 0) + 1);
@@ -134,12 +135,17 @@ async function withThreadInfo(rows: ComplaintRow[]): Promise<ComplaintRow[]> {
     if (isOpenComplaint(row.status)) {
       open.add(key);
     }
+    // 지사에 와 있는데 아직 안 본 회차. 상세를 열면 이것들이 함께 확인된다.
+    if (row.status === 'branch' && !row.read_at) {
+      unread.set(key, (unread.get(key) ?? 0) + 1);
+    }
   }
 
   return rows.map((row) => ({
     ...row,
     thread_total: row.thread_key ? (total.get(row.thread_key) ?? 1) : 1,
     thread_open: row.thread_key ? open.has(row.thread_key) : false,
+    thread_unread: row.thread_key ? (unread.get(row.thread_key) ?? 0) : row.read_at ? 0 : 1,
   }));
 }
 

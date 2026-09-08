@@ -296,3 +296,127 @@
   font-weight: 700;
   color: #333;
 }
+
+/* ── 같은 건의 다른 회차 ───────────────────────────────────────
+ * 처리 창(complaints/page.module.css)과 같은 모양이다. 같은 것을 같은 모양으로.
+ */
+.threadBox {
+  margin: 0 0 24px;
+  padding: 20px;
+  border: 1px solid #f3c3d4;
+  border-radius: 10px;
+  background: #fff5f7;
+}
+
+.threadBox h4 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #db1a62;
+}
+
+.threadNote {
+  font-size: 15px;
+  font-weight: 500;
+  color: #888;
+}
+
+.threadList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 회차 하나가 카드 하나. 이번 건은 테두리로만 짚는다. */
+.threadList li {
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  border: 1px solid #f3dae2;
+  border-radius: 8px;
+  background: white;
+}
+
+.threadList li:last-child {
+  margin-bottom: 0;
+}
+
+.threadCurrent {
+  border-color: #db1a62;
+  box-shadow: inset 0 0 0 1px #db1a62;
+}
+
+.threadHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.threadSeq {
+  padding: 2px 10px;
+  border-radius: 100px;
+  background: #db1a62;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.threadWhen {
+  font-size: 15px;
+  color: #888;
+}
+
+.threadHere {
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: #333;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.threadDone {
+  padding: 2px 8px;
+  border: 1px solid #a5d6a7;
+  border-radius: 100px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.threadMemo {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.7;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 그 회차에 우리가 뭐라고 안내했는지. 고객 말과 섞이지 않게 옅게 깔아 갈라 둔다. */
+.threadHandled {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #faf7f8;
+  border-left: 3px solid #db1a62;
+}
+
+.threadHandledLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #db1a62;
+}
+
+.threadHandledBody {
+  margin: 0 0 6px;
+  font-size: 16px;
+  line-height: 1.7;
+  color: #444;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
