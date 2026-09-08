@@ -5,13 +5,12 @@ import { MdExpandMore } from 'react-icons/md';
 import { useAuthStore } from '@/app/store/authStore';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { isAdminRole } from '@/lib/roles';
-import { useComplaints } from '@/app/hooks/useComplaints';
+import { useComplaints, useUnreadComplaintCount } from '@/app/hooks/useComplaints';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { toAssignableDepartmentGroups } from '@/lib/departments';
 import {
   COMPLAINT_STATUSES,
   COMPLAINT_STATUS_LABEL,
-  PENDING_STATUS,
   type ComplaintRow,
   type ComplaintStatus,
 } from '@/lib/complaints';
@@ -27,14 +26,14 @@ import styles from '../page.module.css';
 /**
  * 나에게 온 민원.
  *
- * 지사는 자기 소속 건을, 설계사는 자기에게 넘어온 건만 본다. 관리자는 전체를
- * 보며 담당 지사를 못 찾은 건을 직접 정한다. 거르는 건 서버가 하고 여기서는
- * 조회 조건만 든다.
+ * 지사는 자기 소속 건만 본다. 관리자는 전체를 보며 담당 지사를 못 찾은 건을
+ * 직접 정하고, 잘못 간 건을 옮긴다. 거르는 건 서버가 하고 여기서는 조회
+ * 조건만 든다.
  */
 const ACTION_DONE_TITLE = {
   assign_dept: '지사 지정 완료',
-  return: '반려 완료',
-  assign_agent: '설계사 지정 완료',
+  bounce: '관리자에게 되돌림',
+  return: '보완 요청 완료',
   handle: '처리 완료',
 } as const;
 
@@ -46,8 +45,9 @@ function doneMessage(
 ): string {
   const who = `${row.customer_name} 님 민원`;
   if (body.action === 'assign_dept') return `${who}을 ${body.group} 지사로 넘겼습니다.`;
-  if (body.action === 'return') return `${who}을 등록한 사람에게 반려했습니다.`;
-  if (body.action === 'assign_agent') return `${who}의 담당 설계사를 지정했습니다.`;
+  // 무엇을 했는지만 적는다. 그다음 일은 화면이 상태로 말한다.
+  if (body.action === 'return') return `${who}에 보완을 요청했습니다.`;
+  if (body.action === 'bounce') return `${who}을 관리자에게 되돌렸습니다. 관리자가 지사를 다시 정합니다.`;
 
   // 같은 건이 함께 끝났으면 그 수를 말한다. 한 건뿐이면 굳이 세지 않는다.
   const closed = result?.closed ?? 1;
@@ -62,21 +62,27 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
 
   const list = useComplaints();
   const { showAlert } = useAlert();
-  // 소속 목록은 관리자만 쓴다. 지사·설계사는 서버가 자기 범위로 고정한다.
+  // 사이드바 배지와 같은 값을 쓴다. 따로 세면 둘이 어긋난 숫자를 말하게 된다.
+  const { data: badge } = useUnreadComplaintCount();
+  const manageTabs = badge?.manageTabs ?? {};
+  // 소속 목록은 관리자만 쓴다. 지사는 서버가 자기 범위로 고정한다.
   const { data: departments } = useDepartments(isAdmin);
   /*
-   * 확인은 되돌릴 수 없다 — 누가 언제 봤는지가 그대로 기록으로 남고, 그 순간
-   * 넣은 사람은 더 이상 고치지 못한다. 목록에서 손이 미끄러져 눌리기 쉬운
-   * 자리라, 한 번 묻고 넘어간다.
+   * 상세를 여는 것이 곧 확인이다.
+   *
+   * 확인의 뜻은 "이 내용으로 판단이 시작됐다"이고, 상세를 연 순간 그게 일어난다.
+   * 버튼을 따로 두면 안 누르고 지나가고, 그동안 넣은 사람이 내용을 고쳐 지사가
+   * 본 것과 다른 건을 처리하게 된다.
+   *
+   * **지사가 자기 미처리 건을 열 때만** 찍는다. 관리자가 훑어보다 찍으면 지사의
+   * 첫 확인 기록이 사라지고, 넣은 사람의 수정이 남의 클릭으로 잠긴다. 관리자는
+   * 목록의 [미확인] 버튼으로 뜻을 갖고 누른다.
    */
-  const askRead = (row: ComplaintRow) => {
-    showAlert({
-      type: 'info',
-      title: '민원 확인',
-      message: `${row.customer_name} 님 민원의 상세 내용을 확인하셨습니까?`,
-      showCancelButton: true,
-      onConfirm: () => list.patch({ id: row.id, body: { action: 'read' } }),
-    });
+  const openDetail = (row: ComplaintRow) => {
+    setDetail(row);
+    if (isAdmin || row.status !== 'branch' || row.read_at) return;
+    // 보러 온 사람에게 오류창을 띄우지 않는다. 실패하면 목록이 '미확인' 그대로다.
+    list.patch({ id: row.id, body: { action: 'read' } }).catch(() => {});
   };
 
   const [target, setTarget] = useState<{
@@ -96,20 +102,10 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
   const groups = toAssignableDepartmentGroups(departments);
 
   /*
-   * 상태 탭.
-   *
-   * '지사 확인 대기'와 '설계사 처리 대기'는 걸러 볼 일이 없어 빼 둔다 — 아직
-   * 처리되지 않았다는 뜻이라 어차피 목록 위쪽에 쌓인다. 각 줄의 상태 표시는
-   * 그대로 남는다.
-   *
-   * '담당 지사 없음'은 관리자만 할 일이 있는 자리라 지사·설계사에게는 안 보인다.
-   * 보여 주면 자기가 할 수 없는 건만 담긴 빈 탭이 된다.
+   * 상태 탭. '담당 지사 없음'은 관리자만 할 일이 있는 자리라 지사에게는 안
+   * 보인다 — 보여 주면 자기가 할 수 없는 건만 담긴 빈 탭이 된다.
    */
-  const HIDDEN_TABS = ['branch', 'agent'];
-  const statuses = COMPLAINT_STATUSES.filter((s) => {
-    if (HIDDEN_TABS.includes(s)) return false;
-    return s === 'unassigned' ? isAdmin : true;
-  });
+  const statuses = COMPLAINT_STATUSES.filter((s) => (s === 'unassigned' ? isAdmin : true));
 
   return (
     <>
@@ -121,7 +117,7 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
           value={list.search}
           onChange={list.setSearch}
           onReset={() => list.setSearch('')}
-          placeholder="고객명 · 주문번호 · 전화번호"
+          placeholder="모든 항목 검색 — 고객명 · 전화 · 주문번호 · 상품 · 담당 · 메모 · 상태 · 날짜"
         />
       </div>
 
@@ -142,7 +138,6 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
             {/* 열이 안 보이는 사람에게는 그 정렬도 내지 않는다 — 눌러도 표가 그대로다. */}
             {isAdmin && <option value="assigned_group">담당 지사순</option>}
             <option value="status">상태순</option>
-            <option value="read_at">확인순</option>
           </select>
           <MdExpandMore className={styles.selectIcon} />
         </div>
@@ -184,29 +179,28 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
         >
           전체
         </button>
-        {/*
-          미처리 = 지사에 와 있는 것 + 설계사에게 넘긴 것. 단계는 달라도 둘 다
-          아직 안 끝난 것이라, 지사가 "내가 할 일"을 볼 때는 한 덩어리로 본다.
-          사이드바 배지가 세는 것과 같은 범위다 — 배지를 누르고 들어와 그만큼이
-          보여야 숫자를 믿을 수 있다.
-        */}
-        <button
-          type="button"
-          className={`${styles.statusTab} ${list.status === PENDING_STATUS ? styles.active : ''}`}
-          onClick={() => list.setStatus(PENDING_STATUS)}
-        >
-          미처리
-        </button>
-        {statuses.map((status) => (
-          <button
-            key={status}
-            type="button"
-            className={`${styles.statusTab} ${list.status === status ? styles.active : ''}`}
-            onClick={() => list.setStatus(status as ComplaintStatus)}
-          >
-            {COMPLAINT_STATUS_LABEL[status]}
-          </button>
-        ))}
+        {statuses.map((status) => {
+          // 옆 메뉴 배지에 든 숫자를 그 숫자가 사는 탭에 그대로 붙인다.
+          const todo = manageTabs[status] ?? 0;
+          return (
+            <button
+              key={status}
+              type="button"
+              className={`${styles.statusTab} ${list.status === status ? styles.active : ''}`}
+              onClick={() => list.setStatus(status as ComplaintStatus)}
+            >
+              {COMPLAINT_STATUS_LABEL[status]}
+              {todo > 0 && (
+                <span
+                  className={styles.tabCount}
+                  title={status === 'branch' ? '아직 처리가 끝나지 않은 건' : '담당 지사를 정해 줘야 넘어가는 건'}
+                >
+                  {todo}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {isAdmin && groups.length > 0 && (
@@ -240,8 +234,7 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
           <ComplaintTable
             rows={list.complaints}
             isAdmin={isAdmin}
-            onRead={askRead}
-            onOpen={setDetail}
+            onOpen={openDetail}
             sortBy={list.sort.by}
             sortOrder={list.sort.order}
             onSort={list.toggleSort}

@@ -73,6 +73,8 @@
 }
 
 .statusTab {
+  display: inline-flex;
+  align-items: center;
   padding: 10px 20px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -82,6 +84,34 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+/*
+ * 탭에 붙는 건수.
+ *
+ * 크기를 고정한다 — 글자 수(1자리·2자리)에 따라 높이와 너비가 달라지면 탭마다
+ * 다른 배지처럼 보인다. 세 자리가 넘어가면 가로로만 늘어난다.
+ */
+.tabCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 8px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 8px;
+  border-radius: 100px;
+  background: #db1a62;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.statusTab.active .tabCount {
+  background: white;
+  color: #db1a62;
 }
 
 .statusTab:hover {
@@ -169,40 +199,6 @@
 .rowRead {
   background-color: #fafafa;
   color: #888;
-}
-
-/*
- * 아직 안 본 건. 이 글자가 곧 버튼이다 — 눌러야 할 것이 눈에 띄는 자리에
- * 그대로 있어야, 어디를 눌러 확인 처리하는지 찾지 않는다.
- */
-.readBadge {
-  display: inline-block;
-  padding: 6px 14px;
-  border: 1px solid #a5d6a7;
-  border-radius: 100px;
-  background: #e8f5e9;
-  color: #2e7d32;
-  font-size: 16px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.unreadBtn {
-  padding: 6px 14px;
-  border: 1px solid #f3c3d4;
-  border-radius: 100px;
-  background: #fdf2f6;
-  color: #db1a62;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.unreadBtn:hover {
-  background: #db1a62;
-  border-color: #db1a62;
-  color: white;
 }
 
 /* ── 정렬·개수 ───────────────────────────────────────────── */
@@ -877,4 +873,73 @@
   font-size: 15px;
   font-weight: 500;
   color: #888;
+}
+
+/* 철회. 지운 게 아니라 닫은 것 — 회색으로 물러나 있되 사라지지는 않는다. */
+.status_withdrawn {
+  background: #f3f3f3;
+  border: 1px solid #d9d9d9;
+  color: #777;
+}
+
+/* 철회 사유 입력. 확인창 안에 들어간다. */
+.withdrawField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  text-align: left;
+}
+
+.withdrawField > span {
+  font-size: 15px;
+  font-weight: 600;
+  color: #555;
+}
+
+.withdrawField input {
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 16px;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.withdrawField input:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+/*
+ * 상태 아래 붙는 확인 배지.
+ *
+ * 상태(미처리)와 같은 모양이라 한 칸에 위아래로 서도 따로 놀지 않는다.
+ * 상세를 열면 '미확인'이 '확인'으로 바뀐다 — 본 것과 처리한 것은 다른 일이라
+ * 상태는 그대로 미처리다.
+ */
+/*
+ * 상태 배지 옆에 붙는 확인 배지.
+ *
+ * 붙어 있으면 '미처리 미확인'이 한 덩어리로 읽혀 하나의 상태처럼 보인다.
+ * 서로 다른 것을 말하는 배지라 눈이 한 번 끊길 만큼 띄운다.
+ */
+.readBadge {
+  margin-left: 8px;
+}
+
+/* 아직 안 본 것. 상태 배지보다 이쪽이 눈에 먼저 들어와야 한다. */
+.read_no {
+  background: #fdf2f6;
+  border: 1px solid #f3c3d4;
+  color: #db1a62;
+}
+
+/* 본 것. 할 일이 끝난 자리라 물러나 있다. */
+.read_yes {
+  background: #f1f8f2;
+  border: 1px solid #c3ddc6;
+  color: #3d7a44;
 }

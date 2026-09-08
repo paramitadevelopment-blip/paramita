@@ -10,6 +10,8 @@ import {
   type ComplaintInput,
 } from '@/app/hooks/useComplaints';
 import { useAlert } from '@/app/components/Alert/Alert';
+import { useAuthStore } from '@/app/store/authStore';
+import { isAdminRole } from '@/lib/roles';
 import {
   COMPLAINT_STATUS_LABEL,
   type ComplaintRow,
@@ -37,18 +39,19 @@ import styles from '../page.module.css';
 /*
  * 넣은 사람이 볼 상태.
  *
- * '지사 확인 대기'와 '설계사 처리 중'은 가른다 — 넣은 사람 입장에서는 둘 다
- * "넘어가서 진행 중"이고, 어느 단계인지는 지사 사정이다. 대신 '진행 중' 하나로
- * 묶어 낸다면 탭이 늘 뿐이라, 여기서는 내가 무언가 해야 하는 것만 세운다.
+ * '미처리'는 세우지 않는다 — 넣은 사람 입장에서는 "넘어가서 진행 중"이고
+ * 그다음은 지사 사정이다. 여기서는 내가 무언가 해야 하는 것만 세운다.
  */
-const REGISTER_TABS: ComplaintStatus[] = ['unassigned', 'returned', 'done'];
+const REGISTER_TABS: ComplaintStatus[] = ['unassigned', 'returned', 'done', 'withdrawn'];
 
 const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent() {
   const { showAlert } = useAlert();
+  // 관리자만 담당 지사를 본다. 넣은 사람에게는 그다음이 남의 지사 사정이다.
+  const isAdmin = isAdminRole(useAuthStore((state) => state.user?.role));
   const list = useComplaints();
   // 사이드바 배지와 같은 값을 쓴다. 따로 세면 둘이 어긋난 숫자를 말하게 된다.
   const { data: badge } = useUnreadComplaintCount();
-  const returnedCount = badge?.register ?? 0;
+  const registerTabs = badge?.registerTabs ?? {};
   const register = useRegisterComplaint();
   const registerMany = useRegisterComplaints();
   const [isFormOpen, setFormOpen] = useState(false);
@@ -107,14 +110,79 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
     return row;
   };
 
+  /*
+   * 지우기.
+   *
+   * 넣은 사람이 아무도 안 본 건을 물릴 때는 그냥 묻고 지운다 — 잘못 적은 것을
+   * 바로 지우는 일이라 남길 사정이 없다. 관리자는 처리가 끝난 건도, 남이 넣은
+   * 건도 지울 수 있어 사유를 받는다. 그 사유는 보관본에 함께 남는다.
+   */
   const askDelete = (row: ComplaintRow) => {
+    let reason = '';
     showAlert({
       type: 'warning',
       title: '민원 삭제',
-      message: `${row.customer_name} 님 민원을 정말 삭제하시겠습니까?`,
+      message: isAdmin ? (
+        <>
+          <p>
+            {row.customer_name} 님 민원을 삭제합니다. 보완 이력과 배정 이력도 함께 사라집니다.
+            되돌릴 수 없습니다.
+          </p>
+          <label className={styles.withdrawField}>
+            <span>삭제 사유</span>
+            <input
+              type="text"
+              maxLength={500}
+              placeholder="예: 시험 삼아 넣은 건"
+              onChange={(e) => {
+                reason = e.target.value;
+              }}
+            />
+          </label>
+        </>
+      ) : (
+        `${row.customer_name} 님 민원을 정말 삭제하시겠습니까?`
+      ),
       showCancelButton: true,
       onConfirm: () => {
-        list.remove(row.id);
+        if (isAdmin && !reason.trim()) {
+          showAlert({ type: 'warning', title: '민원 삭제', message: '삭제 사유를 적어 주세요.' });
+          return;
+        }
+        list.remove({ id: row.id, reason: reason.trim() });
+        setLastResult(null);
+      },
+    });
+  };
+
+  /*
+   * 철회. 보완 요청을 받았는데 진행할 필요가 없어진 건을 닫는다.
+   * 지우는 게 아니라 사유를 물어 닫는다 — 관리자가 나중에 "왜 안 했나"를 본다.
+   */
+  const askWithdraw = (row: ComplaintRow) => {
+    let reason = '';
+    showAlert({
+      type: 'warning',
+      title: '민원 철회',
+      message: (
+        <>
+          <p>{row.customer_name} 님 민원을 철회하시겠습니까? 철회해도 기록은 남습니다.</p>
+          <label className={styles.withdrawField}>
+            <span>사유 (선택)</span>
+            <input
+              type="text"
+              maxLength={500}
+              placeholder="예: 다른 민원과 중복"
+              onChange={(e) => {
+                reason = e.target.value;
+              }}
+            />
+          </label>
+        </>
+      ),
+      showCancelButton: true,
+      onConfirm: () => {
+        list.patch({ id: row.id, body: { action: 'withdraw', reason: reason.trim() } });
         setLastResult(null);
       },
     });
@@ -143,7 +211,7 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
           value={list.search}
           onChange={list.setSearch}
           onReset={() => list.setSearch('')}
-          placeholder="고객명 · 주문번호 · 전화번호"
+          placeholder="모든 항목 검색 — 고객명 · 전화 · 주문번호 · 상품 · 담당 · 메모 · 상태 · 날짜"
         />
         {/* 여러 건은 붙여넣기, 한 건은 직접 입력. 둘 다 남겨 둔다. */}
         <button type="button" className={styles.ghostBtn} onClick={() => setPasteOpen(true)}>
@@ -193,9 +261,9 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
 
       {/*
         상태로 거르기.
-        넣은 건이 쌓이면 "반려돼서 내가 고쳐야 할 게 뭐였지"를 목록에서 눈으로
-        찾게 된다. 반려 탭에는 건수를 함께 적는다 — 다른 탭과 달리 지나치면
-        그 민원은 아무 데도 가지 않고 멈춰 있다.
+        넣은 건이 쌓이면 "보완 요청 받은 게 뭐였지"를 목록에서 눈으로 찾게 된다.
+        보완 탭에는 건수를 함께 적는다 — 다른 탭과 달리 지나치면 그 민원은
+        아무 데도 가지 않고 멈춰 있다.
       */}
       <div className={styles.statusTabs}>
         <button
@@ -205,19 +273,25 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
         >
           전체
         </button>
-        {REGISTER_TABS.map((status) => (
-          <button
-            key={status}
-            type="button"
-            className={`${styles.statusTab} ${list.status === status ? styles.active : ''}`}
-            onClick={() => list.setStatus(status)}
-          >
-            {COMPLAINT_STATUS_LABEL[status]}
-            {status === 'returned' && returnedCount > 0 && (
-              <span className={styles.tabCount}>{returnedCount}</span>
-            )}
-          </button>
-        ))}
+        {REGISTER_TABS.map((status) => {
+          // 옆 메뉴 배지에 든 숫자를 그 숫자가 사는 탭에 그대로 붙인다.
+          const todo = registerTabs[status] ?? 0;
+          return (
+            <button
+              key={status}
+              type="button"
+              className={`${styles.statusTab} ${list.status === status ? styles.active : ''}`}
+              onClick={() => list.setStatus(status)}
+            >
+              {COMPLAINT_STATUS_LABEL[status]}
+              {todo > 0 && (
+                <span className={styles.tabCount} title="고쳐서 다시 보내야 하는 건">
+                  {todo}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {lastResult && (
@@ -234,13 +308,16 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
         <>
           <RegisteredTable
             rows={list.complaints}
+            showGroup={isAdmin}
             statusLabel={COMPLAINT_STATUS_LABEL}
             sortBy={list.sort.by}
             sortOrder={list.sort.order}
             onSort={list.toggleSort}
             onOpen={setDetail}
             onEdit={setEditing}
+            isAdmin={isAdmin}
             onDelete={askDelete}
+            onWithdraw={askWithdraw}
           />
           <Pagination
             currentPage={list.page}
@@ -259,9 +336,12 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
         />
       )}
 
-      {/* 넣은 사람에게는 배정 근거를 보여주지 않는다 — 남의 지사 사정이다. */}
+      {/*
+        넣은 사람에게는 배정 근거를 보여주지 않는다 — 남의 지사 사정이다.
+        관리자는 다르다: 배정을 정하는 사람이라 무엇을 보고 그 지사가 됐는지 알아야 한다.
+      */}
       {detail && (
-        <ComplaintDetailModal row={detail} isAdmin={false} onClose={() => setDetail(null)} />
+        <ComplaintDetailModal row={detail} isAdmin={isAdmin} onClose={() => setDetail(null)} />
       )}
 
       {isPasteOpen && (
@@ -280,7 +360,7 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
       )}
 
       {editing && (
-        /* 반려된 건을 고치는 것은 '수정'이 아니라 '재요청'이다 — 저장하는 순간 다시 넘어간다. */
+        /* 보완 요청을 받은 건을 고치는 것은 '수정'이 아니라 '재요청'이다 — 저장하는 순간 다시 넘어간다. */
         <ComplaintFormModal
           onClose={() => setEditing(null)}
           onSubmit={handleEdit}

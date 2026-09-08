@@ -34,9 +34,10 @@ export interface ComplaintInput {
 type PatchBody =
   | { action: 'assign_dept'; group: string }
   | { action: 'return'; reason: string }
-  | { action: 'assign_agent'; agentId: number }
+  | { action: 'bounce'; reason: string }
   | { action: 'handle'; note: string }
   | { action: 'read' }
+  | { action: 'withdraw'; reason?: string }
   | ({ action: 'update' } & ComplaintInput);
 
 export function useComplaints(options: { status?: ComplaintFilter } = {}) {
@@ -47,7 +48,7 @@ export function useComplaints(options: { status?: ComplaintFilter } = {}) {
   const [search, setSearchValue] = useState('');
   const [limit, setLimitValue] = useState(10);
   const [status, setStatusValue] = useState<ComplaintFilter>(options.status ?? '');
-  // 관리자만 쓴다. 지사·설계사는 서버가 자기 범위로 고정한다.
+  // 관리자만 쓴다. 지사는 서버가 자기 범위로 고정한다.
   const [group, setGroupValue] = useState('');
   // 밀린 건만 보기. 목록을 훑어서는 안 보이는 것을 드러낸다.
   const [overdueOnly, setOverdueOnlyValue] = useState(false);
@@ -75,7 +76,7 @@ export function useComplaints(options: { status?: ComplaintFilter } = {}) {
     },
     /*
      * 사람이 손으로 넣고 넘기는 값이라 자주 바뀌지 않는다. 다만 지사가 넘긴
-     * 직후 설계사가 봐야 하므로 재신청 알림(30초)보다 짧게 둔다.
+     * 직후 지사가 봐야 하므로 재신청 알림(30초)보다 짧게 둔다.
      */
     staleTime: 15 * 1000,
     gcTime: 5 * 60 * 1000,
@@ -147,12 +148,17 @@ export function useComplaints(options: { status?: ComplaintFilter } = {}) {
     setPage(1);
   }, []);
 
+  /*
+   * 지우기. 관리자는 사유를 함께 보낸다 — 서버가 보관본에 그 사유를 적는다.
+   * 넣은 사람이 아무도 안 본 건을 물릴 때는 사유가 없다.
+   */
   const removeMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async ({ id, reason }: { id: number; reason?: string }) => {
       const response = await fetch(`/api/complaints/${id}`, {
         method: 'DELETE',
         credentials: 'include',
-        headers: { 'X-CSRF-Token': getCsrfToken() },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+        body: JSON.stringify({ reason: reason ?? '' }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || '지우지 못했습니다.');
@@ -160,6 +166,8 @@ export function useComplaints(options: { status?: ComplaintFilter } = {}) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: COMPLAINTS_KEY });
+      // 지운 건이 배지에 남아 있으면 눌러도 아무것도 없는 숫자가 된다.
+      queryClient.invalidateQueries({ queryKey: UNREAD_COMPLAINTS_KEY });
     },
     onError: (err: Error) => {
       showAlert({ type: 'error', title: '오류', message: err.message });
@@ -279,13 +287,24 @@ export function useRegisterComplaints() {
  * 두 곳을 고쳐야 하고, 한쪽만 고치면 눌러도 아무것도 없는 배지가 뜬다.
  */
 export interface ComplaintBadgeCounts {
-  /** 민원 등록: 내가 넣었다가 반려돼 돌아온 건. */
+  /** 민원 등록: 내가 넣었다가 보완 요청을 받아 돌아온 건. */
   register: number;
   /** 민원관리: 담당 지사를 못 찾았거나, 안 봤거나, 며칠째 안 끝난 건. */
   manage: number;
+  /**
+   * 위 숫자를 **어느 상태 탭에 있는지**로 쪼갠 것. 합은 언제나 위와 같다 —
+   * 옆 메뉴의 숫자를 보고 어느 탭을 눌러야 할지 화면에서 바로 찾으라고 있다.
+   */
+  registerTabs: Partial<Record<ComplaintFilter, number>>;
+  manageTabs: Partial<Record<ComplaintFilter, number>>;
 }
 
-const NO_BADGE: ComplaintBadgeCounts = { register: 0, manage: 0 };
+const NO_BADGE: ComplaintBadgeCounts = {
+  register: 0,
+  manage: 0,
+  registerTabs: {},
+  manageTabs: {},
+};
 
 export function useUnreadComplaintCount(enabled = true) {
   return useQuery({
@@ -294,31 +313,18 @@ export function useUnreadComplaintCount(enabled = true) {
       const response = await fetch('/api/complaints/unread-count', { credentials: 'include' });
       if (!response.ok) return NO_BADGE;
       const result = await response.json();
-      return { register: result.register ?? 0, manage: result.manage ?? 0 };
+      return {
+        register: result.register ?? 0,
+        manage: result.manage ?? 0,
+        registerTabs: result.registerTabs ?? {},
+        manageTabs: result.manageTabs ?? {},
+      };
     },
     enabled,
     // 사이드바는 모든 화면에 떠 있다. 너무 자주 물으면 화면마다 요청이 붙는다.
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
     retry: 1,
-  });
-}
-
-/** 지사가 고를 수 있는 소속 설계사. 관리자는 지사를 지정해야 나온다. */
-export function useComplaintAgents(group?: string, enabled = true) {
-  return useQuery({
-    queryKey: ['complaintAgents', group ?? ''],
-    queryFn: async (): Promise<Array<{ id: number; name: string; username: string }>> => {
-      const params = group ? `?group=${encodeURIComponent(group)}` : '';
-      const response = await fetch(`/api/complaints/agents${params}`, { credentials: 'include' });
-      if (!response.ok) throw new Error('설계사 목록을 불러올 수 없습니다.');
-      const result = await response.json();
-      return result.data ?? [];
-    },
-    enabled,
-    // 계정이 자주 늘지 않는다. 길게 잡아 목록을 다시 받지 않게 한다.
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
   });
 }
 

@@ -56,7 +56,7 @@ describe('밀린 건', () => {
   it(`아직 할 일이 남았고 ${COMPLAINT_OVERDUE_DAYS}일이 지났으면 밀린 건`, () => {
     expect(isOverdueComplaint(row('branch', iso(2026, 9, 1)), now)).toBe(true);
     expect(isOverdueComplaint(row('unassigned', iso(2026, 9, 1)), now)).toBe(true);
-    expect(isOverdueComplaint(row('agent', iso(2026, 8, 20)), now)).toBe(true);
+    expect(isOverdueComplaint(row('branch', iso(2026, 8, 20)), now)).toBe(true);
   });
 
   it('아직 기한 안이면 밀린 건이 아니다', () => {
@@ -64,9 +64,11 @@ describe('밀린 건', () => {
   });
 
   /** 끝난 건에 빨간 표시가 붙으면, 색이 '할 일'을 뜻하지 않게 된다. */
-  it('처리 완료·반려는 아무리 오래돼도 밀린 건이 아니다', () => {
+  it('처리 완료·반려·철회는 아무리 오래돼도 밀린 건이 아니다', () => {
     expect(isOverdueComplaint(row('done', iso(2026, 1, 1)), now)).toBe(false);
     expect(isOverdueComplaint(row('returned', iso(2026, 1, 1)), now)).toBe(false);
+    // 철회는 넣은 사람이 닫은 것이다. 한때 여기 빠져 있어 6일 된 철회 건이 밀린 건으로 잡혔다.
+    expect(isOverdueComplaint(row('withdrawn', iso(2026, 1, 1)), now)).toBe(false);
   });
 
   it('경계: 정확히 3일째부터 밀린 건', () => {

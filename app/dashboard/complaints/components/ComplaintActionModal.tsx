@@ -2,8 +2,9 @@
 
 import React, { memo, useState } from 'react';
 import { MdClose, MdExpandMore } from 'react-icons/md';
-import { useComplaintAgents, useComplaintThread } from '@/app/hooks/useComplaints';
+import { useComplaintThread } from '@/app/hooks/useComplaints';
 import type { ComplaintRow } from '@/lib/complaints';
+import { refusedGroups } from '@/lib/complaintTransfers';
 import styles from '../page.module.css';
 
 /**
@@ -11,14 +12,19 @@ import styles from '../page.module.css';
  *
  * 네 동작이 한 창에 있다 — 무엇을 하든 "어느 고객의 어떤 민원인가"를 다시
  * 확인하고 한 가지 값만 적는 모양이라, 창을 넷으로 나누면 같은 껍데기가 넷이 된다.
+ *
+ *   assign_dept  관리자가 지사를 정한다. 못 찾은 건도, 이미 간 건을 옮기는 것도
+ *   bounce       지사가 "우리 지사 건이 아니다"로 관리자에게 되돌린다
+ *   return       관리자가 넣은 사람에게 보완을 요청한다
+ *   handle       처리 내용을 적는다
  */
 
-export type ActionKind = 'assign_dept' | 'return' | 'assign_agent' | 'handle';
+export type ActionKind = 'assign_dept' | 'bounce' | 'return' | 'handle';
 
 type SubmitBody =
   | { action: 'assign_dept'; group: string }
+  | { action: 'bounce'; reason: string }
   | { action: 'return'; reason: string }
-  | { action: 'assign_agent'; agentId: number }
   | { action: 'handle'; note: string };
 
 /** '9. 3. 14:05' — 지난 민원을 훑을 때는 연도까지 필요하지 않다. */
@@ -29,13 +35,6 @@ const callText = (value: string | null) => {
     hour: '2-digit',
     minute: '2-digit',
   })}`;
-};
-
-const TITLE: Record<ActionKind, string> = {
-  assign_dept: '담당 지사 지정',
-  return: '민원담당자에게 반려',
-  assign_agent: '담당 설계사 지정',
-  handle: '처리 내용 입력',
 };
 
 interface ComplaintActionModalProps {
@@ -59,7 +58,6 @@ const ComplaintActionModal = memo(function ComplaintActionModalComponent({
   const [group, setGroup] = useState('');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState(row.handled_note ?? '');
-  const [agentId, setAgentId] = useState('');
   /*
    * 지난 민원을 읽었다는 표시.
    *
@@ -84,38 +82,46 @@ const ComplaintActionModal = memo(function ComplaintActionModalComponent({
    * 전부 시간순으로 세우고 이번 건이 어디인지만 짚어 주는 편이 읽기 쉽다.
    */
   const others = thread.filter((entry) => entry.id !== row.id).length;
-  const unfinished = thread.filter((e) => e.status === 'branch' || e.status === 'agent').length;
+  const unfinished = thread.filter((e) => e.status === 'branch').length;
 
-  // 설계사 목록은 그 창을 열었을 때만 받는다. 다른 동작에는 필요 없다.
-  const { data: agents = [], isLoading: agentsLoading } = useComplaintAgents(
-    row.assigned_group ?? undefined,
-    kind === 'assign_agent',
-  );
+  // 옮기기라면 지금 가 있는 지사는 고를 수 없다 — 같은 데로 옮기는 건 옮긴 게 아니다.
+  const moving = kind === 'assign_dept' && row.status === 'branch';
+  const groupChoices = moving ? groups.filter((g) => g !== row.assigned_group) : groups;
+  // 이미 되돌아온 적 있는 지사는 표시해 둔다. 또 보내면 또 돌아온다.
+  const bouncedFrom = refusedGroups(row.complaint_transfers ?? []);
+
+  const title =
+    kind === 'assign_dept'
+      ? moving
+        ? '담당 지사 옮기기'
+        : '담당 지사 지정'
+      : kind === 'bounce'
+        ? '우리 지사 건이 아닙니다'
+        : kind === 'return'
+          ? '민원담당자에게 보완 요청'
+          : '처리 내용 입력';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (kind === 'assign_dept') await onSubmit({ action: 'assign_dept', group });
+    else if (kind === 'bounce') await onSubmit({ action: 'bounce', reason: reason.trim() });
     else if (kind === 'return') await onSubmit({ action: 'return', reason: reason.trim() });
-    else if (kind === 'assign_agent')
-      await onSubmit({ action: 'assign_agent', agentId: Number(agentId) });
     else await onSubmit({ action: 'handle', note: note.trim() });
   };
 
   const canSubmit =
     kind === 'assign_dept'
       ? !!group
-      : kind === 'return'
+      : kind === 'bounce' || kind === 'return'
         ? reason.trim().length > 0
-        : kind === 'assign_agent'
-          ? !!agentId
-          : note.trim().length > 0 && (others === 0 || readPast);
+        : note.trim().length > 0 && (others === 0 || readPast);
 
   return (
     /* 배경을 눌러도 닫히지 않는다. 적던 처리 내용이 스치는 손짓에 사라지면 안 된다. */
     <div className={styles.modalOverlay}>
       <div className={`${styles.modal} ${kind === 'handle' ? styles.wideModal : ''}`}>
         <div className={styles.modalHeader}>
-          <h3>{TITLE[kind]}</h3>
+          <h3>{title}</h3>
           <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="닫기">
             <MdClose />
           </button>
@@ -139,30 +145,57 @@ const ComplaintActionModal = memo(function ComplaintActionModalComponent({
             <dt>통화내역</dt>
             <dd>{row.call_memo || '-'}</dd>
           </div>
+          {moving && (
+            <div>
+              <dt>지금 지사</dt>
+              <dd>{row.assigned_group}</dd>
+            </div>
+          )}
         </dl>
 
         <form onSubmit={handleSubmit}>
           {kind === 'assign_dept' && (
             <label className={styles.modalField}>
-              <span>넘길 지사</span>
+              <span>{moving ? '옮길 지사' : '넘길 지사'}</span>
               {/* 화살표는 다른 화면과 같이 react-icons 를 쓴다. */}
               <div className={styles.selectWrapper}>
                 <select value={group} onChange={(e) => setGroup(e.target.value)} required>
                   <option value="">지사를 고르세요</option>
-                  {groups.map((name) => (
+                  {groupChoices.map((name) => (
                     <option key={name} value={name}>
                       {name}
+                      {bouncedFrom.has(name) ? ' — 우리 건 아니라고 되돌린 지사' : ''}
                     </option>
                   ))}
                 </select>
                 <MdExpandMore className={styles.selectIcon} />
               </div>
+              {bouncedFrom.size > 0 && (
+                <span className={styles.fieldHint}>
+                  {[...bouncedFrom].join(' · ')} 지사가 &quot;우리 건 아니다&quot;로 되돌렸던 민원입니다.
+                  상세에서 사유를 볼 수 있습니다.
+                </span>
+              )}
+            </label>
+          )}
+
+          {kind === 'bounce' && (
+            <label className={styles.modalField}>
+              <span>사유</span>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={4}
+                maxLength={500}
+                placeholder="예: 일치하는 주문번호가 없습니다."
+                required
+              />
             </label>
           )}
 
           {kind === 'return' && (
             <label className={styles.modalField}>
-              <span>반려 사유</span>
+              <span>보완 사유</span>
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -171,32 +204,6 @@ const ComplaintActionModal = memo(function ComplaintActionModalComponent({
                 placeholder="무엇을 고쳐야 하는지 적어 주세요."
                 required
               />
-            </label>
-          )}
-
-          {kind === 'assign_agent' && (
-            <label className={styles.modalField}>
-              <span>담당 설계사</span>
-              {agentsLoading ? (
-                <p className={styles.muted}>불러오는 중…</p>
-              ) : agents.length === 0 ? (
-                // 계정이 없으면 고를 수가 없다. 무엇을 해야 하는지 알려 준다.
-                <p className={styles.muted}>
-                  이 지사에 설계사 계정이 없습니다. 관리자에게 계정 생성을 요청해 주세요.
-                </p>
-              ) : (
-                <div className={styles.selectWrapper}>
-                  <select value={agentId} onChange={(e) => setAgentId(e.target.value)} required>
-                    <option value="">설계사를 고르세요</option>
-                    {agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name || agent.username}
-                      </option>
-                    ))}
-                  </select>
-                  <MdExpandMore className={styles.selectIcon} />
-                </div>
-              )}
             </label>
           )}
 

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!canViewComplaints(user.role) && !canRegisterComplaints(user.role)) {
+    if (!canViewComplaints(user.role) && !canRegisterComplaints(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

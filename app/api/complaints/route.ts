@@ -7,17 +7,50 @@ import {
   canRegisterComplaints,
   canViewComplaints,
   canViewAllComplaints,
-  isAgentRole,
-  isComplaintStaffRole,
 } from '@/lib/roles';
 import { readComplaintInput, toComplaintRow } from '@/lib/complaintIntake';
+import { recordTransfer } from '@/lib/complaintTransfers';
 import {
   COMPLAINT_COLUMNS,
   COMPLAINT_OVERDUE_DAYS,
-  PENDING_STATUS,
+  COMPLAINT_STATUS_LABEL,
+  MATCH_KEY_LABEL,
+  OPEN_STATUSES,
   complaintThreadKey,
+  isOpenComplaint,
   type ComplaintRow,
 } from '@/lib/complaints';
+import { dateSpanOf, ilikeTerms, phoneVariants, statusesMatching } from '@/lib/listSearch';
+
+/**
+ * 검색이 훑는 칸 — 목록·상세에서 사람이 읽는 글자는 전부 여기 있다.
+ *
+ * 새 칸을 붙이면 여기에도 넣는다. 화면에는 보이는데 검색에는 안 걸리는 칸이
+ * 하나라도 있으면, 그다음부터 사람은 검색을 믿지 않고 눈으로 훑는다.
+ */
+const SEARCH_COLUMNS = [
+  'customer_name',
+  'phone',
+  'order_no',
+  'product',
+  'call_memo',
+  'assigned_group',
+  'assigned_by',
+  'handled_note',
+  'handled_by',
+  'read_by',
+  'return_reason',
+  'returned_by',
+  'withdraw_reason',
+  'withdrawn_by',
+  'created_by',
+  'source_file_name',
+] as const;
+
+/** 날짜만 담는 칸. */
+const SEARCH_DAY_COLUMNS = ['received_at', 'order_confirmed_at'] as const;
+/** 시각까지 담는 칸. */
+const SEARCH_TIME_COLUMNS = ['called_at', 'handled_at', 'created_at'] as const;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -27,7 +60,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * 민원.
  *
  * 민원담당자가 메일로 받은 내역을 옮겨 적으면(POST), 그 고객을 직전에 받았던
- * 지사를 찾아 넘긴다. 지사·설계사는 자기 것만 본다(GET).
+ * 지사를 찾아 넘긴다. 지사는 자기 소속 것만 본다(GET).
  *
  * 보이는 범위를 화면에서 가리지 않고 여기서 조건으로 건다 — 요청을 직접
  * 만들면 남의 고객 개인정보를 그대로 받아 갈 수 있다.
@@ -60,7 +93,6 @@ const SORTABLE = [
   'phone',
   'order_no',
   'assigned_group',
-  'agent_name',
   'status',
   // 확인한 것과 안 한 것을 갈라 놓고 보는 자리. 안 본 것부터 보려고 쓴다.
   'read_at',
@@ -99,7 +131,7 @@ async function withThreadInfo(rows: ComplaintRow[]): Promise<ComplaintRow[]> {
     const key = row.thread_key as string;
     total.set(key, (total.get(key) ?? 0) + 1);
     // 반려는 등록자에게 돌아간 것이라 지사가 이어서 할 일이 아니다.
-    if (row.status === 'unassigned' || row.status === 'branch' || row.status === 'agent') {
+    if (isOpenComplaint(row.status)) {
       open.add(key);
     }
   }
@@ -158,6 +190,30 @@ async function departmentOf(userId: number): Promise<string | null> {
   return data?.department ?? null;
 }
 
+/**
+ * 접수하자마자 찾아간 지사를 이력 첫 줄로 남긴다.
+ *
+ * 민원 행에도 지사와 찾은 방법이 적히지만, 나중에 옮기면 그 값이 덮인다.
+ * 처음 어디로 갔는지가 사라지면 "한울부원이 아니라고 했다"는 말의 앞이 없어진다.
+ * 못 찾아 관리자 앞에 놓인 건은 남길 것이 없다 — 아직 아무 데도 안 갔다.
+ */
+async function logFirstAssign(
+  row: { id: number; assigned_group: string | null; match_key: string | null; created_at: string },
+  user: { id: number; username: string }
+) {
+  if (!row?.assigned_group) return;
+  await recordTransfer(supabase, {
+    complaintId: row.id,
+    kind: 'auto',
+    from: null,
+    to: row.assigned_group,
+    reason: row.match_key ? `${MATCH_KEY_LABEL[row.match_key] ?? row.match_key}로 찾음` : null,
+    byId: user.id,
+    byName: user.username,
+    at: row.created_at,
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = getUserFromRequest(request);
@@ -166,7 +222,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 민원담당자는 이 화면을 못 보지만 자기가 넣은 건은 봐야 한다.
-    if (!canViewComplaints(user.role) && !canRegisterComplaints(user.role)) {
+    if (!canViewComplaints(user.role) && !canRegisterComplaints(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -190,11 +246,9 @@ export async function GET(request: NextRequest) {
     if (canViewAllComplaints(user.role)) {
       const group = (searchParams.get('group') || '').trim();
       if (group) query = query.eq('assigned_group', group);
-    } else if (isAgentRole(user.role)) {
-      // 설계사는 자기에게 넘어온 것만. 소속이 같아도 남의 건은 안 보인다.
-      query = query.eq('agent_id', user.id);
-    } else if (isComplaintStaffRole(user.role)) {
-      // 민원담당자는 자기가 넣은 것만. 남의 지사 처리 상황은 보지 않는다.
+    } else if (!canViewComplaints(user.role) && canRegisterComplaints(user)) {
+      // 민원을 넣기만 하는 사람(민원담당자, 등록 권한을 더 받은 계정)은 자기가
+      // 넣은 것만. 남의 지사 처리 상황은 보지 않는다.
       query = query.eq('created_by_id', user.id);
     } else {
       const department = await departmentOf(user.id);
@@ -205,17 +259,7 @@ export async function GET(request: NextRequest) {
       query = query.eq('assigned_group', department);
     }
 
-    /*
-     * '미처리'는 상태 하나가 아니다.
-     *
-     * 지사에 와 있는 것(branch)과 설계사에게 넘긴 것(agent)은 단계가 다를 뿐
-     * 둘 다 아직 안 끝난 것이다. 지사가 보고 싶은 건 그 둘을 합친 것이라,
-     * 상태 이름을 따로 만들지 않고 여기서 풀어 준다. 사이드바 배지가 세는
-     * 것과 같은 범위여야 한다 — 숫자를 누르고 들어와 그만큼이 보여야 한다.
-     */
-    if (status === PENDING_STATUS) {
-      query = query.in('status', ['branch', 'agent']);
-    } else if (status) {
+    if (status) {
       query = query.eq('status', status);
     }
 
@@ -230,7 +274,8 @@ export async function GET(request: NextRequest) {
       const since = new Date();
       since.setHours(0, 0, 0, 0);
       since.setDate(since.getDate() - COMPLAINT_OVERDUE_DAYS);
-      query = query.lt('created_at', since.toISOString()).not('status', 'in', '(done,returned)');
+      // 할 일이 남은 상태만. 목록이 따로 들고 있으면 철회를 더했을 때 빠진다.
+      query = query.lt('created_at', since.toISOString()).in('status', [...OPEN_STATUSES]);
     }
 
     // 아직 안 본 건만 보기. 지사가 새로 온 것부터 처리할 때 쓴다.
@@ -238,15 +283,41 @@ export async function GET(request: NextRequest) {
       query = query.is('read_at', null);
     }
 
+    /*
+     * 검색.
+     *
+     * 한 줄에 실린 글자 칸은 전부 훑는다 — 무엇으로 찾을 수 있는지 외워야
+     * 하는 검색은 검색이 아니다. 여기에 더해 사람이 실제로 치는 세 가지를
+     * 알아듣는다: 상태말('보완'), 날짜('2026-09-08'·'260908'), 하이픈 없는
+     * 전화번호. 전부 하나의 or()로 묶어 "어디든 걸리면 나온다"로 만든다.
+     */
     if (search) {
+      const terms = ilikeTerms(SEARCH_COLUMNS, search);
+
+      // 전화번호는 저장된 꼴이 사람마다 달라 숫자 키로도 찾는다.
       const digits = search.replace(/\D/g, '');
-      const terms = [
-        `customer_name.ilike.%${search}%`,
-        `product.ilike.%${search}%`,
-        `order_no.ilike.%${search}%`,
-        `phone.ilike.%${search}%`,
-      ];
       if (digits) terms.push(`phone_keys.cs.{${digits}}`);
+      for (const shape of phoneVariants(search)) {
+        terms.push(...ilikeTerms(['phone'], shape));
+      }
+
+      // '보완'이라고 쳐도 보완 요청 건이 나온다.
+      const statuses = statusesMatching(search, COMPLAINT_STATUS_LABEL);
+      if (statuses.length > 0) {
+        terms.push(`status.in.(${statuses.join(',')})`);
+      }
+
+      // 날짜로 치면 그날(또는 그달)에 걸린 건.
+      const span = dateSpanOf(search);
+      if (span) {
+        for (const column of SEARCH_DAY_COLUMNS) {
+          terms.push(`and(${column}.gte.${span.fromDay},${column}.lte.${span.toDay})`);
+        }
+        for (const column of SEARCH_TIME_COLUMNS) {
+          terms.push(`and(${column}.gte.${span.from},${column}.lte.${span.to})`);
+        }
+      }
+
       query = query.or(terms.join(','));
     }
 
@@ -296,7 +367,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
     }
 
-    if (!canRegisterComplaints(user.role)) {
+    if (!canRegisterComplaints(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -362,6 +433,7 @@ export async function POST(request: NextRequest) {
           console.error('Complaint bulk insert error:', rowError);
           results.push({ at, ok: false, error: '등록하지 못했습니다.' });
         } else {
+          await logFirstAssign(row as any, user);
           results.push({ at, ok: true, data: row });
         }
       }
@@ -402,6 +474,8 @@ export async function POST(request: NextRequest) {
       console.error('Complaint insert error:', error);
       return NextResponse.json({ error: '민원을 등록하지 못했습니다.' }, { status: 500 });
     }
+
+    await logFirstAssign(data as any, user);
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {

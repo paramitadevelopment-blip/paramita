@@ -10,6 +10,7 @@ import {
   daysSince,
   type ComplaintRow,
 } from '@/lib/complaints';
+import { TRANSFER_KIND_LABEL, transferPath } from '@/lib/complaintTransfers';
 import styles from './ComplaintDetail.module.css';
 
 /**
@@ -56,6 +57,8 @@ const ComplaintDetailModal = memo(function ComplaintDetailModalComponent({
   const returns = [...(row.complaint_returns ?? [])].sort((a, b) =>
     a.returned_at.localeCompare(b.returned_at)
   );
+  // 오간 이력. 서버가 순서를 보장하지 않아 오래된 것부터 세운다.
+  const transfers = [...(row.complaint_transfers ?? [])].sort((a, b) => a.at.localeCompare(b.at));
 
   return (
     <div className={styles.modalOverlay}>
@@ -151,7 +154,6 @@ const ComplaintDetailModal = memo(function ComplaintDetailModalComponent({
               )}
             </>
           )}
-          {row.agent_name && <Line label="담당 설계사">{row.agent_name}</Line>}
         </dl>
 
         <h4 className={styles.detailTitle}>처리</h4>
@@ -182,22 +184,58 @@ const ComplaintDetailModal = memo(function ComplaintDetailModalComponent({
               <Line label="처리한 사람">{row.handled_by}</Line>
             </>
           )}
-
+          {/* 철회. 지운 게 아니라 닫은 것이라, 누가 언제 왜 닫았는지가 여기 남는다. */}
+          {row.status === 'withdrawn' && (
+            <>
+              <Line label="철회 시각">{dateTimeText(row.withdrawn_at)}</Line>
+              <Line label="철회한 사람">{row.withdrawn_by}</Line>
+              <Line label="철회 사유">
+                {row.withdraw_reason ? (
+                  <span className={styles.detailNote}>{row.withdraw_reason}</span>
+                ) : (
+                  <span className={styles.muted}>적지 않음</span>
+                )}
+              </Line>
+            </>
+          )}
         </dl>
 
         {/*
-          반려 이력. 고쳐서 다시 보내면 위의 상태는 바뀌지만 여기 기록은 남는다 —
+          보완 이력. 고쳐서 다시 보내면 위의 상태는 바뀌지만 여기 기록은 남는다 —
           몇 번 오갔고 그때마다 무엇이 문제였는지가 그 건의 사정이다.
         */}
         {returns.length > 0 && (
           <>
-            <h4 className={styles.detailTitle}>반려 이력 ({returns.length}회)</h4>
+            <h4 className={styles.detailTitle}>보완 이력 ({returns.length}회)</h4>
             <dl className={styles.detailList}>
               {returns.map((r, at) => (
-                <Line key={`${r.returned_at}-${at}`} label={`${at + 1}차 반려`}>
+                <Line key={`${r.returned_at}-${at}`} label={`${at + 1}차 보완`}>
                   <span className={styles.detailNote}>{r.reason}</span>
                   <span className={styles.returnMeta}>
                     {dateTimeText(r.returned_at)} · {r.returned_by}
+                  </span>
+                </Line>
+              ))}
+            </dl>
+          </>
+        )}
+
+        {/*
+          지사를 오간 이력.
+          민원 행에는 지금 지사 하나만 남아 옮기는 순간 앞의 지사가 덮인다.
+          한 건이 몇 군데를 돌았고 누가 왜 되돌렸는지는 여기서만 읽힌다 —
+          관리자가 다음 지사를 정할 때 같은 데로 또 보내지 않으려면 봐야 한다.
+        */}
+        {transfers.length > 0 && (
+          <>
+            <h4 className={styles.detailTitle}>지사 배정 이력 ({transfers.length}회)</h4>
+            <dl className={styles.detailList}>
+              {transfers.map((t, at) => (
+                <Line key={`${t.at}-${at}`} label={`${at + 1}. ${TRANSFER_KIND_LABEL[t.kind]}`}>
+                  <span className={styles.transferPath}>{transferPath(t)}</span>
+                  {t.reason && <span className={styles.detailNote}>{t.reason}</span>}
+                  <span className={styles.returnMeta}>
+                    {dateTimeText(t.at)} · {t.by_name}
                   </span>
                 </Line>
               ))}

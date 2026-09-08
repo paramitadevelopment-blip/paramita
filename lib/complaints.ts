@@ -5,20 +5,24 @@
  * "화면에는 처리 완료인데 목록에는 안 뜬다" 같은 어긋남이 생긴다.
  */
 
-/** 목록·상세에 내려보내는 열. 내부용 id(created_by_id·agent_id는 화면이 쓴다)만 빼고 그대로다. */
+import type { ComplaintTransfer } from '@/lib/complaintTransfers';
+
+/** 목록·상세에 내려보내는 열. 내부용 id(created_by_id 등)만 빼고 그대로다. */
 export const COMPLAINT_COLUMNS =
   'id, product, customer_name, phone, order_no, received_at, order_confirmed_at, ' +
   'called_at, call_memo, ' +
   'assigned_group, assign_type, assigned_by, assigned_at, match_key, ' +
   'source_file_id, source_file_name, previous_applied_at, previous_assigned_at, ' +
-  'agent_id, agent_name, agent_assign_type, agent_assigned_by, agent_assigned_at, ' +
   'status, handled_note, handled_by, handled_at, ' +
   'read_at, read_by, ' +
   'return_reason, returned_by, returned_at, ' +
   'thread_key, sequence_no, ' +
+  'withdrawn_by, withdrawn_at, withdraw_reason, ' +
   'created_by, created_at, ' +
   // 지나간 반려까지 함께 읽는다. 몇 번 오갔는지가 그 건의 사정이다.
-  'complaint_returns(reason, returned_by, returned_at)';
+  'complaint_returns(reason, returned_by, returned_at), ' +
+  // 지사를 오간 이력. 어디로 갔고 누가 왜 되돌렸는지가 다 여기 있다.
+  'complaint_transfers(kind, from_group, to_group, reason, by_name, at)';
 
 /**
  * 민원 한 건이 거치는 자리.
@@ -26,30 +30,35 @@ export const COMPLAINT_COLUMNS =
  * 'unassigned'는 "아직 아무도 안 봤다"가 아니라 **담당 지사를 못 찾았다**는
  * 뜻이다. 그 건은 지사가 아니라 관리자에게 쌓인다.
  */
-/**
- * 목록에서만 쓰는 '미처리'.
- *
- * 실제 상태가 아니라 '지사에 와 있는 것(branch) + 설계사에게 넘긴 것(agent)'
- * 묶음이다. 단계는 달라도 둘 다 아직 안 끝난 것이라, 지사가 자기 할 일을 볼
- * 때는 한 덩어리로 본다. 사이드바 배지가 세는 범위와 같다.
- */
-export const PENDING_STATUS = 'pending';
-
 /** 목록을 거를 때 고를 수 있는 값. 빈 문자열은 전체. */
-export type ComplaintFilter = ComplaintStatus | typeof PENDING_STATUS | '';
+export type ComplaintFilter = ComplaintStatus | '';
 
-export const COMPLAINT_STATUSES = ['unassigned', 'branch', 'agent', 'done', 'returned'] as const;
+/*
+ * 설계사 단계는 없다. 지사가 받아서 지사가 처리한다 — 한때 '설계사 처리 대기'가
+ * 있었지만 아무도 밟지 않는 단계라 걷어냈다. 'branch'가 곧 "지사가 처리할 것"이다.
+ */
+export const COMPLAINT_STATUSES = [
+  'unassigned',
+  'branch',
+  'done',
+  'returned',
+  'withdrawn',
+] as const;
 export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number];
 
 export const COMPLAINT_STATUS_LABEL: Record<ComplaintStatus, string> = {
   unassigned: '담당 지사 없음',
-  branch: '지사 확인 대기',
-  agent: '설계사 처리 대기',
+  // 지사에 와 있고 아직 안 끝난 것. 지사에게는 "내가 할 일"이다.
+  branch: '미처리',
   done: '처리 완료',
-  returned: '반려',
+  // 관리자가 되돌려 보낸 것. '반려'가 아니라 '보완'이라 부른다 — 사은품과 같은 말이고,
+  // 받는 쪽에 "고쳐서 다시 보내라"는 뜻이 그대로 전해진다.
+  returned: '보완 요청',
+  // 등록자가 "이 민원은 진행하지 않는다"로 닫은 것. 기록은 남는다.
+  withdrawn: '철회',
 };
 
-/** 어떻게 배정됐는지. 지금 설계사 배정은 전부 manual이지만 자리는 나눠 둔다. */
+/** 어떻게 배정됐는지. 기록에서 찾은 것(auto)과 관리자가 정한 것(manual). */
 export type AssignType = 'auto' | 'manual';
 
 export const ASSIGN_TYPE_LABEL: Record<AssignType, string> = {
@@ -85,21 +94,19 @@ export interface ComplaintRow {
   previous_applied_at: string | null;
   /** 그 건이 실제로 지사에 배정된 날. 배정날짜 열을 못 읽었으면 null. */
   previous_assigned_at: string | null;
-  agent_id: number | null;
-  agent_name: string | null;
-  agent_assign_type: AssignType | null;
-  agent_assigned_by: string | null;
-  agent_assigned_at: string | null;
   status: ComplaintStatus;
   handled_note: string | null;
   handled_by: string | null;
   handled_at: string | null;
-  /** 지사·설계사가 이 민원을 열어 본 시각. 안 봤으면 null이다. */
+  /** 지사가 이 민원을 열어 본 시각. 안 봤으면 null이다. */
   read_at: string | null;
   read_by: string | null;
   return_reason: string | null;
   returned_by: string | null;
   returned_at: string | null;
+  withdrawn_by: string | null;
+  withdrawn_at: string | null;
+  withdraw_reason: string | null;
   /** 같은 건의 반복 민원을 묶는 열쇠. 주문번호 + 전화번호(숫자만). */
   thread_key: string | null;
   /** 그 묶음에서 몇 번째인가. 1이면 처음 들어온 건이다. */
@@ -112,6 +119,8 @@ export interface ComplaintRow {
   created_at: string;
   /** 지나간 반려들. 시간 순이 아닐 수 있어 화면에서 정렬해 쓴다. */
   complaint_returns?: Array<{ reason: string; returned_by: string; returned_at: string }>;
+  /** 지사를 오간 이력. 처음 배정·관리자 지정·옮김·되돌림이 시간순으로 쌓인다. */
+  complaint_transfers?: ComplaintTransfer[];
 }
 
 /**
@@ -131,16 +140,32 @@ export function daysSince(iso: string | null, now: Date = new Date()): number {
 export const COMPLAINT_OVERDUE_DAYS = 3;
 
 /**
+ * 아직 누군가 손대야 하는 상태. 밀린 건·배지·'미처리' 탭이 전부 이 둘을 본다.
+ *
+ *   unassigned  관리자가 지사를 정해야 한다
+ *   branch      지사가 처리해야 한다
+ *
+ * 끝난 것(done)·넣은 사람에게 돌아간 것(returned)·닫힌 것(withdrawn)은 아니다.
+ * 한 곳에 두는 이유: 셋이 따로 목록을 들고 있으면 철회를 더했을 때 하나가 빠진다 —
+ * 실제로 철회된 건이 '밀린 건'에 잡히던 일이 그래서 있었다.
+ */
+export const OPEN_STATUSES: readonly ComplaintStatus[] = ['unassigned', 'branch'];
+
+export function isOpenComplaint(status: ComplaintStatus): boolean {
+  return OPEN_STATUSES.includes(status);
+}
+
+/**
  * 밀린 건인가.
  *
- * 처리가 끝났거나 반려된 건은 아무리 오래돼도 밀린 것이 아니다 — 할 일이
- * 남아 있는 건만 센다. 그래야 목록에서 색이 붙은 줄이 곧 '지금 손봐야 할 것'이 된다.
+ * 할 일이 남아 있는 건만 센다. 그래야 목록에서 색이 붙은 줄이 곧 '지금 손봐야
+ * 할 것'이 된다. 어느 상태가 '할 일'인지는 OPEN_STATUSES 한 곳이 정한다.
  */
 export function isOverdueComplaint(
   row: { status: ComplaintStatus; created_at: string },
   now: Date = new Date()
 ): boolean {
-  if (row.status === 'done' || row.status === 'returned') return false;
+  if (!isOpenComplaint(row.status)) return false;
   return daysSince(row.created_at, now) >= COMPLAINT_OVERDUE_DAYS;
 }
 
@@ -151,7 +176,7 @@ export function isOverdueComplaint(
  * 막는다"가 생기고, 그때 사람은 무엇이 잘못됐는지 알 수 없다.
  *
  * 여덟 칸이 다 있어야 한다. 메일에 오는 표의 칸이 그대로 여덟이라, 하나라도
- * 비면 옮겨 적다 건너뛴 것이다. 받는 지사·설계사는 그 빈칸을 채울 방법이
+ * 비면 옮겨 적다 건너뛴 것이다. 받는 지사는 그 빈칸을 채울 방법이
  * 없다 — 원본은 메일에만 있다.
  *
  * @returns 잘못된 것이 있으면 그 이유, 없으면 null
@@ -219,14 +244,14 @@ export function validateComplaintInput(raw: Record<string, unknown>): string | n
  * 넣은 사람이 아직 고치거나 지울 수 있는 건인가.
  *
  * 옮겨 적다 한 글자 틀리는 일은 늘 있고, 그때는 넣은 사람이 바로 고치는 게
- * 맞다. 다만 **다른 사람이 이미 손을 댄 뒤에는 안 된다** — 지사가 설계사를
- * 정했거나, 관리자가 지사를 지정했거나 반려한 뒤에 내용이 바뀌면, 그 사람들이
+ * 맞다. 다만 **다른 사람이 이미 손을 댄 뒤에는 안 된다** — 지사가 봤거나,
+ * 관리자가 지사를 지정했거나 반려한 뒤에 내용이 바뀌면, 그 사람들이
  * 판단한 근거와 지금 적힌 내용이 달라진다. 처리까지 끝난 건이 사라지면
  * 처리 기록도 함께 사라진다.
  *
  * 그래서 "아무도 손대지 않은 상태"만 연다:
  *   - 담당 지사를 못 찾아 관리자 앞에 놓인 건(unassigned) — 아직 아무도 안 봤다
- *   - 자동으로 지사까지만 간 건(branch + auto) — 지사가 아직 아무것도 안 했다
+ *   - 자동으로 지사에 간 건(branch + auto) — 지사가 아직 아무것도 안 했다
  *
  * **지사가 열어 보기만 해도(read_at) 잠근다.** 본 순간 그 내용으로 판단이
  * 시작된다 — 전화를 걸었을 수도, 다른 사람에게 전달했을 수도 있다. 그 뒤에
@@ -237,7 +262,9 @@ export function validateComplaintInput(raw: Record<string, unknown>): string | n
  * 아래 canEditComplaint·canDeleteComplaint를 보라.
  */
 export function isUntouchedComplaint(row: ComplaintLockInput): boolean {
-  if (row.agent_id || row.handled_at || row.read_at) return false;
+  // 철회된 건은 닫힌 것이다. 아무도 손대지 않은 상태로 보지 않는다.
+  if (row.status === 'withdrawn') return false;
+  if (row.handled_at || row.read_at) return false;
   if (row.status === 'unassigned') return true;
   return row.status === 'branch' && row.assign_type !== 'manual';
 }
@@ -246,7 +273,6 @@ export function isUntouchedComplaint(row: ComplaintLockInput): boolean {
 export interface ComplaintLockInput {
   status: ComplaintStatus;
   assign_type: AssignType | null;
-  agent_id: number | null;
   handled_at: string | null;
   read_at?: string | null;
 }
@@ -263,6 +289,17 @@ export function canEditComplaint(row: ComplaintLockInput): boolean {
 }
 
 /**
+ * 철회할 수 있는가.
+ *
+ * 보완 요청을 받은 건만이다. 진행할 필요가 없어진 건(잘못 넣은 것, 다른 건과
+ * 겹친 것)은 고쳐 보낼 것도 없고 지울 수도 없어 나갈 길이 없었다. 철회는
+ * 지우지 않고 닫는 것이다 — 민원도 보완 이력도 남고, 배지에서만 빠진다.
+ */
+export function canWithdrawComplaint(row: ComplaintLockInput): boolean {
+  return row.status === 'returned';
+}
+
+/**
  * 지울 수 있는가.
  *
  * **반려된 건은 지울 수 없다.** 고치기와 달리 지우기는 되돌릴 수 없고, 민원이
@@ -270,7 +307,15 @@ export function canEditComplaint(row: ComplaintLockInput): boolean {
  * 되돌려 보냈는지가 통째로 없어져, 반려가 마음에 들지 않을 때 지워 버리고
  * 새로 넣는 길이 열린다. 잘못 넣은 것을 물리는 일은 아무도 손대기 전까지다.
  */
-export function canDeleteComplaint(row: ComplaintLockInput): boolean {
+export function canDeleteComplaint(row: ComplaintLockInput, isAdmin = false): boolean {
+  /*
+   * 관리자(admin·subadmin)는 상태와 무관하게 지운다.
+   *
+   * 잘못 들어간 개인정보나 시험 삼아 넣은 건은 '철회'로 닫아 두는 것으로는
+   * 안 되고 없애야 한다. 지운 것은 사유와 함께 보관본으로 남으므로
+   * (deleted_complaints) "무엇을 누가 왜 지웠나"는 사라지지 않는다.
+   */
+  if (isAdmin) return true;
   return isUntouchedComplaint(row);
 }
 

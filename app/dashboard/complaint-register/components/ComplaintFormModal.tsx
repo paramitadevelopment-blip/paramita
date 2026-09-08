@@ -27,7 +27,7 @@ interface ComplaintFormModalProps {
 const TITLE = {
   create: '민원 등록',
   edit: '민원 수정',
-  resubmit: '수정 후 재요청',
+  resubmit: '보완 후 재요청',
 } as const;
 
 const ComplaintFormModal = memo(function ComplaintFormModalComponent({

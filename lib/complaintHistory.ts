@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { ASSIGNED_DEPT_COLUMN, ASSIGNED_AT_COLUMN } from '@/lib/insurance';
 import { parseDateCell } from '@/lib/parseDateCell';
 import type { MatchRecord } from '@/lib/complaintMatch';
+import { filesContaining } from '@/lib/fileContentSearch';
 
 /**
  * 민원의 주인을 찾는 데 쓸 과거 배포 기록을 읽는다.
@@ -44,25 +45,16 @@ async function rowsContaining(
   needle: Record<string, string>
 ): Promise<MatchRecord[]> {
   /*
-   * JSON 문자열로 넘긴다.
-   *
-   * .contains()에 배열을 그대로 주면 supabase-js가 Postgres 배열 리터럴
-   * '{...}'로 바꿔 보내는데, jsonb 열은 그 형식을 못 읽는다
-   * (invalid input syntax for type json). 문자열은 손대지 않고 그대로
-   * 보내므로 '[{"주문번호":"..."}]' 형태가 유지된다.
+   * 값이 숫자로 저장된 파일도 함께 찾는다(lib/fileContentSearch.ts). 주문번호는
+   * 엑셀에서 숫자로 읽히는 일이 잦은데, jsonb 포함 검사는 자료형까지 봐서
+   * 문자열로만 찾으면 그런 파일이 통째로 안 걸린다.
    */
-  const { data, error } = await supabase
-    .from('files')
-    .select('id, name, uploaded_at, file_content')
-    .eq('is_original', true)
-    .eq('source', 'direct')
-    .contains('file_content', JSON.stringify([needle]));
-
-  if (error) {
-    // 과거를 못 읽으면 "기록에 없는 고객"과 구별이 안 된다. 조용히 넘어가면
-    // 있는 고객을 관리자에게 떠넘기게 되므로 그대로 던진다.
-    throw error;
-  }
+  const data = await filesContaining<{
+    id: string;
+    name: string;
+    uploaded_at: string;
+    file_content: unknown;
+  }>(supabase, 'id, name, uploaded_at, file_content', needle);
 
   const [key, value] = Object.entries(needle)[0];
   const records: MatchRecord[] = [];
@@ -72,7 +64,7 @@ async function rowsContaining(
     for (const row of file.file_content) {
       if (!row || typeof row !== 'object') continue;
       // 포함 검사는 파일 단위다. 그 파일의 다른 사람 줄까지 딸려 오므로 여기서 좁힌다.
-      if (String((row as any)[key] ?? '') !== value) continue;
+      if (String((row as any)[key] ?? '').trim() !== value) continue;
       records.push(toMatchRecord(row as Record<string, unknown>, file as any));
     }
   }

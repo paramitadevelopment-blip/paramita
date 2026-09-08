@@ -5,6 +5,7 @@ import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import {
   canDeleteComplaint,
   canEditComplaint,
+  canWithdrawComplaint,
   type ComplaintRow,
   type ComplaintStatus,
 } from '@/lib/complaints';
@@ -52,24 +53,39 @@ const SortableHeader = memo(function SortableHeader({
 
 interface RegisteredTableProps {
   rows: ComplaintRow[];
+  /**
+   * 담당 지사 열을 내는가.
+   *
+   * 넣은 사람(민원담당자)에게는 안 낸다 — 어느 지사가 받았는지는 그다음 사정이고,
+   * 배정이 안 된 건은 관리자가 정한다. 관리자에게는 이 화면에서도 보여야 한다:
+   * 여기가 "들어온 민원 전부"가 모이는 자리라, 어디로 갔는지 한눈에 봐야 한다.
+   */
+  showGroup: boolean;
   statusLabel: Record<ComplaintStatus, string>;
+  /** 관리자는 상태와 무관하게 지울 수 있다. 버튼을 낼지 여기서 갈린다. */
+  isAdmin: boolean;
   sortBy: string;
   sortOrder: 'asc' | 'desc';
   onSort: (column: string) => void;
   onOpen: (row: ComplaintRow) => void;
   onEdit: (row: ComplaintRow) => void;
   onDelete: (row: ComplaintRow) => void;
+  /** 보완 요청을 받은 건을 진행하지 않기로 닫는다. 지우는 것과 다르다. */
+  onWithdraw: (row: ComplaintRow) => void;
 }
 
 const RegisteredTable = memo(function RegisteredTableComponent({
   rows,
+  showGroup,
   statusLabel,
+  isAdmin,
   sortBy,
   sortOrder,
   onSort,
   onOpen,
   onEdit,
   onDelete,
+  onWithdraw,
 }: RegisteredTableProps) {
   const sortProps = { sortBy, sortOrder, onSort };
 
@@ -84,6 +100,7 @@ const RegisteredTable = memo(function RegisteredTableComponent({
             <SortableHeader label="전화번호" column="phone" {...sortProps} />
             <SortableHeader label="주문번호" column="order_no" {...sortProps} />
             <SortableHeader label="고객 접수일" column="received_at" {...sortProps} />
+            {showGroup && <SortableHeader label="담당 지사" column="assigned_group" {...sortProps} />}
             {/* 통화내역은 자유롭게 적는 글이라 글자순으로 세워도 의미가 없다. */}
             <th>통화내역</th>
             <SortableHeader label="상태" column="status" {...sortProps} />
@@ -98,16 +115,43 @@ const RegisteredTable = memo(function RegisteredTableComponent({
               <td>{row.phone || '-'}</td>
               <td>{row.order_no || '-'}</td>
               <td>{dateText(row.received_at)}</td>
+              {/* 배정 못 한 건은 빈칸이 아니라 '미정'이다. 관리자가 손봐야 할 자리다. */}
+              {showGroup && (
+                <td>
+                  {row.assigned_group ? (
+                    row.assigned_group
+                  ) : (
+                    <span className={styles.muted}>미정</span>
+                  )}
+                </td>
+              )}
 
               {/* 길이를 예측할 수 없다. 한 줄로 잘라 두고 전체는 상세에서 본다. */}
               <td className={styles.noteCell} title={row.call_memo || ''}>
                 {row.call_memo || '-'}
               </td>
 
+              {/*
+                상태 옆에 지사가 봤는지를 붙인다.
+                넣은 사람에게는 이게 곧 "아직 고칠 수 있나"다 — 지사가 여는 순간
+                수정·삭제 버튼이 사라지므로, 사라진 뒤에 왜인지 찾게 두면 안 된다.
+              */}
               <td>
                 <span className={`${styles.statusBadge} ${styles[`status_${row.status}`]}`}>
                   {statusLabel[row.status]}
                 </span>
+                {row.status === 'branch' && (
+                  <span
+                    className={`${styles.statusBadge} ${styles.readBadge} ${row.read_at ? styles.read_yes : styles.read_no}`}
+                    title={
+                      row.read_at
+                        ? `${dateText(row.read_at)} 지사 확인 — 이제 고칠 수 없습니다`
+                        : '지사가 아직 안 봤습니다 — 지금은 고칠 수 있습니다'
+                    }
+                  >
+                    {row.read_at ? '확인' : '미확인'}
+                  </span>
+                )}
               </td>
 
               {/*
@@ -115,7 +159,8 @@ const RegisteredTable = memo(function RegisteredTableComponent({
                 나서 "안 된다"는 말을 듣는 것보다 비어 있는 편이 낫다. 왜 못 하는지는
                 바로 옆 상태 칸이 말하고 있다.
 
-                반려된 건은 둘이 갈린다 — 고치기는 되고 지우기는 안 된다.
+                보완 요청을 받은 건은 갈린다 — 고쳐서 다시 보내거나 철회한다.
+                지우지는 못한다: 지우면 보완 이력까지 사라진다.
               */}
               <td className={styles.actionCell}>
                 <button type="button" className={styles.ghostBtn} onClick={() => onOpen(row)}>
@@ -123,14 +168,15 @@ const RegisteredTable = memo(function RegisteredTableComponent({
                 </button>
                 {canEditComplaint(row) && (
                   <button type="button" className={styles.ghostBtn} onClick={() => onEdit(row)}>
-                    수정
+                    {row.status === 'returned' ? '보완' : '수정'}
                   </button>
                 )}
-                {/*
-                  반려된 건은 고치기만 되고 지우기는 안 된다. 지우면 반려 이력까지
-                  함께 사라져, 되돌려 보낸 사유가 통째로 없어진다.
-                */}
-                {canDeleteComplaint(row) && (
+                {canWithdrawComplaint(row) && (
+                  <button type="button" className={styles.ghostBtn} onClick={() => onWithdraw(row)}>
+                    철회
+                  </button>
+                )}
+                {canDeleteComplaint(row, isAdmin) && (
                   <button type="button" className={styles.dangerBtn} onClick={() => onDelete(row)}>
                     삭제
                   </button>

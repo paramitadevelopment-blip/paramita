@@ -248,3 +248,51 @@
   /* 아이콘을 눌러도 드롭다운이 열려야 한다. */
   pointer-events: none;
 }
+
+/* 철회. 지운 게 아니라 닫은 것 — 회색으로 물러나 있되 사라지지는 않는다. */
+.status_withdrawn {
+  background: #f3f3f3;
+  border: 1px solid #d9d9d9;
+  color: #777;
+}
+
+/* 철회 사유 입력. 확인창 안에 들어간다. */
+.withdrawField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  text-align: left;
+}
+
+.withdrawField > span {
+  font-size: 15px;
+  font-weight: 600;
+  color: #555;
+}
+
+.withdrawField input {
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 16px;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.withdrawField input:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+/*
+ * 지사 배정 이력의 '한울부원 → 경기'.
+ * 사유보다 먼저 읽혀야 해서 굵게 두고, 화살표 앞뒤를 띄운다.
+ */
+.transferPath {
+  display: block;
+  font-weight: 700;
+  color: #333;
+}
