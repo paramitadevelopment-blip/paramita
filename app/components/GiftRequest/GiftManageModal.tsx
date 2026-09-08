@@ -7,10 +7,16 @@ import { validateShipInput, type GiftRequestRow, type GiftShipInput } from '@/li
 import styles from './GiftRequest.module.css';
 
 /**
- * 사은품담당자의 두 동작 — 발주와 보완 요청.
+ * 사은품담당자의 두 동작 — 배송 정보 입력과 보완 요청.
  *
  * 둘 다 "어느 고객의 어떤 사은품인가"를 다시 확인하고 몇 칸만 적는 모양이라
  * 한 창에 둔다. 창을 둘로 나누면 같은 껍데기가 둘이 된다.
+ *
+ * 배송 정보는 택배사·운송장번호가 본체다. 발주일은 발주리스트를 만들 때 이미
+ * 찍혀 있고, 거래처가 실제로 내보낸 날이 다르면 여기서 고친다. 배송메세지는
+ * 신청 때 안 적었어도 송장을 넣으며 함께 붙일 수 있다.
+ *
+ * 저장하면 지사의 확인이 다시 필요해진다 — 바뀐 값을 지사가 봐야 한다.
  */
 
 export type ManageKind = 'ship' | 'supplement';
@@ -18,13 +24,8 @@ export type ManageKind = 'ship' | 'supplement';
 type SubmitBody = ({ action: 'ship' } & GiftShipInput) | { action: 'supplement'; reason: string };
 
 const TITLE: Record<ManageKind, string> = {
-  ship: '발주 · 배송 정보 입력',
+  ship: '배송 정보 입력',
   supplement: '보완 요청',
-};
-
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
 interface GiftManageModalProps {
@@ -43,21 +44,27 @@ const GiftManageModal = memo(function GiftManageModalComponent({
   onSubmit,
 }: GiftManageModalProps) {
   const { showAlert } = useAlert();
-  // 발주하는 날이 곧 발주일인 경우가 대부분이다. 다른 날이면 고친다.
-  const [orderDate, setOrderDate] = useState(row.order_date ?? today());
   const [courier, setCourier] = useState(row.courier ?? '');
   const [trackingNo, setTrackingNo] = useState(row.tracking_no ?? '');
+  const [orderDate, setOrderDate] = useState(row.order_date ?? '');
+  const [deliveryMemo, setDeliveryMemo] = useState(row.delivery_memo ?? '');
   const [reason, setReason] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (kind === 'ship') {
-      const error = validateShipInput({ orderDate, courier, trackingNo });
+      const error = validateShipInput({ courier, trackingNo, orderDate, deliveryMemo });
       if (error) {
         showAlert({ type: 'warning', title: '입력 확인', message: error });
         return;
       }
-      await onSubmit({ action: 'ship', orderDate, courier: courier.trim(), trackingNo: trackingNo.trim() });
+      await onSubmit({
+        action: 'ship',
+        courier: courier.trim(),
+        trackingNo: trackingNo.trim(),
+        orderDate: orderDate.trim(),
+        deliveryMemo: deliveryMemo.trim(),
+      });
     } else {
       if (!reason.trim()) {
         showAlert({ type: 'warning', title: '입력 확인', message: '보완 사유를 적어 주세요.' });
@@ -99,15 +106,30 @@ const GiftManageModal = memo(function GiftManageModalComponent({
               {row.group_name} · {row.requester_name}
             </dd>
           </div>
+          {row.order_id && (
+            <div>
+              <dt>발주</dt>
+              <dd>
+                #{row.order_id} · {row.order_date || '-'}
+              </dd>
+            </div>
+          )}
         </dl>
+
+        {/*
+          발주 보냄 상태에서 되돌리면 그 건은 묶음에서 빠진다. 나머지 건은
+          그대로 간다. 담당자가 그걸 알고 눌러야 한다.
+        */}
+        {kind === 'supplement' && row.status === 'ordered' && (
+          <p className={styles.fieldHint}>
+            이 건은 발주 #{row.order_id}에 담겨 나갔습니다. 보완을 요청하면 그 묶음에서 빠지고,
+            고쳐서 올라오면 다음 발주리스트에 실립니다.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit}>
           {kind === 'ship' ? (
             <>
-              <label className={styles.modalField}>
-                <span>발주일</span>
-                <input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} required />
-              </label>
               <label className={styles.modalField}>
                 <span>택배사</span>
                 <input
@@ -117,6 +139,7 @@ const GiftManageModal = memo(function GiftManageModalComponent({
                   placeholder="CJ대한통운"
                   maxLength={50}
                   required
+                  autoFocus
                 />
               </label>
               <label className={styles.modalField}>
@@ -129,6 +152,30 @@ const GiftManageModal = memo(function GiftManageModalComponent({
                   required
                 />
               </label>
+              <label className={styles.modalField}>
+                <span>발주일</span>
+                <input
+                  type="date"
+                  value={orderDate}
+                  onChange={(e) => setOrderDate(e.target.value)}
+                />
+                <span className={styles.fieldHint}>
+                  발주리스트를 만든 날이 채워져 있습니다. 거래처가 실제로 내보낸 날이 다르면 고쳐 주세요.
+                </span>
+              </label>
+              <label className={styles.modalField}>
+                <span>배송메세지</span>
+                <input
+                  type="text"
+                  value={deliveryMemo}
+                  onChange={(e) => setDeliveryMemo(e.target.value)}
+                  placeholder="부재 시 경비실에 맡겨 주세요"
+                  maxLength={300}
+                />
+              </label>
+              <p className={styles.fieldHint}>
+                저장하면 신청한 지사에게 &apos;배송 정보 확인&apos;으로 뜹니다.
+              </p>
             </>
           ) : (
             <label className={styles.modalField}>
@@ -138,8 +185,9 @@ const GiftManageModal = memo(function GiftManageModalComponent({
                 onChange={(e) => setReason(e.target.value)}
                 rows={4}
                 maxLength={500}
-                placeholder="무엇을 고쳐야 하는지 적어 주세요. 신청한 설계사가 이 내용을 보고 고칩니다."
+                placeholder="무엇을 고쳐야 하는지 적어 주세요. 신청한 지사가 이 내용을 보고 고칩니다."
                 required
+                autoFocus
               />
             </label>
           )}
@@ -149,7 +197,7 @@ const GiftManageModal = memo(function GiftManageModalComponent({
               취소
             </button>
             <button type="submit" className={styles.submitBtn} disabled={isSubmitting}>
-              {isSubmitting ? '저장 중…' : kind === 'ship' ? '발주 완료' : '보완 요청'}
+              {isSubmitting ? '저장 중…' : kind === 'ship' ? '저장' : '보완 요청'}
             </button>
           </div>
         </form>

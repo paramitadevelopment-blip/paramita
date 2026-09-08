@@ -52,7 +52,7 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
           </button>
         </div>
 
-        {row.status === 'supplement' && row.supplement_reason && (
+        {(row.status === 'supplement' || row.status === 'withdrawn') && row.supplement_reason && (
           <div className={styles.threadBox}>
             <h4>보완 요청 사유</h4>
             <p className={styles.threadMemo}>{row.supplement_reason}</p>
@@ -64,9 +64,22 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
 
         <h4 className={styles.detailTitle}>배송</h4>
         <dl className={styles.detailList}>
+          {/* 어느 발주리스트에 실렸나. 발주일은 그 묶음을 만든 날이다. */}
+          <Line label="발주 묶음">{row.order_id ? `#${row.order_id}` : null}</Line>
           <Line label="발주일">{dateText(row.order_date)}</Line>
           <Line label="택배사">{row.courier}</Line>
           <Line label="운송장번호">{row.tracking_no}</Line>
+          {/*
+            배송메세지는 택배 기사에게 가는 말이라 배송 쪽에 둔다. 지사가 신청할 때
+            적기도 하고, 담당자가 송장을 넣으며 함께 적기도 한다 — 그 둘이 한자리에
+            있어야 "무엇이 어떻게 나갔나"가 한눈에 읽힌다.
+          */}
+          <Line label="배송메세지">{row.delivery_memo}</Line>
+          {row.shipped_at && (
+            <Line label="배송 정보 입력">
+              {dateTimeText(row.shipped_at)} · {row.shipped_by}
+            </Line>
+          )}
         </dl>
 
         <h4 className={styles.detailTitle}>고객</h4>
@@ -76,7 +89,6 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
           <Line label="전화번호2">{row.phone2}</Line>
           <Line label="우편번호">{row.zip}</Line>
           <Line label="주소">{row.address}</Line>
-          <Line label="배송메세지">{row.delivery_memo}</Line>
         </dl>
 
         <h4 className={styles.detailTitle}>사은품</h4>
@@ -96,6 +108,19 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
         <dl className={styles.detailList}>
           <Line label="주문번호">{row.order_no}</Line>
           <Line label="근거 파일">{row.source_file_name}</Line>
+          {/* 같은 주문번호의 재신청. 왜 또 보냈고 누가 통과시켰는지가 여기 남는다. */}
+          {row.check_reason && (
+            <>
+              <Line label="재신청 사유">{row.check_reason}</Line>
+              <Line label="관리자 확인">
+                {row.checked_at ? (
+                  `${dateTimeText(row.checked_at)} · ${row.checked_by}`
+                ) : (
+                  <span className={styles.muted}>아직 확인 전 — 담당자에게 가지 않습니다</span>
+                )}
+              </Line>
+            </>
+          )}
           <Line label="신청한 사람">{row.requester_name}</Line>
           <Line label="소속 지사">{row.group_name}</Line>
           <Line label="신청 시각">{dateTimeText(row.created_at)}</Line>
@@ -104,10 +129,37 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
               {dateTimeText(row.forwarded_at)} · {row.forwarded_by}
             </Line>
           )}
-          {row.shipped_at && (
-            <Line label="발주">
-              {dateTimeText(row.shipped_at)} · {row.shipped_by}
+          {/*
+            담당자가 봤는가. 지사는 이걸로 "아직 고칠 수 있나"를 안다 —
+            확인 전이면 고칠 수 있고, 확인된 순간 닫힌다.
+          */}
+          {row.forwarded_at && (
+            <Line label="담당자 확인">
+              {row.read_at ? (
+                `${dateTimeText(row.read_at)} · ${row.read_by}`
+              ) : (
+                <span className={styles.muted}>아직 확인 전 — 지사가 고칠 수 있습니다</span>
+              )}
             </Line>
+          )}
+          {/* 송장을 신청한 쪽이 봤는가. 안 봤으면 지사의 할 일로 배지에 잡혀 있다. */}
+          {row.status === 'shipped' && (
+            <Line label="지사 확인">
+              {row.ship_read_at ? (
+                `${dateTimeText(row.ship_read_at)} · ${row.ship_read_by}`
+              ) : (
+                <span className={styles.muted}>아직 확인 전</span>
+              )}
+            </Line>
+          )}
+          {/* 철회. 지운 게 아니라 닫은 것이라, 누가 언제 왜 닫았는지가 남는다. */}
+          {row.status === 'withdrawn' && (
+            <>
+              <Line label="철회">
+                {dateTimeText(row.withdrawn_at)} · {row.withdrawn_by}
+              </Line>
+              <Line label="철회 사유">{row.withdraw_reason || '적지 않음'}</Line>
+            </>
           )}
         </dl>
 

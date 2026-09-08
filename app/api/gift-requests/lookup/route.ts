@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const customerGroup = await groupOfDepartment(supabase, source.assignedDept);
 
     let groupName = customerGroup ?? '';
-    if (!canViewAllGiftRequests(user.role)) {
+    if (!canViewAllGiftRequests(user)) {
       const { data: me } = await supabase
         .from('users')
         .select('department')
@@ -72,7 +72,20 @@ export async function GET(request: NextRequest) {
       { id: source.fileId, name: source.fileName },
       { name: user.name, groupName }
     );
-    return NextResponse.json({ data: prefill });
+
+    /*
+     * 같은 주문번호로 이미 들어간 신청. 있으면 이번 건은 재신청이라 사유가
+     * 필요하고, 전에 무엇을 어디로 보냈는지가 창에 보여야 한다 — 이사한 고객이면
+     * 그때 주소가 지금과 다를 수 있다.
+     */
+    const { data: existing } = await supabase
+      .from('gift_requests')
+      .select('id, gift_name, quantity, status, created_at, requester_name, address')
+      .eq('order_no', orderNo)
+      .neq('status', 'withdrawn')
+      .order('created_at', { ascending: false });
+
+    return NextResponse.json({ data: { ...prefill, existing: existing ?? [] } });
   } catch (error) {
     console.error('Gift lookup error:', error);
     return NextResponse.json({ error: '고객을 찾지 못했습니다.' }, { status: 500 });

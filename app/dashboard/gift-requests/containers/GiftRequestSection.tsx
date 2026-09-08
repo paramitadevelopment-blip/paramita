@@ -1,17 +1,21 @@
 'use client';
 
 import React, { memo, useState } from 'react';
-import { MdAdd, MdExpandMore, MdSend } from 'react-icons/md';
+import { MdAdd, MdExpandMore, MdListAlt, MdContentPaste, MdVerified } from 'react-icons/md';
 import { useAuthStore } from '@/app/store/authStore';
 import { useAlert } from '@/app/components/Alert/Alert';
-import { canForwardGiftRequests, canViewAllGiftRequests } from '@/lib/roles';
-import { useGiftRequests, useRequestGift, useGiftBadgeCount } from '@/app/hooks/useGifts';
+import { canViewAllGiftRequests } from '@/lib/roles';
+import {
+  useGiftRequests,
+  useRequestGift,
+  useGiftBadgeCount,
+  useRegisterGifts,
+} from '@/app/hooks/useGifts';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { toAssignableDepartmentGroups } from '@/lib/departments';
 import {
   GIFT_STATUSES,
   GIFT_STATUS_LABEL,
-  type GiftEditableFields,
   type GiftRequestRow,
   type GiftStatus,
 } from '@/lib/gifts';
@@ -20,49 +24,75 @@ import SearchBar from '@/app/components/SearchBar';
 import Pagination from '@/app/components/Pagination/Pagination';
 import EmptyState from '@/app/components/EmptyState/EmptyState';
 import GiftTable from '@/app/components/GiftRequest/GiftTable';
-import GiftRequestFormModal from '@/app/components/GiftRequest/GiftRequestFormModal';
+import GiftRequestFormModal, {
+  type GiftFormSubmit,
+} from '@/app/components/GiftRequest/GiftRequestFormModal';
 import GiftDetailModal from '@/app/components/GiftRequest/GiftDetailModal';
+import GiftCheckPanel from '@/app/components/GiftRequest/GiftCheckPanel';
+import GiftPasteModal from '@/app/components/GiftRequest/GiftPasteModal';
+import type { GiftPasteRow } from '@/lib/giftPaste';
 import styles from '../page.module.css';
 
 /**
- * 사은품 신청.
+ * 사은품 신청 — 지사의 자리. 두 탭이다.
  *
- * 설계사는 자기가 넣은 것을, 지사는 소속에서 넣은 것을 본다. 지사는 여기서
- * 골라 사은품담당자에게 보낸다 — 신청과 전달이 한 화면인 이유는, 지사가
- * "무엇이 올라왔나"를 보는 자리와 "보낸다"를 누르는 자리가 같아야 한 번에
- * 끝나기 때문이다.
+ *   신청 건      지사가 등록한 건 하나하나. 등록하면 곧바로 담당자에게 뜬다
+ *   관리자 확인  배포 기록 없이 들어온 건. 관리자가 봐 줘야 신청 건으로 내려온다
+ *
+ * 지사가 모아 두었다가 보내는 단계는 없다 — 등록이 곧 전달이다. 취합은
+ * 담당자가 체크해서 발주리스트로 묶을 때 한다.
+ *
+ * 설계사가 개인별로 넣는 것은 나중에 연다(lib/roles.ts의 canRequestGift 참고).
  */
+type View = 'items' | 'checks';
+
+/**
+ * 탭 배지가 무엇을 센 숫자인지. 상태에 든 건수와 다를 수 있어서 —
+ * 배송 정보 입력됨은 열 건이어도 아직 안 본 것이 셋이면 3이 뜬다 — 밝혀 둔다.
+ */
+const TAB_COUNT_HINT: Partial<Record<GiftStatus, string>> = {
+  pending_check: '관리자 확인을 기다리는 재신청',
+  supplement: '보완 요청을 받아 고쳐 올려야 하는 건',
+  shipped: '배송 정보가 채워졌는데 아직 확인하지 않은 건',
+};
+
 const GiftRequestSection = memo(function GiftRequestSectionComponent() {
   const user = useAuthStore((state) => state.user);
   const role = user?.role;
   const isAdmin = canViewAllGiftRequests(role);
-  const canForward = canForwardGiftRequests(role);
 
   const { showAlert } = useAlert();
   const list = useGiftRequests();
   const request = useRequestGift();
+  const registerMany = useRegisterGifts();
   const { data: badge } = useGiftBadgeCount();
-  // 소속 목록은 관리자만 쓴다. 지사·설계사는 서버가 자기 범위로 고정한다.
+  // 소속 목록은 관리자만 쓴다. 지사는 서버가 자기 범위로 고정한다.
   const { data: departments } = useDepartments(isAdmin);
   const groups = toAssignableDepartmentGroups(departments);
 
+  const [view, setView] = useState<View>('items');
   const [isFormOpen, setFormOpen] = useState(false);
+  const [isPasteOpen, setPasteOpen] = useState(false);
   const [editing, setEditing] = useState<GiftRequestRow | null>(null);
   const [detail, setDetail] = useState<GiftRequestRow | null>(null);
-  // 지사가 골라 둔 것. 페이지를 넘겨도 남는다 — 두 페이지에 걸쳐 고르는 일이 있다.
-  const [picked, setPicked] = useState<Set<number>>(new Set());
 
-  const handleCreate = async (input: { orderNo: string } & GiftEditableFields) => {
+  const handleCreate = async (input: GiftFormSubmit) => {
     const created = await request.mutateAsync(input);
     setFormOpen(false);
+    // 기록 없이 들어간 건은 담당자가 아니라 관리자에게 먼저 간다. 안내가 달라야 한다.
+    const waiting = created.status === 'pending_check';
+    // 관리자만 확인 탭이 있다. 지사는 신청 건 목록에 그대로 남아 자기 건을 본다.
+    if (waiting && isAdmin) setView('checks');
     showAlert({
       type: 'success',
-      title: '신청 완료',
-      message: `${created.customer_name} 님 ${created.gift_name} 신청을 넣었습니다. 지사가 확인 후 사은품담당자에게 전달합니다.`,
+      title: waiting ? '재신청 — 관리자 확인 요청' : '신청 등록',
+      message: waiting
+        ? `${created.customer_name} 님 ${created.gift_name} 재신청을 넣었습니다. 같은 주문번호로 이미 신청된 적이 있어 관리자 확인을 거친 뒤 담당자에게 갑니다.`
+        : `${created.customer_name} 님 ${created.gift_name} 신청을 넣었습니다. 사은품담당자에게 바로 전달됩니다.`,
     });
   };
 
-  const handleEdit = async (input: { orderNo: string } & GiftEditableFields) => {
+  const handleEdit = async (input: GiftFormSubmit) => {
     if (!editing) return;
     const wasSupplement = editing.status === 'supplement';
     const { orderNo: _omit, ...fields } = input;
@@ -72,7 +102,7 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
       type: 'success',
       title: wasSupplement ? '다시 올림' : '수정 완료',
       message: wasSupplement
-        ? '고친 내용으로 다시 올렸습니다. 지사가 확인 후 다시 전달합니다.'
+        ? '고친 내용으로 다시 올렸습니다. 사은품담당자에게 다시 전달됩니다.'
         : '신청 내용을 고쳤습니다.',
     });
   };
@@ -87,192 +117,224 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
     });
   };
 
-  const togglePick = (id: number) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const toggleAll = (ids: number[]) =>
-    setPicked((prev) => {
-      const every = ids.every((id) => prev.has(id));
-      const next = new Set(prev);
-      for (const id of ids) {
-        if (every) next.delete(id);
-        else next.add(id);
-      }
-      return next;
-    });
-
-  const askForward = () => {
-    const ids = [...picked];
+  /** 채워진 배송 정보를 봤다고 표시한다. 누르면 배지에서 내려간다. */
+  const askConfirmShip = (row: GiftRequestRow) => {
     showAlert({
       type: 'info',
-      title: '사은품담당자에게 전달',
-      message: `고른 ${ids.length}건을 사은품담당자에게 전달하시겠습니까? 전달한 뒤에는 설계사가 내용을 고칠 수 없습니다.`,
+      title: '배송 정보 확인',
+      message: `${row.customer_name} 님 ${row.gift_name} — ${[row.courier, row.tracking_no]
+        .filter(Boolean)
+        .join(' · ')}. 확인하셨습니까?`,
       showCancelButton: true,
-      onConfirm: async () => {
-        const result = await list.forward(ids);
-        setPicked(new Set());
-        showAlert({
-          type: 'success',
-          title: '전달 완료',
-          message:
-            result.skipped > 0
-              ? `${result.forwarded}건을 전달했습니다. ${result.skipped}건은 이미 전달됐거나 전달할 수 없어 빠졌습니다.`
-              : `${result.forwarded}건을 사은품담당자에게 전달했습니다.`,
-        });
-      },
+      onConfirm: () => list.patch({ id: row.id, body: { action: 'confirmShip' } }),
+    });
+  };
+
+  const askWithdraw = (row: GiftRequestRow) => {
+    let reason = '';
+    showAlert({
+      type: 'warning',
+      title: '신청 철회',
+      message: (
+        <>
+          <p>
+            {row.customer_name} 님 {row.gift_name} 신청을 철회하시겠습니까? 철회해도 기록은
+            남습니다.
+          </p>
+          <label className={styles.withdrawField}>
+            <span>사유 (선택)</span>
+            <input
+              type="text"
+              maxLength={500}
+              placeholder="예: 고객이 사은품을 원하지 않음"
+              onChange={(e) => {
+                reason = e.target.value;
+              }}
+            />
+          </label>
+        </>
+      ),
+      showCancelButton: true,
+      onConfirm: () =>
+        list.patch({ id: row.id, body: { action: 'withdraw', reason: reason.trim() } }),
     });
   };
 
   return (
     <>
-      <div className={styles.searchSection}>
-        <span className={styles.totalCount}>
-          총 <span>{list.pagination?.totalRecords ?? 0}</span>건
-        </span>
-        <SearchBar
-          value={list.search}
-          onChange={list.setSearch}
-          onReset={() => list.setSearch('')}
-          placeholder="고객명 · 주문번호 · 사은품 · 신청자"
-        />
-        <button type="button" className={styles.submitBtn} onClick={() => setFormOpen(true)}>
-          <MdAdd />
-          사은품 신청
-        </button>
-      </div>
-
-      <div className={styles.controlsSection}>
-        <div className={styles.selectWrapper}>
-          <select
-            className={styles.select}
-            value={list.sort.by}
-            onChange={(e) => list.setSortBy(e.target.value)}
-          >
-            <option value="created_at">신청일순</option>
-            <option value="customer_name">고객명순</option>
-            <option value="gift_name">사은품순</option>
-            <option value="order_no">주문번호순</option>
-            {isAdmin && <option value="group_name">지사순</option>}
-            <option value="requester_name">신청자순</option>
-            <option value="order_date">발주일순</option>
-            <option value="status">상태순</option>
-          </select>
-          <MdExpandMore className={styles.selectIcon} />
-        </div>
-        <div className={styles.selectWrapper}>
-          <select
-            className={styles.select}
-            value={list.limit}
-            onChange={(e) => list.setLimit(Number(e.target.value))}
-          >
-            <option value="10">10개씩보기</option>
-            <option value="20">20개씩보기</option>
-            <option value="30">30개씩보기</option>
-            <option value="50">50개씩보기</option>
-          </select>
-          <MdExpandMore className={styles.selectIcon} />
-        </div>
-      </div>
-
-      <div className={styles.statusTabs}>
+      {/* ── 화면 탭 ─────────────────────────────────────────── */}
+      <div className={styles.viewTabs}>
         <button
           type="button"
-          className={`${styles.statusTab} ${list.status === '' ? styles.active : ''}`}
-          onClick={() => list.setStatus('')}
+          className={`${styles.viewTab} ${view === 'items' ? styles.active : ''}`}
+          onClick={() => setView('items')}
         >
-          전체
+          <MdListAlt />
+          신청 건
         </button>
-        {GIFT_STATUSES.map((status) => (
+        {/*
+          재신청이 멈춰 있는 자리. **관리자에게만 낸다** — 지사는 여기서 할 수 있는
+          일이 없다. 자기 건은 신청 건 탭에 '관리자 확인 대기'로 뜨고 거기서 고치고
+          지운다. 못 누를 탭을 내주면 "왜 확인이 안 되냐"고 묻게 된다.
+        */}
+        {isAdmin && (
           <button
-            key={status}
             type="button"
-            className={`${styles.statusTab} ${list.status === status ? styles.active : ''}`}
-            onClick={() => list.setStatus(status as GiftStatus)}
+            className={`${styles.viewTab} ${view === 'checks' ? styles.active : ''}`}
+            onClick={() => setView('checks')}
           >
-            {GIFT_STATUS_LABEL[status]}
-            {/* 보완 요청은 그냥 지나치면 안 되는 자리다. 건수를 붙인다. */}
-            {status === 'supplement' && (badge?.requests ?? 0) > 0 && !canForward && (
+            <MdVerified />
+            관리자 확인
+            {(badge?.requests ?? 0) > 0 && (
               <span className={styles.tabCount}>{badge?.requests}</span>
             )}
           </button>
-        ))}
+        )}
       </div>
 
-      {isAdmin && groups.length > 0 && (
-        <div className={styles.departmentsFilter}>
-          <button
-            type="button"
-            className={`${styles.departmentBtn} ${list.group === '' ? styles.active : ''}`}
-            onClick={() => list.setGroup('')}
-          >
-            전체 지사
-          </button>
-          {groups.map((name) => (
-            <button
-              key={name}
-              type="button"
-              className={`${styles.departmentBtn} ${list.group === name ? styles.active : ''}`}
-              onClick={() => list.setGroup(name)}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 지사가 고른 것을 보내는 자리. 고른 게 있을 때만 나온다. */}
-      {canForward && picked.size > 0 && (
-        <div className={styles.forwardBar}>
-          <span>
-            <strong>{picked.size}건</strong> 골랐습니다
-          </span>
-          <button
-            type="button"
-            className={styles.actionBtn}
-            onClick={askForward}
-            disabled={list.isForwarding}
-          >
-            <MdSend />
-            사은품담당자에게 전달
-          </button>
-          <button type="button" className={styles.ghostBtn} onClick={() => setPicked(new Set())}>
-            선택 해제
-          </button>
-        </div>
-      )}
-
-      {list.isLoading ? (
-        <Spinner />
-      ) : list.rows.length === 0 ? (
-        <EmptyState message="아직 사은품 신청이 없습니다." />
+      {view === 'checks' && isAdmin ? (
+        <GiftCheckPanel onOpenRow={setDetail} />
       ) : (
         <>
-          <GiftTable
-            rows={list.rows}
-            showGroup={isAdmin}
-            actions={{
-              select: canForward
-                ? { picked, onToggle: togglePick, onToggleAll: toggleAll }
-                : undefined,
-              onOpen: setDetail,
-              onEdit: setEditing,
-              onDelete: askDelete,
-            }}
-            sortBy={list.sort.by}
-            sortOrder={list.sort.order}
-            onSort={list.toggleSort}
-          />
-          <Pagination
-            currentPage={list.page}
-            totalPages={list.pagination?.totalPages ?? 1}
-            onPageChange={list.changePage}
-            isLoading={list.isLoading}
-          />
+          <div className={styles.searchSection}>
+            <span className={styles.totalCount}>
+              총 <span>{list.pagination?.totalRecords ?? 0}</span>건
+            </span>
+            <SearchBar
+              value={list.search}
+              onChange={list.setSearch}
+              onReset={() => list.setSearch('')}
+              placeholder="모든 항목 검색 — 고객명 · 주소 · 사은품 · 주문번호 · 상태 · 날짜 · 운송장"
+            />
+            {/* 여러 건은 붙여넣기, 한 건은 직접 입력. 같은 일의 두 길이라 붙여 둔다. */}
+            <div className={styles.searchActions}>
+              <button type="button" className={styles.ghostBtn} onClick={() => setPasteOpen(true)}>
+                <MdContentPaste />
+                붙여넣기로 등록
+              </button>
+              <button type="button" className={styles.submitBtn} onClick={() => setFormOpen(true)}>
+                <MdAdd />
+                사은품 신청
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.controlsSection}>
+            <div className={styles.selectWrapper}>
+              <select
+                className={styles.select}
+                value={list.sort.by}
+                onChange={(e) => list.setSortBy(e.target.value)}
+              >
+                <option value="created_at">신청일순</option>
+                <option value="customer_name">고객명순</option>
+                <option value="gift_name">사은품순</option>
+                <option value="order_no">주문번호순</option>
+                {isAdmin && <option value="group_name">지사순</option>}
+                <option value="requester_name">신청자순</option>
+                <option value="order_date">발주일순</option>
+                <option value="status">상태순</option>
+              </select>
+              <MdExpandMore className={styles.selectIcon} />
+            </div>
+            <div className={styles.selectWrapper}>
+              <select
+                className={styles.select}
+                value={list.limit}
+                onChange={(e) => list.setLimit(Number(e.target.value))}
+              >
+                <option value="10">10개씩보기</option>
+                <option value="20">20개씩보기</option>
+                <option value="30">30개씩보기</option>
+                <option value="50">50개씩보기</option>
+              </select>
+              <MdExpandMore className={styles.selectIcon} />
+            </div>
+          </div>
+
+          <div className={styles.statusTabs}>
+            <button
+              type="button"
+              className={`${styles.statusTab} ${list.status === '' ? styles.active : ''}`}
+              onClick={() => list.setStatus('')}
+            >
+              전체
+            </button>
+            {GIFT_STATUSES.map((status) => {
+              /*
+                옆 메뉴 배지에 든 숫자를 그 숫자가 사는 탭에 그대로 붙인다.
+                상태에 든 건수가 아니라 **손대야 할 건수**다 — 배송 정보는 아직
+                확인 안 누른 것만 센다. 그래서 탭 배지의 합이 곧 메뉴 배지다.
+              */
+              const todo = badge?.tabs?.[status] ?? 0;
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  className={`${styles.statusTab} ${list.status === status ? styles.active : ''}`}
+                  onClick={() => list.setStatus(status as GiftStatus)}
+                >
+                  {GIFT_STATUS_LABEL[status]}
+                  {todo > 0 && (
+                    <span className={styles.tabCount} title={TAB_COUNT_HINT[status]}>
+                      {todo}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {isAdmin && groups.length > 0 && (
+            <div className={styles.departmentsFilter}>
+              <button
+                type="button"
+                className={`${styles.departmentBtn} ${list.group === '' ? styles.active : ''}`}
+                onClick={() => list.setGroup('')}
+              >
+                전체 지사
+              </button>
+              {groups.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className={`${styles.departmentBtn} ${list.group === name ? styles.active : ''}`}
+                  onClick={() => list.setGroup(name)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {list.isLoading ? (
+            <Spinner />
+          ) : list.rows.length === 0 ? (
+            <EmptyState message="아직 사은품 신청이 없습니다." />
+          ) : (
+            <>
+              <GiftTable
+                rows={list.rows}
+                showGroup={isAdmin}
+                actions={{
+                  onOpen: setDetail,
+                  onEdit: setEditing,
+                  onDelete: askDelete,
+                  onConfirmShip: askConfirmShip,
+                  onWithdraw: askWithdraw,
+                }}
+                sortBy={list.sort.by}
+                sortOrder={list.sort.order}
+                onSort={list.toggleSort}
+              />
+              <Pagination
+                currentPage={list.page}
+                totalPages={list.pagination?.totalPages ?? 1}
+                onPageChange={list.changePage}
+                isLoading={list.isLoading}
+              />
+            </>
+          )}
         </>
       )}
 
@@ -290,6 +352,14 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
           isSubmitting={list.isPatching}
           onClose={() => setEditing(null)}
           onSubmit={handleEdit}
+        />
+      )}
+
+      {isPasteOpen && (
+        <GiftPasteModal
+          isSubmitting={registerMany.isPending}
+          onClose={() => setPasteOpen(false)}
+          onSubmit={async (rows: GiftPasteRow[]) => registerMany.mutateAsync({ rows })}
         />
       )}
 

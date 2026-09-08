@@ -1,11 +1,18 @@
 'use client';
 
 import React, { memo, useState } from 'react';
-import { MdClose, MdSearch, MdSend, MdLock } from 'react-icons/md';
+import { MdClose, MdSearch, MdSend, MdLock, MdPlace } from 'react-icons/md';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { useGiftLookup } from '@/app/hooks/useGifts';
-import { validateGiftInput, type GiftEditableFields, type GiftRequestRow } from '@/lib/gifts';
+import {
+  GIFT_STATUS_LABEL,
+  validateGiftInput,
+  type GiftEditableFields,
+  type GiftRequestRow,
+  type PriorGiftRequest,
+} from '@/lib/gifts';
 import { formatPhone } from '@/lib/phoneFormat';
+import { pickAddress } from '@/lib/daumPostcode';
 import styles from './GiftRequest.module.css';
 
 /**
@@ -13,7 +20,14 @@ import styles from './GiftRequest.module.css';
  *
  * 주문번호를 치고 [조회]를 누르면 배포 기록에서 고객을 찾아 아래 칸을 채운다.
  * 고객명·전화번호는 잠긴다 — 사은품이 엉뚱한 사람에게 가는 사고는 대개
- * 이름과 번호를 손으로 옮겨 적다 생긴다. 나머지는 고칠 수 있다.
+ * 이름과 번호를 손으로 옮겨 적다 생긴다. 기록에 없는 번호는 여기서 끝이다.
+ *
+ * 주소는 **검색해서 고른다.** 손으로 치면 오타가 나고, 오타 난 주소로는 사은품이
+ * 안 간다. 기록의 주소가 채워져 오지만 고객이 이사했을 수 있으니 [주소 검색]으로
+ * 바꿀 수 있고, 동·호수 같은 상세만 손으로 적는다.
+ *
+ * 같은 주문번호로 이미 신청된 건이 있으면 그 목록이 보이고 **재신청 사유**를
+ * 적어야 한다. 그 건은 관리자 확인을 거친 뒤 담당자에게 간다.
  *
  * 칸 순서는 발주리스트 엑셀의 열 순서를 따른다. 사은품담당자가 그 엑셀로
  * 옮겨 적어 발주하므로, 같은 순서여야 눈이 덜 움직인다.
@@ -40,12 +54,14 @@ interface Locked {
   phone2: string;
 }
 
+export type GiftFormSubmit = { orderNo: string; checkReason?: string } & GiftEditableFields;
+
 interface GiftRequestFormModalProps {
   /** 고칠 때. 없으면 새로 넣는 것이다. */
   editing?: GiftRequestRow;
   isSubmitting: boolean;
   onClose: () => void;
-  onSubmit: (input: { orderNo: string } & GiftEditableFields) => Promise<unknown>;
+  onSubmit: (input: GiftFormSubmit) => Promise<unknown>;
 }
 
 const TITLE = {
@@ -59,6 +75,8 @@ const SUBMIT_LABEL = {
   edit: '수정',
   resubmit: '다시 올리기',
 } as const;
+
+const dateText = (value: string) => new Date(value).toLocaleDateString('ko-KR').slice(0, -1);
 
 const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
   editing,
@@ -95,6 +113,16 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
         }
       : EMPTY
   );
+  /*
+   * 주소는 둘로 나눠 든다. 기본 주소는 검색으로 고른 값(또는 기록의 값)이라 손으로
+   * 못 고치고, 상세만 적는다. 저장할 때 둘을 붙인다. 고칠 때는 저장돼 있던 주소가
+   * 기본 주소로 들어오고 상세는 비어 있다 — 바꾸려면 다시 검색한다.
+   */
+  const [addrBase, setAddrBase] = useState(editing?.address ?? '');
+  const [addrDetail, setAddrDetail] = useState('');
+  const [addrPicked, setAddrPicked] = useState(false);
+  const [existing, setExisting] = useState<PriorGiftRequest[]>([]);
+  const [checkReason, setCheckReason] = useState('');
   const [hint, setHint] = useState<{ ok: boolean; text: string } | null>(null);
 
   const set =
@@ -112,13 +140,42 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
       const found = await lookup.mutateAsync(value);
       setLocked(found.locked);
       setForm(found.fields);
-      setHint({ ok: true, text: `${found.locked.customerName} 님 — 기록에서 찾았습니다. 아래 칸을 확인하고 채워 주세요.` });
+      setAddrBase(found.fields.address);
+      setAddrDetail('');
+      setAddrPicked(false);
+      setExisting(found.existing ?? []);
+      setCheckReason('');
+      setHint({
+        ok: true,
+        text:
+          (found.existing?.length ?? 0) > 0
+            ? `${found.locked.customerName} 님 — 기록에서 찾았습니다. 이 주문번호로 이미 ${found.existing!.length}건 신청돼 있어 아래에 사유를 적어야 합니다.`
+            : `${found.locked.customerName} 님 — 기록에서 찾았습니다. 아래 칸을 확인하고 채워 주세요.`,
+      });
     } catch (err) {
       setLocked(null);
       setForm(EMPTY);
+      setAddrBase('');
+      setAddrDetail('');
+      setExisting([]);
       setHint({ ok: false, text: (err as Error).message });
     }
   };
+
+  const handlePickAddress = async () => {
+    try {
+      const picked = await pickAddress();
+      if (!picked) return;
+      setAddrBase(picked.address);
+      setAddrDetail('');
+      setAddrPicked(true);
+      setForm((prev) => ({ ...prev, zip: picked.zip }));
+    } catch (err) {
+      showAlert({ type: 'error', title: '주소 검색', message: (err as Error).message });
+    }
+  };
+
+  const fullAddress = `${addrBase.trim()} ${addrDetail.trim()}`.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,12 +183,25 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
       showAlert({ type: 'warning', title: '고객 확인', message: '먼저 주문번호를 조회해 고객을 찾아 주세요.' });
       return;
     }
-    const error = validateGiftInput({ ...form, orderNo });
+    if (!addrBase.trim()) {
+      showAlert({ type: 'warning', title: '주소 확인', message: '[주소 검색]으로 주소를 골라 주세요.' });
+      return;
+    }
+    if (existing.length > 0 && !checkReason.trim()) {
+      showAlert({
+        type: 'warning',
+        title: '재신청 사유',
+        message: '같은 주문번호로 이미 신청된 건이 있습니다. 왜 다시 보내는지 적어 주세요.',
+      });
+      return;
+    }
+    const payload = { ...form, address: fullAddress, orderNo: orderNo.trim() };
+    const error = validateGiftInput({ ...payload, checkReason });
     if (error) {
       showAlert({ type: 'warning', title: '입력 확인', message: error });
       return;
     }
-    await onSubmit({ orderNo: orderNo.trim(), ...form });
+    await onSubmit({ ...payload, ...(existing.length > 0 ? { checkReason: checkReason.trim() } : {}) });
   };
 
   return (
@@ -188,6 +258,40 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
           </div>
           {hint && <p className={`${styles.lookupHint} ${hint.ok ? styles.ok : styles.bad}`}>{hint.text}</p>}
 
+          {/*
+            같은 주문번호로 이미 들어간 신청. 전에 무엇을 어디로 보냈는지 보고,
+            왜 또 보내는지를 적는다. 이 건은 관리자 확인을 거친다.
+          */}
+          {existing.length > 0 && (
+            <div className={styles.threadBox}>
+              <h4>이 주문번호로 이미 신청된 {existing.length}건</h4>
+              <ul className={styles.priorList}>
+                {existing.map((p) => (
+                  <li key={p.id}>
+                    <strong>{p.gift_name}</strong> × {p.quantity} · {GIFT_STATUS_LABEL[p.status]} ·{' '}
+                    {dateText(p.created_at)} · {p.requester_name}
+                    {p.address && <span className={styles.priorAddress}>{p.address}</span>}
+                  </li>
+                ))}
+              </ul>
+              <label className={styles.modalField}>
+                <span>
+                  재신청 사유 <b className={styles.required}>*</b>
+                </span>
+                <textarea
+                  value={checkReason}
+                  onChange={(e) => setCheckReason(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="예: 두 번째 상품 가입분 / 고객이 추가로 요청"
+                />
+                <span className={styles.fieldHint}>
+                  관리자가 이 사유를 보고 확인한 뒤 사은품담당자에게 전달됩니다.
+                </span>
+              </label>
+            </div>
+          )}
+
           <div className={styles.formSection}>고객 — 기록에서 가져온 값이라 고칠 수 없습니다</div>
           <div className={styles.formGrid}>
             <label className={`${styles.modalField} ${styles.lockedField}`}>
@@ -208,15 +312,50 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
               </span>
               <input type="text" value={locked?.phone2 ?? ''} readOnly tabIndex={-1} />
             </label>
-            <label className={styles.modalField}>
-              <span>우편번호</span>
-              <input type="text" value={form.zip} onChange={set('zip')} maxLength={10} />
-            </label>
-            <label className={`${styles.modalField} ${styles.full}`}>
+          </div>
+
+          {/*
+            주소. 기본 주소는 검색으로만 들어온다 — 손으로 치는 칸이 없으니 오타가
+            날 자리가 없다. 상세(동·호수)만 적는다.
+          */}
+          <div className={styles.formSection}>
+            배송 주소 — 손으로 치지 않고 검색해서 고릅니다. 이사했으면 [주소 검색]으로 바꿔 주세요
+          </div>
+          <div className={styles.formGrid}>
+            <label className={`${styles.modalField} ${styles.lockedField}`}>
               <span>
-                주소 <b className={styles.required}>*</b>
+                우편번호 <MdLock className={styles.lockedTag} />
               </span>
-              <input type="text" value={form.address} onChange={set('address')} maxLength={300} />
+              <input type="text" value={form.zip} readOnly tabIndex={-1} />
+            </label>
+            <div className={`${styles.lookupRow} ${styles.full}`}>
+              <label className={`${styles.modalField} ${styles.lockedField}`}>
+                <span>
+                  기본 주소 <b className={styles.required}>*</b>
+                  {addrPicked && <em className={styles.pickedTag}>검색으로 고름</em>}
+                </span>
+                <input
+                  type="text"
+                  value={addrBase}
+                  readOnly
+                  tabIndex={-1}
+                  placeholder="[주소 검색]을 눌러 고르세요"
+                />
+              </label>
+              <button type="button" className={styles.actionBtn} onClick={handlePickAddress}>
+                <MdPlace />
+                주소 검색
+              </button>
+            </div>
+            <label className={`${styles.modalField} ${styles.full}`}>
+              <span>상세 주소</span>
+              <input
+                type="text"
+                value={addrDetail}
+                onChange={(e) => setAddrDetail(e.target.value)}
+                placeholder="동·호수 등. 기본 주소에 이미 있으면 비워 두세요"
+                maxLength={100}
+              />
             </label>
             <label className={`${styles.modalField} ${styles.full}`}>
               <span>배송메세지</span>

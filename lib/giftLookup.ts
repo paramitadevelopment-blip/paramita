@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ASSIGNED_DEPT_COLUMN } from '@/lib/insurance';
 import { isAssignedRecord } from '@/lib/lastAssignment';
+import { filesContaining } from '@/lib/fileContentSearch';
 
 /**
  * 주문번호로 배포 기록 한 줄을 찾는다.
@@ -32,17 +33,15 @@ export async function findGiftSource(
   if (!needle) return null;
 
   /*
-   * JSON 문자열로 넘긴다. 배열을 그대로 주면 supabase-js가 Postgres 배열
-   * 리터럴로 바꿔 jsonb가 거부한다(lib/complaintHistory.ts와 같은 사정).
+   * 주문번호가 문자열로 저장된 파일도, 숫자로 저장된 파일도 함께 찾는다
+   * (lib/fileContentSearch.ts). 실제 배포 파일의 주문번호는 대개 숫자다.
    */
-  const { data, error } = await supabase
-    .from('files')
-    .select('id, name, uploaded_at, file_content')
-    .eq('is_original', true)
-    .eq('source', 'direct')
-    .contains('file_content', JSON.stringify([{ 주문번호: needle }]));
-
-  if (error) throw error;
+  const data = await filesContaining<{
+    id: string;
+    name: string;
+    uploaded_at: string;
+    file_content: unknown;
+  }>(supabase, 'id, name, uploaded_at, file_content', { 주문번호: needle });
 
   let best: GiftSourceRecord | null = null;
   for (const file of data ?? []) {

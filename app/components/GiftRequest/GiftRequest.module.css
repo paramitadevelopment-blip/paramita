@@ -72,7 +72,10 @@
   margin-top: 28px;
 }
 
+/* 배지를 품는 탭이라 세로 가운데로 맞춘다 — 글자 기준선에 걸리면 배지가 떠 보인다. */
 .statusTab {
+  display: inline-flex;
+  align-items: center;
   padding: 10px 20px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -428,10 +431,9 @@
   align-items: center;
 }
 
-/* 글자 수가 달라도 버튼 폭은 같게 — 줄마다 칸이 들쭉날쭉하지 않는다. */
+/* 버튼은 글자만큼만. 폭을 고정하면 짧은 이름 옆에 빈자리가 남는다. */
 .actionCell button {
-  min-width: 76px;
-  text-align: center;
+  justify-content: center;
 }
 
 .actionBtn {
@@ -627,7 +629,18 @@
   margin-bottom: 24px;
 }
 
+/*
+ * 라벨 높이를 고정한다.
+ *
+ * 잠금 아이콘이 붙은 라벨은 줄 상자가 그만큼 커져, 아이콘 없는 옆 칸
+ * (우편번호)의 입력이 혼자 위로 올라간다. 한 줄 높이를 못 박아 두면 아이콘이
+ * 있든 없든 입력이 같은 자리에서 시작한다.
+ */
 .modalField > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
   font-size: 18px;
   font-weight: 600;
   color: #333;
@@ -999,6 +1012,18 @@
   margin: 0;
 }
 
+/*
+ * [조회]는 주문번호 칸과 나란히 선다.
+ *
+ * .actionBtn은 표 안에서 쓰는 작은 버튼이라 그대로 두면 입력 칸보다 낮다.
+ * 이 자리에서만 입력 칸과 같은 높이로 맞춘다 (패딩 12+12 · 글자 18 · 테두리 2).
+ */
+.lookupRow .actionBtn {
+  height: 53px;
+  padding: 0 24px;
+  font-size: 17px;
+}
+
 .lookupHint {
   margin: -8px 0 20px;
   font-size: 15px;
@@ -1020,10 +1045,10 @@
   cursor: not-allowed;
 }
 
+/* 잠금 표시. 라벨이 flex라 자리는 gap이 잡는다. */
 .lockedTag {
-  margin-left: 6px;
-  font-size: 13px;
-  font-weight: 600;
+  flex: none;
+  font-size: 16px;
   color: #999;
 }
 
@@ -1087,17 +1112,961 @@
 }
 
 /* 그냥 지나치면 안 되는 탭에 건수를 붙인다. 민원 등록 화면과 같은 모양이다. */
+/*
+ * 탭에 붙는 건수.
+ *
+ * 크기를 고정한다 — 글자 수(1자리·2자리)나 붙는 자리(화면 탭·상태 탭)에 따라
+ * 높이와 너비가 달라지면 탭마다 다른 배지처럼 보인다. 세 자리가 넘어가면
+ * 가로로만 늘어난다.
+ */
 .tabCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   margin-left: 8px;
-  padding: 2px 8px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 8px;
   border-radius: 100px;
   background: #db1a62;
   color: white;
   font-size: 14px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .statusTab.active .tabCount {
   background: white;
   color: #db1a62;
+}
+
+/* 철회. 지운 게 아니라 닫은 것 — 회색으로 물러나 있되 사라지지는 않는다. */
+.status_withdrawn {
+  background: #f3f3f3;
+  border: 1px solid #d9d9d9;
+  color: #777;
+}
+
+/* 철회 사유 입력. 확인창 안에 들어간다. */
+.withdrawField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  text-align: left;
+}
+
+.withdrawField > span {
+  font-size: 15px;
+  font-weight: 600;
+  color: #555;
+}
+
+.withdrawField input {
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 16px;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.withdrawField input:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+/* ── 같이 온 묶음 머리줄 (담당자 · 발주 대기) ─────────────── */
+
+/* 지사가 한 번에 전달한 건들. 지사는 폴더를 안 만들어도 담당자에게는 폴더처럼 보인다. */
+.batchRow td {
+  padding: 8px 12px;
+  background: #fafafa;
+  border-top: 2px solid #e8e8e8;
+}
+
+.batchHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: #555;
+}
+
+.batchHead strong {
+  font-size: 16px;
+  color: #333;
+}
+
+.batchHead input {
+  width: 16px;
+  height: 16px;
+  accent-color: #db1a62;
+  cursor: pointer;
+}
+
+.batchWhen {
+  color: #888;
+}
+
+.batchCount {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  border-radius: 100px;
+  background: #fdf2f6;
+  border: 1px solid #f3c3d4;
+  font-size: 15px;
+  font-weight: 700;
+  color: #db1a62;
+}
+/* 아직 아무것도 안 담긴 폴더. 숫자 0을 크게 두면 잘못된 것처럼 보인다. */
+.batchCountEmpty {
+  background: #fafafa;
+  border-color: #e0e0e0;
+  color: #999;
+  font-weight: 500;
+}
+
+/* 어느 발주 묶음에 실렸나. 발주일 옆에 붙인다. */
+.orderTag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e6f4ff;
+  color: #0958d9;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 송장이 채워졌으면 상태 아래 그대로 보인다. */
+.shipNote {
+  margin-top: 4px;
+  font-size: 14px;
+  color: #2e7d32;
+}
+
+/* 담당자가 아직 안 본 전달 건. 지사는 이걸로 "아직 고칠 수 있다"를 안다. */
+.unreadNote {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #ad6800;
+}
+
+/* 발주 보냄 상태 배지 */
+.status_ordered {
+  background: #f0f5ff;
+  border: 1px solid #adc6ff;
+  color: #1d39c4;
+}
+
+/* ── 발주 묶음 창 ────────────────────────────────────────── */
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: #666;
+  font-size: 22px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.backBtn:hover {
+  color: #db1a62;
+}
+
+.orderList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.orderItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.orderItem:last-child {
+  border-bottom: none;
+}
+
+/* 묶음 한 줄. 누르면 열린다. */
+.orderOpen {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 64px 150px 60px 1fr 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.orderOpen:hover {
+  border-color: #db1a62;
+}
+
+.orderNo {
+  font-weight: 700;
+  color: #db1a62;
+}
+
+.orderWhen,
+.orderBy {
+  color: #777;
+  font-size: 15px;
+}
+
+.orderCount {
+  font-weight: 700;
+  color: #333;
+}
+
+.orderGroups {
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 묶음 상세의 요약 줄. 엑셀 버튼은 오른쪽 끝. */
+.orderSummary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 16px;
+  color: #555;
+}
+
+.orderSummary strong {
+  color: #333;
+}
+
+.orderSummary .submitBtn {
+  margin-left: auto;
+  padding: 10px 18px;
+  font-size: 16px;
+}
+
+/* ── 화면 탭 (신청 건 / 전달 묶음) ───────────────────────── */
+
+.viewTabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #eee;
+}
+
+.viewTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  background: none;
+  font-size: 18px;
+  font-weight: 600;
+  color: #777;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.viewTab:hover {
+  color: #db1a62;
+}
+
+.viewTab.active {
+  color: #db1a62;
+  border-bottom-color: #db1a62;
+}
+
+/* ── 어느 묶음에 담겼나 ───────────────────────────────────── */
+
+.batchTag {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 100px;
+  background: #fff5f7;
+  border: 1px solid #f3c3d4;
+  color: #db1a62;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.batchTagSent {
+  background: #f3f3f3;
+  border-color: #ddd;
+  color: #777;
+}
+
+/* ── 묶음 고르기 창 ──────────────────────────────────────── */
+
+.pickList {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.pickItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  font-size: 17px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pickItem:hover:not(:disabled) {
+  border-color: #db1a62;
+  background: #fff5f7;
+}
+
+.pickIcon {
+  font-size: 22px;
+  color: #db1a62;
+  flex: none;
+}
+
+.pickName {
+  flex: 1;
+  font-weight: 600;
+  color: #333;
+}
+
+.pickCount {
+  font-size: 15px;
+  color: #777;
+}
+
+/* ── 전달 묶음 목록·상세 ──────────────────────────────────── */
+
+
+
+.batchItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.batchItem:last-child {
+  border-bottom: none;
+}
+
+/*
+ * 표 안의 묶음 이름. 이름 자체가 폴더를 여는 버튼이다 — 줄 어디를 눌러야
+ * 열리는지 찾지 않아도 되게, 눈이 먼저 닿는 이름에 그 일을 준다.
+ */
+.batchOpen {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.batchOpen:hover .batchName {
+  color: #db1a62;
+  text-decoration: underline;
+}
+
+.batchIcon {
+  flex-shrink: 0;
+  font-size: 24px;
+  color: #db1a62;
+}
+
+.batchIconSent {
+  color: #999;
+}
+
+.batchName {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  transition: color 0.2s ease;
+}
+
+
+
+.batchHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.batchTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #333;
+}
+
+.batchRename {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.batchRename input {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 18px;
+  font-family: inherit;
+  width: 240px;
+}
+
+.batchActions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: #999;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  color: #db1a62;
+}
+
+/* 새 묶음 만들기 줄. 목록 위에 늘 있다 — 폴더를 먼저 두고 며칠에 걸쳐 담는다. */
+.newBatchRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.newBatchRow input {
+  flex: 1;
+  max-width: 420px;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 17px;
+  font-family: inherit;
+}
+
+.newBatchRow input:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.newBatchRow .submitBtn {
+  height: 53px;
+  padding: 0 24px;
+  font-size: 17px;
+}
+
+/* ── 폴더 안에서 신청 건 끌어오기 ────────────────────────── */
+
+.addAll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+}
+
+.addAll input,
+.addItem input {
+  width: 18px;
+  height: 18px;
+  accent-color: #db1a62;
+  cursor: pointer;
+}
+
+.addList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.addItem {
+  display: grid;
+  grid-template-columns: 24px 110px 1fr 200px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.addItem:hover {
+  border-color: #f3c3d4;
+}
+
+.addItemOn {
+  border-color: #db1a62;
+  background: #fff5f7;
+}
+
+.addName {
+  font-weight: 700;
+  color: #333;
+}
+
+.addGift {
+  color: #444;
+}
+
+.addMeta {
+  font-size: 14px;
+  color: #888;
+  text-align: right;
+}
+
+/* ── 붙여넣기로 등록 (민원 등록 화면과 같은 모양) ────────────── */
+.resultOk,
+.resultWarn {
+  padding: 16px 20px;
+  border-radius: 8px;
+  font-size: 18px;
+  margin-bottom: 32px;
+}
+
+.resultOk {
+  background: #fdf2f6;
+  border: 1px solid #f3c3d4;
+  color: #db1a62;
+}
+
+.resultWarn {
+  background: #fffbe6;
+  border: 1px solid #e0c34a;
+  color: #8a6d00;
+}
+
+
+.pasteModal {
+  max-width: 960px;
+}
+
+.pasteGuide {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: #666;
+}
+
+/* 어떤 순서로 읽는지. 붙여넣기 전에 한 번 훑어볼 수 있게 한 줄로 둔다. */
+.pasteHeaders {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  color: #999;
+}
+
+.pasteArea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #333;
+  resize: vertical;
+  /* 붙여넣은 표가 줄바꿈되면 칸이 밀려 보인다. 가로로 흐르게 둔다. */
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.pasteArea:focus {
+  outline: none;
+  border-color: #db1a62;
+  box-shadow: 0 0 0 3px rgba(219, 26, 98, 0.1);
+}
+
+.pasteSummary {
+  margin: 12px 0;
+  font-size: 17px;
+  color: #333;
+}
+
+/* 미리보기. 건수가 많아도 창이 늘어나지 않게 안에서 스크롤한다. */
+.pastePreview {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.pastePreview .table th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  font-size: 16px;
+}
+
+.pastePreview .table td {
+  font-size: 16px;
+}
+
+/* 그대로는 못 넣는 줄. 눈에 띄어야 사람이 그 줄만 메일에서 다시 본다. */
+.pasteBadRow {
+  background: #fdeced;
+}
+
+.pasteProblem {
+  color: #c8434f;
+  font-size: 15px;
+}
+
+.pasteOk {
+  color: #2e7d32;
+  font-size: 15px;
+}
+
+.pasteDone {
+  padding: 8px 0 0;
+}
+
+.noteCell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+/* 창 아래 버튼 줄. 민원 등록 창과 같은 자리·같은 모양. */
+.formActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+/* ── 관리자 확인 (배포 기록 없이 들어온 건) ──────────────── */
+
+/* 확인 대기 배지. 멈춰 있다는 뜻이라 노란 계열로, 보완(빨강)과 가른다. */
+.status_pending_check {
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  color: #ad6800;
+}
+
+/* 기록 없이 들어와 적을 번호가 없는 자리. 빈칸으로 두면 빠뜨린 것처럼 보인다. */
+.noOrderNo {
+  color: #ad6800;
+  font-size: 15px;
+}
+
+/* 확인을 받고 지나온 건. 지난 일이라 물러나 있게 둔다. */
+.checkedNote {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #999;
+}
+
+/* 확인 탭 머리의 안내. 보는 사람에 따라 문장이 갈린다. */
+.checkGuide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 14px 18px;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+  background: #fffbe6;
+  font-size: 17px;
+  color: #ad6800;
+}
+.checkGuide svg {
+  flex-shrink: 0;
+  font-size: 22px;
+}
+
+/* 기록에 없는 고객으로 넘어가는 문. 신청서 안에서 한 번 멈춰 보게 한다. */
+.manualToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 14px;
+  padding: 12px 16px;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+  background: #fffbe6;
+  font-size: 17px;
+  color: #8c6200;
+  cursor: pointer;
+}
+.manualToggle input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  accent-color: #db1a62;
+  cursor: pointer;
+}
+.manualToggle span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.manualToggle svg {
+  font-size: 20px;
+}
+
+/* 붙여넣기 미리보기에서 '관리자 확인 필요'. 문제는 아니지만 그냥 가지도 않는다. */
+.pasteCheck {
+  color: #ad6800;
+  font-size: 15px;
+}
+
+/* 묶음 줄의 지사 이름. 관리자만 본다 — 전 지사 폴더가 한 목록에 섞여 있다. */
+.batchGroup {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  border: 1px solid #d6dae0;
+  border-radius: 100px;
+  background: #f2f4f7;
+  color: #5a6472;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 폴더 상세 머리에 붙는 한 줄 — 몇 건이고 언제 만들었나(또는 보냈나). */
+.batchMeta {
+  display: block;
+  margin: 4px 0 12px;
+  font-size: 16px;
+  color: #777;
+}
+
+/* 되돌아온 건이 든 폴더. 폴더 목록만 보고 있어도 알아채야 한다. */
+.batchAlert {
+  color: #c8434f;
+  font-weight: 700;
+}
+
+/*
+ * 발주 번호를 누르면 그 장의 엑셀이 다시 내려온다(담당자 화면). 꼬리표 모양은
+ * 그대로 두고 누를 수 있다는 것만 보이게 한다.
+ */
+.orderTagBtn {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid #91caff;
+  border-radius: 4px;
+  background: #e6f4ff;
+  color: #0958d9;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.orderTagBtn:hover {
+  background: #0958d9;
+  border-color: #0958d9;
+  color: white;
+}
+
+/* ── 재신청·주소 검색 ──────────────────────────────────────── */
+
+/* 같은 주문번호로 이미 들어간 신청들. 사유를 적기 전에 한눈에 훑는다. */
+.priorList {
+  margin: 0 0 14px;
+  padding: 0 0 0 18px;
+  font-size: 16px;
+  color: #444;
+}
+.priorList li {
+  margin-bottom: 6px;
+}
+/* 그때 보낸 주소. 이사했으면 지금과 다르다 — 한 단 작게 아래에 둔다. */
+.priorAddress {
+  display: block;
+  font-size: 14px;
+  color: #888;
+}
+
+/* 검색으로 고른 주소라는 표시. 손으로 친 게 아니라는 뜻이다. */
+.pickedTag {
+  margin-left: 8px;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+/* ── 관리자 확인: 주문번호로 묶어 보이기 ─────────────────────── */
+
+/* 묶음 하나. 테두리로 둘러 어디까지가 한 주문번호인지 보이게 한다. */
+.checkGroup {
+  border: 2px solid #ffe58f;
+}
+.checkGroup + .checkGroup {
+  border-top-width: 8px;
+  border-top-color: transparent;
+}
+
+/* 묶음 머리 — 주문번호·고객·건수. */
+.checkGroupHead td {
+  padding: 10px 14px;
+  background: #fffbe6;
+  text-align: left;
+  border-bottom: 1px solid #ffe58f;
+}
+.checkOrderNo {
+  font-size: 17px;
+  font-weight: 700;
+  color: #8c6200;
+}
+.checkCustomer {
+  margin-left: 12px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #333;
+}
+.checkCount {
+  margin-left: 12px;
+  font-size: 15px;
+  color: #ad6800;
+}
+
+/* 이미 나간 지난 신청. 읽는 줄이라 가라앉혀 둔다. */
+.checkPrior td {
+  background: #fafafa;
+  color: #777;
+}
+
+/* 이번에 판정할 줄. */
+.checkCurrent td {
+  background: white;
+  font-weight: 500;
+}
+
+/* 확인 목록의 상태 칸 — 배지·태그·사유를 세로로 세우고 사이를 띄운다. */
+.checkStatusCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+}
+.checkStatusTop {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* '이번 건' 꼬리표. 줄을 통째로 차지하지 않게 글자 너비만 쓴다. */
+.checkHereTag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: #333;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* 재신청 사유. 길면 접히되 칸을 밀어 넓히지는 않는다. */
+.checkReasonNote {
+  display: block;
+  max-width: 320px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: #c8434f;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+/*
+ * 확인 목록에서는 줄에 마우스를 올려도 색이 바뀌지 않는다.
+ *
+ * 여기서는 색이 곧 뜻이다 — 머리줄은 노랑, 지난 신청은 회색, 이번 건은 흰색.
+ * 손을 올렸다고 그 색이 회색으로 덮이면 어느 줄이 이번 건인지 흐려진다.
+ */
+.checkGroup tr:hover {
+  background: transparent;
+}
+.checkGroupHead:hover td {
+  background: #fffbe6;
+}
+.checkPrior:hover td {
+  background: #fafafa;
+}
+.checkCurrent:hover td {
+  background: #fff;
+}
+
+/* 송장이 덜 들어온 발주 장. 발주처에 다시 물어야 하는 자리라 눈에 띄어야 한다. */
+.shipWaiting {
+  color: #c8434f;
+  font-weight: 700;
+}
+.shipDone {
+  color: #2e7d32;
+  font-weight: 700;
+}
+
+/*
+ * 걸러진 숫자 옆에 전체를 함께 적는다.
+ *
+ * 검색해서 3장이 남았을 때 '총 3장'만 뜨면 장이 세 개뿐인 줄 안다 —
+ * 걸러진 것이지 없어진 게 아니라는 걸 그 자리에서 말해 준다.
+ */
+.searchNote {
+  margin-left: 6px;
+  color: #999;
+  font-size: 15px;
+  font-weight: 500;
 }

@@ -13,11 +13,71 @@ import { findGiftSource, groupOfDepartment } from '@/lib/giftLookup';
 import {
   GIFT_COLUMNS,
   GIFT_STATUSES,
+  GIFT_STATUS_LABEL,
   prefillFromRecord,
   readGiftFields,
+  settlementFor,
   toGiftColumns,
   validateGiftInput,
 } from '@/lib/gifts';
+import {
+  dateSpanOf,
+  ilikeTerms,
+  numberOf,
+  phoneVariants,
+  statusesMatching,
+} from '@/lib/listSearch';
+
+/**
+ * 검색이 훑는 칸 — 상세 창에 뜨는 글자는 전부 여기 있다.
+ *
+ * 발주리스트 열 열여덟 개가 다 상세에 뜨는 화면이라, 검색이 그중 넷만 본다면
+ * 나머지 열넷은 눈으로 찾으라는 말이 된다. 새 칸을 붙이면 여기에도 넣는다.
+ */
+const SEARCH_COLUMNS = [
+  'customer_name',
+  'phone1',
+  'phone2',
+  'zip',
+  'address',
+  'order_no',
+  'customer_no',
+  'gift_name',
+  'note',
+  'delivery_memo',
+  'courier',
+  'tracking_no',
+  'sender_name',
+  'sender_phone',
+  'product',
+  'counselor',
+  'settlement',
+  'requester_name',
+  'group_name',
+  'source_file_name',
+  'forwarded_by',
+  'shipped_by',
+  'read_by',
+  'checked_by',
+  'check_reason',
+  'ship_read_by',
+  'supplement_reason',
+  'supplement_by',
+  'withdraw_reason',
+  'withdrawn_by',
+] as const;
+
+/** 전화번호가 든 칸. 하이픈 없이 쳐도 찾히게 따로 본다. */
+const SEARCH_PHONE_COLUMNS = ['phone1', 'phone2', 'sender_phone'] as const;
+/** 날짜만 담는 칸. */
+const SEARCH_DAY_COLUMNS = ['order_date'] as const;
+/** 시각까지 담는 칸. */
+const SEARCH_TIME_COLUMNS = [
+  'created_at',
+  'forwarded_at',
+  'shipped_at',
+  'checked_at',
+] as const;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -46,8 +106,8 @@ async function departmentOf(userId: number): Promise<string | null> {
  * 누가 무엇을 보는가:
  *   설계사       자기가 넣은 것
  *   지사         자기 소속에서 넣은 것 전부
- *   사은품담당자  전달된 것부터(forwarded·shipped·supplement). 지사 안에서
- *                아직 오가는 신청(requested)은 남의 일이라 안 보인다
+ *   사은품담당자  발주 대기부터(forwarded·ordered·shipped·supplement·withdrawn).
+ *                관리자 확인 대기(pending_check)는 아직 담당자 일이 아니라 안 보인다
  *   관리자급     전부
  */
 export async function GET(request: NextRequest) {
@@ -56,7 +116,7 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!canViewGiftRequests(user.role) && !canManageGiftRequests(user.role)) {
+    if (!canViewGiftRequests(user.role) && !canManageGiftRequests(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -73,11 +133,21 @@ export async function GET(request: NextRequest) {
 
     let query = supabase.from('gift_requests').select(GIFT_COLUMNS, { count: 'exact' });
 
-    if (canViewAllGiftRequests(user.role)) {
+    /*
+     * 사은품 관리 화면이 부를 때는 전달된 것부터만 준다.
+     *
+     * 담당자에게는 원래 그렇게 주고 있었지만, 관리자는 두 화면을 다 보므로 역할만
+     * 보면 관리 화면에도 지사 안에서 아직 오가는 건(지사 전달 대기·관리자 확인
+     * 대기)이 섞여 들어온다. 그 건들은 지사가 [전송]을 눌러야 담당자 일이 된다.
+     */
+    const staffOnly =
+      (new URL(request.url).searchParams.get('scope') || '') === 'manage' ||
+      !canViewGiftRequests(user.role);
+
+    if (canViewAllGiftRequests(user)) {
       if (group) query = query.eq('group_name', group);
-      // 사은품담당자에게는 전달된 것부터다. 관리자급은 전부 본다.
-      if (!canViewGiftRequests(user.role)) {
-        query = query.in('status', ['forwarded', 'shipped', 'supplement']);
+      if (staffOnly) {
+        query = query.in('status', ['forwarded', 'ordered', 'shipped', 'supplement', 'withdrawn']);
       }
     } else if (isAgentRole(user.role)) {
       query = query.eq('requester_id', user.id);
@@ -93,16 +163,46 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     }
 
+    /*
+     * 검색.
+     *
+     * 상세에 뜨는 글자 칸은 전부 훑고, 사람이 실제로 치는 것도 알아듣는다 —
+     * 상태말('보완'), 날짜('2026-09-08'·'260908'), 하이픈 없는 전화번호,
+     * 발주 묶음 번호('#39'). 하나의 or()로 묶어 어디든 걸리면 나오게 한다.
+     */
     if (search) {
-      query = query.or(
-        [
-          `customer_name.ilike.%${search}%`,
-          `order_no.ilike.%${search}%`,
-          `gift_name.ilike.%${search}%`,
-          `requester_name.ilike.%${search}%`,
-          `tracking_no.ilike.%${search}%`,
-        ].join(',')
-      );
+      const terms = ilikeTerms(SEARCH_COLUMNS, search);
+
+      // '01012345678'로 쳐도 '010-1234-5678'로 저장된 줄이 나온다.
+      for (const shape of phoneVariants(search)) {
+        terms.push(...ilikeTerms(SEARCH_PHONE_COLUMNS, shape));
+      }
+
+      // '보완'이라고 쳐도 보완 요청 건이 나온다.
+      const statuses = statusesMatching(search, GIFT_STATUS_LABEL);
+      if (statuses.length > 0) {
+        terms.push(`status.in.(${statuses.join(',')})`);
+      }
+
+      // 상세와 목록이 발주 묶음을 '#39'로 부른다. 그대로 쳐도 찾히게 한다.
+      const asNumber = numberOf(search);
+      if (asNumber !== null) {
+        terms.push(`order_id.eq.${asNumber}`);
+        terms.push(`quantity.eq.${asNumber}`);
+      }
+
+      // 날짜로 치면 그날(또는 그달)에 걸린 건.
+      const span = dateSpanOf(search);
+      if (span) {
+        for (const column of SEARCH_DAY_COLUMNS) {
+          terms.push(`and(${column}.gte.${span.fromDay},${column}.lte.${span.toDay})`);
+        }
+        for (const column of SEARCH_TIME_COLUMNS) {
+          terms.push(`and(${column}.gte.${span.from},${column}.lte.${span.to})`);
+        }
+      }
+
+      query = query.or(terms.join(','));
     }
 
     // 동점이면 순서가 고정되지 않아 페이지를 넘길 때 행이 중복되거나 빠진다.
@@ -133,7 +233,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * 사은품 신청.
+ * 사은품 신청 — 한 건이든 여러 건이든 같은 길을 지난다.
  *
  * 주문번호로 배포 기록을 찾아 고객명·전화번호를 **서버가 다시 채운다.** 화면이
  * 미리 보여준 값을 그대로 믿지 않는다 — 요청은 직접 만들 수 있고, 잠근 칸이
@@ -141,7 +241,151 @@ export async function GET(request: NextRequest) {
  *
  * 남의 지사 고객은 못 넣는다. 배포 기록의 배정소속이 신청자의 소속과 다르면
  * 그 고객은 다른 지사가 받은 사람이다. 관리자급만 예외다.
+ *
+ * 붙여넣기로 온 건은 고객명을 함께 들고 온다. 기록의 이름과 다르면 넣지 않는다 —
+ * 고객번호 한 자리가 틀려 남의 기록에 붙는 것이 붙여넣기에서 가장 흔한 사고다.
  */
+const BULK_LIMIT = 200;
+
+type CreateOutcome =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; status: number; error: string; code?: 'duplicate' };
+
+async function createOne(
+  user: { id: number; name: string; username: string; role: string },
+  given: Record<string, unknown>,
+  opts: { department: string | null; expectedName?: string; bulk?: boolean }
+): Promise<CreateOutcome> {
+  const raw: Record<string, unknown> = given ?? {};
+  const invalid = validateGiftInput(raw);
+  if (invalid) return { ok: false, status: 400, error: invalid };
+
+  const orderNo = String(raw.orderNo ?? '').trim();
+  const source = await findGiftSource(supabase, orderNo);
+  /*
+   * 기록에 없는 번호는 여기서 끝이다. 우리가 배포하지 않은 고객에게 사은품이
+   * 나가면 누가 왜 보냈는지 되짚을 길이 없다. 번호를 잘못 적은 것이면 화면에서
+   * 고쳐 다시 조회한다.
+   */
+  if (!source) {
+    return {
+      ok: false,
+      status: 404,
+      error: '배포 기록에 없는 주문번호입니다. 우리가 배포한 고객만 신청할 수 있습니다.',
+    };
+  }
+
+  // 신청자의 소속. 관리자급은 소속이 '관리자'라 그 고객의 지사를 대신 적는다.
+  const customerGroup = await groupOfDepartment(supabase, source.assignedDept);
+  let groupName: string;
+  if (canViewAllGiftRequests(user)) {
+    groupName = customerGroup ?? '';
+    if (!groupName) return { ok: false, status: 400, error: '이 고객의 소속 지사를 알 수 없습니다.' };
+  } else {
+    if (!opts.department) return { ok: false, status: 403, error: '소속을 확인할 수 없습니다.' };
+    if (customerGroup !== opts.department) {
+      return {
+        ok: false,
+        status: 403,
+        error: `이 고객은 ${customerGroup ?? '다른'} 지사로 배정된 고객입니다. 우리 지사 고객만 신청할 수 있습니다.`,
+      };
+    }
+    groupName = opts.department;
+  }
+
+  const prefill = prefillFromRecord(
+    source.row,
+    { id: source.fileId, name: source.fileName },
+    { name: user.name, groupName }
+  );
+
+  // 붙여넣은 이름이 기록과 다르면 남의 기록이다. 공백 차이는 봐준다.
+  if (opts.expectedName !== undefined) {
+    const same = (a: string) => a.replace(/\s+/g, '');
+    if (same(opts.expectedName) !== same(prefill.locked.customerName)) {
+      return {
+        ok: false,
+        status: 409,
+        error: `고객번호 ${orderNo}의 기록은 '${prefill.locked.customerName}' 님입니다. 붙여넣은 이름('${opts.expectedName}')과 다릅니다.`,
+      };
+    }
+  }
+
+  /*
+   * 같은 주문번호로 이미 신청된 건이 있는가.
+   *
+   * 한 주문번호로 여러 상품을 가입하거나 사은품을 추가로 달라는 일이 있어
+   * 막지는 않는다. 대신 왜 또 보내는지를 적게 하고, 관리자가 확인한 뒤에야
+   * 담당자에게 간다. 철회한 건은 안 센다 — 그건 없던 일이다.
+   */
+  const { data: prior } = await supabase
+    .from('gift_requests')
+    .select('id')
+    .eq('order_no', orderNo)
+    .neq('status', 'withdrawn');
+  const duplicate = (prior ?? []).length > 0;
+  const checkReason = String(raw.checkReason ?? '').trim();
+  if (duplicate && !checkReason) {
+    return {
+      ok: false,
+      status: 409,
+      code: 'duplicate',
+      error: `이미 신청된 주문번호입니다(${prior!.length}건). 왜 다시 보내는지 사유를 적으면 관리자 확인 후 진행됩니다.`,
+    };
+  }
+  if (duplicate && opts.bulk) {
+    return {
+      ok: false,
+      status: 409,
+      code: 'duplicate',
+      error: '이미 신청된 주문번호입니다. 붙여넣기로는 다시 넣을 수 없습니다 — [사은품 신청]에서 사유를 적어 등록해 주세요.',
+    };
+  }
+
+  const fields = readGiftFields(raw);
+  /*
+   * 정산구분을 안 적어 왔으면 보내는 쪽으로 정한다 — 파라인슈는 'DB포함',
+   * 나머지는 '정산해당'. 적어 온 값은 그대로 둔다(예외가 있을 수 있다).
+   */
+  if (!fields.settlement) {
+    fields.settlement = settlementFor(fields.senderName || groupName);
+  }
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('gift_requests')
+    .insert({
+      order_no: orderNo,
+      source_file_id: source.fileId,
+      source_file_name: source.fileName,
+      // 잠긴 칸은 기록에서. 화면이 보낸 값은 쓰지 않는다.
+      customer_name: prefill.locked.customerName,
+      phone1: prefill.locked.phone1 || null,
+      phone2: prefill.locked.phone2 || null,
+      ...toGiftColumns(fields),
+      requester_id: user.id,
+      requester_name: user.name,
+      group_name: groupName,
+      /*
+       * 등록이 곧 전달이다. 들어오는 순간 담당자의 발주 대기가 된다. 다만 같은
+       * 주문번호의 재신청은 관리자 확인 대기에 멈춰 선다 — 사유와 함께.
+       */
+      ...(duplicate
+        ? { status: 'pending_check', check_reason: checkReason }
+        : { status: 'forwarded', forwarded_by: user.username, forwarded_at: now }),
+      created_at: now,
+      updated_at: now,
+    })
+    .select(GIFT_COLUMNS)
+    .single();
+
+  if (error) {
+    console.error('Gift request insert error:', error);
+    return { ok: false, status: 500, error: '신청을 저장하지 못했습니다.' };
+  }
+  return { ok: true, data: data as unknown as Record<string, unknown> };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = getUserFromRequest(request);
@@ -156,76 +400,57 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const invalid = validateGiftInput(body ?? {});
-    if (invalid) {
-      return NextResponse.json({ error: invalid }, { status: 400 });
-    }
+    const department = canViewAllGiftRequests(user) ? null : await departmentOf(user.id);
 
-    const orderNo = String(body.orderNo ?? '').trim();
-    const source = await findGiftSource(supabase, orderNo);
-    if (!source) {
+    /* ── 여러 건 (붙여넣기) ───────────────────────────────────── */
+    if (Array.isArray(body?.rows)) {
+      if (body.rows.length === 0) {
+        return NextResponse.json({ error: '등록할 내용이 없습니다.' }, { status: 400 });
+      }
+      if (body.rows.length > BULK_LIMIT) {
+        return NextResponse.json(
+          { error: `한 번에 ${BULK_LIMIT}건까지 등록할 수 있습니다.` },
+          { status: 400 }
+        );
+      }
+      /*
+       * 한 줄이 잘못돼도 나머지는 넣는다 — 스무 건 중 하나 때문에 열아홉 건을
+       * 다시 붙여넣게 하면, 사람은 그 하나를 찾느라 전부를 다시 본다.
+       * 같은 붙여넣기 안에서 겹치는 고객번호는 뒤의 것을 뺀다.
+       */
+      const seen = new Set<string>();
+      const results: Array<{ at: number; ok: boolean; error?: string; data?: unknown }> = [];
+      for (const [at, raw] of (body.rows as Record<string, unknown>[]).entries()) {
+        const orderNo = String(raw?.orderNo ?? '').trim();
+        if (orderNo && seen.has(orderNo)) {
+          results.push({ at, ok: false, error: '같은 고객번호가 앞에 이미 있습니다.' });
+          continue;
+        }
+        seen.add(orderNo);
+        const expectedName =
+          typeof raw?.pastedName === 'string' && raw.pastedName.trim() ? raw.pastedName.trim() : undefined;
+        const outcome = await createOne(user, raw ?? {}, { department, expectedName, bulk: true });
+        results.push(
+          outcome.ok ? { at, ok: true, data: outcome.data } : { at, ok: false, error: outcome.error }
+        );
+      }
       return NextResponse.json(
-        { error: '배포 기록에 없는 주문번호입니다. 우리가 배포한 고객만 신청할 수 있습니다.' },
-        { status: 404 }
+        {
+          results,
+          created: results.filter((r) => r.ok).length,
+          failed: results.filter((r) => !r.ok).length,
+        },
+        { status: 201 }
       );
     }
 
-    // 신청자의 소속. 관리자급은 소속이 '관리자'라 그 고객의 지사를 대신 적는다.
-    const customerGroup = await groupOfDepartment(supabase, source.assignedDept);
-    let groupName: string;
-    if (canViewAllGiftRequests(user.role)) {
-      groupName = customerGroup ?? '';
-      if (!groupName) {
-        return NextResponse.json({ error: '이 고객의 소속 지사를 알 수 없습니다.' }, { status: 400 });
-      }
-    } else {
-      const department = await departmentOf(user.id);
-      if (!department) {
-        return NextResponse.json({ error: '소속을 확인할 수 없습니다.' }, { status: 403 });
-      }
-      if (customerGroup !== department) {
-        return NextResponse.json(
-          { error: `이 고객은 ${customerGroup ?? '다른'} 지사로 배정된 고객입니다. 우리 지사 고객만 신청할 수 있습니다.` },
-          { status: 403 }
-        );
-      }
-      groupName = department;
+    /* ── 한 건 ─────────────────────────────────────────────── */
+    const outcome = await createOne(user, body ?? {}, { department });
+    if (!outcome.ok) {
+      // code는 화면이 갈래를 타는 열쇠다 — 'duplicate'면 사유 칸을 연다.
+      return NextResponse.json({ error: outcome.error, code: outcome.code }, { status: outcome.status });
     }
-
-    const prefill = prefillFromRecord(
-      source.row,
-      { id: source.fileId, name: source.fileName },
-      { name: user.name, groupName }
-    );
-    const fields = readGiftFields(body);
-    const now = new Date().toISOString();
-
-    const { data, error } = await supabase
-      .from('gift_requests')
-      .insert({
-        order_no: orderNo,
-        source_file_id: source.fileId,
-        source_file_name: source.fileName,
-        // 잠긴 칸은 기록에서. 화면이 보낸 값은 쓰지 않는다.
-        customer_name: prefill.locked.customerName,
-        phone1: prefill.locked.phone1 || null,
-        phone2: prefill.locked.phone2 || null,
-        ...toGiftColumns(fields),
-        requester_id: user.id,
-        requester_name: user.name,
-        group_name: groupName,
-        status: 'requested',
-        created_at: now,
-        updated_at: now,
-      })
-      .select(GIFT_COLUMNS)
-      .single();
-
-    if (error) {
-      console.error('Gift request insert error:', error);
-      return NextResponse.json({ error: '신청을 저장하지 못했습니다.' }, { status: 500 });
-    }
-    return NextResponse.json({ data }, { status: 201 });
+    return NextResponse.json({ data: outcome.data }, { status: 201 });
   } catch (error) {
     console.error('Gift request API error:', error);
     return NextResponse.json({ error: '신청을 저장하지 못했습니다.' }, { status: 500 });

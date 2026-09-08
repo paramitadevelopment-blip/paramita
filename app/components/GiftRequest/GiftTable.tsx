@@ -1,11 +1,13 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { Fragment, memo } from 'react';
 import { MdArrowDropUp, MdArrowDropDown } from 'react-icons/md';
 import {
   GIFT_STATUS_LABEL,
   canDeleteGiftRequest,
   canEditGiftRequest,
+  canWithdrawGiftRequest,
+  needsShipCheck,
   type GiftRequestRow,
 } from '@/lib/gifts';
 import styles from './GiftRequest.module.css';
@@ -22,6 +24,15 @@ import styles from './GiftRequest.module.css';
 
 const dateText = (value: string | null) =>
   value ? new Date(value).toLocaleDateString('ko-KR').slice(0, -1) : '-';
+
+const dateTimeText = (value: string | null) => {
+  if (!value) return '-';
+  const at = new Date(value);
+  return `${at.toLocaleDateString('ko-KR').slice(0, -1)} ${at.toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+};
 
 const SortableHeader = memo(function SortableHeader({
   label,
@@ -50,19 +61,35 @@ const SortableHeader = memo(function SortableHeader({
 
 /** 이 표를 보는 사람이 할 수 있는 일. 화면이 정하고 표는 그대로 따른다. */
 export interface GiftTableActions {
-  /** 골라서 전달하는 자리. 지사만. 없으면 체크 칸이 안 나온다. */
-  select?: { picked: Set<number>; onToggle: (id: number) => void; onToggleAll: (ids: number[]) => void };
+  /**
+   * 골라서 한 번에 넘기는 자리. 지사는 전달할 것을, 담당자는 발주할 것을 고른다.
+   * 어느 상태를 고를 수 있는지는 화면이 정한다(selectable).
+   */
+  select?: {
+    picked: Set<number>;
+    selectable: (row: GiftRequestRow) => boolean;
+    onToggle: (id: number) => void;
+    onToggleAll: (ids: number[]) => void;
+  };
   onOpen: (row: GiftRequestRow) => void;
   onEdit?: (row: GiftRequestRow) => void;
   onDelete?: (row: GiftRequestRow) => void;
-  /** 사은품담당자: 발주·보완. */
+  onWithdraw?: (row: GiftRequestRow) => void;
+  /** 사은품담당자: 확인·배송 정보·보완. */
+  onRead?: (row: GiftRequestRow) => void;
   onShip?: (row: GiftRequestRow) => void;
   onSupplement?: (row: GiftRequestRow) => void;
+  /** 관리자: 기록 없이 들어온 건을 확인한다. */
+  onCheck?: (row: GiftRequestRow) => void;
+  /** 지사: 채워진 배송 정보를 확인한다. */
+  onConfirmShip?: (row: GiftRequestRow) => void;
+  /** 담당자: 그 건이 실린 발주리스트 엑셀을 다시 받는다. */
+  onDownloadOrder?: (orderId: number) => void;
 }
 
 interface GiftTableProps {
   rows: GiftRequestRow[];
-  /** 소속 열을 보이는가. 지사·설계사는 자기 소속뿐이라 필요 없다. */
+  /** 소속 열을 보이는가. 지사는 자기 소속뿐이라 필요 없다. */
   showGroup: boolean;
   actions: GiftTableActions;
   sortBy: string;
@@ -80,9 +107,8 @@ const GiftTable = memo(function GiftTableComponent({
 }: GiftTableProps) {
   const sortProps = { sortBy, sortOrder, onSort };
   const select = actions.select;
-  // 전달할 수 있는 것만 골라진다. 이미 간 것에 체크 칸을 내면 눌러도 안 간다.
-  const selectable = rows.filter((r) => r.status === 'requested').map((r) => r.id);
-  const allPicked = selectable.length > 0 && selectable.every((id) => select?.picked.has(id));
+  const selectableIds = select ? rows.filter(select.selectable).map((r) => r.id) : [];
+  const allPicked = selectableIds.length > 0 && selectableIds.every((id) => select?.picked.has(id));
 
   return (
     <div className={styles.tableContainer}>
@@ -94,9 +120,9 @@ const GiftTable = memo(function GiftTableComponent({
                 <input
                   type="checkbox"
                   checked={allPicked}
-                  onChange={() => select.onToggleAll(selectable)}
+                  onChange={() => select.onToggleAll(selectableIds)}
                   aria-label="전체 선택"
-                  disabled={selectable.length === 0}
+                  disabled={selectableIds.length === 0}
                 />
               </th>
             )}
@@ -114,75 +140,179 @@ const GiftTable = memo(function GiftTableComponent({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              {select && (
-                <td className={styles.checkCell}>
-                  {row.status === 'requested' && (
-                    <input
-                      type="checkbox"
-                      checked={select.picked.has(row.id)}
-                      onChange={() => select.onToggle(row.id)}
-                      aria-label={`${row.customer_name} 선택`}
-                    />
+          {rows.map((row) => {
+            return (
+              <Fragment key={row.id}>
+                <tr>
+                  {select && (
+                    <td className={styles.checkCell}>
+                      {select.selectable(row) && (
+                        <input
+                          type="checkbox"
+                          checked={select.picked.has(row.id)}
+                          onChange={() => select.onToggle(row.id)}
+                          aria-label={`${row.customer_name} 선택`}
+                        />
+                      )}
+                    </td>
                   )}
-                </td>
-              )}
-              <td>{dateText(row.created_at)}</td>
-              <td>{row.customer_name}</td>
-              <td>{row.phone1 || '-'}</td>
-              <td>{row.gift_name}</td>
-              <td>{row.quantity}</td>
-              <td>{row.order_no}</td>
-              {showGroup && <td>{row.group_name}</td>}
-              <td>{row.requester_name}</td>
-              <td>{dateText(row.order_date)}</td>
-              <td>
-                <span className={`${styles.statusBadge} ${styles[`status_${row.status}`]}`}>
-                  {GIFT_STATUS_LABEL[row.status]}
-                </span>
-                {/* 보완 사유는 목록에서 바로 보여야 한다. 상세를 열어야 알면 늦다. */}
-                {row.status === 'supplement' && row.supplement_reason && (
-                  <div className={styles.supplementNote} title={row.supplement_reason}>
-                    {row.supplement_reason}
-                  </div>
-                )}
-              </td>
-              <td className={styles.actionCell}>
-                <button type="button" className={styles.ghostBtn} onClick={() => actions.onOpen(row)}>
-                  상세
-                </button>
-                {actions.onEdit && canEditGiftRequest(row) && (
-                  <button type="button" className={styles.ghostBtn} onClick={() => actions.onEdit!(row)}>
-                    {row.status === 'supplement' ? '보완' : '수정'}
-                  </button>
-                )}
-                {actions.onDelete && canDeleteGiftRequest(row) && (
-                  <button
-                    type="button"
-                    className={styles.ghostBtn}
-                    onClick={() => actions.onDelete!(row)}
-                  >
-                    삭제
-                  </button>
-                )}
-                {actions.onShip && (row.status === 'forwarded' || row.status === 'shipped') && (
-                  <button type="button" className={styles.actionBtn} onClick={() => actions.onShip!(row)}>
-                    {row.status === 'shipped' ? '배송 수정' : '발주'}
-                  </button>
-                )}
-                {actions.onSupplement && row.status === 'forwarded' && (
-                  <button
-                    type="button"
-                    className={styles.ghostBtn}
-                    onClick={() => actions.onSupplement!(row)}
-                  >
-                    보완 요청
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
+                  <td>{dateText(row.created_at)}</td>
+                  <td>{row.customer_name}</td>
+                  <td>{row.phone1 || '-'}</td>
+                  <td>{row.gift_name}</td>
+                  <td>{row.quantity}</td>
+                  <td>{row.order_no}</td>
+                  {showGroup && <td>{row.group_name}</td>}
+                  <td>{row.requester_name}</td>
+                  <td>
+                    {dateText(row.order_date)}
+                    {/*
+                      어느 발주리스트에 실렸나. 담당자에게는 누르면 그 장의 엑셀이 다시
+                      내려온다 — 메일을 못 찾거나 거래처가 다시 달라고 할 때.
+                    */}
+                    {row.order_id &&
+                      (actions.onDownloadOrder ? (
+                        <button
+                          type="button"
+                          className={styles.orderTagBtn}
+                          onClick={() => actions.onDownloadOrder!(row.order_id!)}
+                          title="이 발주리스트 엑셀 다시 받기"
+                        >
+                          #{row.order_id}
+                        </button>
+                      ) : (
+                        <span className={styles.orderTag}>#{row.order_id}</span>
+                      ))}
+                  </td>
+                  <td>
+                    <span className={`${styles.statusBadge} ${styles[`status_${row.status}`]}`}>
+                      {GIFT_STATUS_LABEL[row.status]}
+                    </span>
+                    {/* 보완 사유는 목록에서 바로 보여야 한다. 상세를 열어야 알면 늦다. */}
+                    {row.status === 'supplement' && row.supplement_reason && (
+                      <div className={styles.supplementNote} title={row.supplement_reason}>
+                        {row.supplement_reason}
+                      </div>
+                    )}
+                    {/* 송장이 채워졌으면 그 자리에서 보인다 — 지사가 "업데이트됐다"를 여기서 안다. */}
+                    {row.status === 'shipped' && (
+                      <div className={styles.shipNote}>
+                        {[row.courier, row.tracking_no].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                    {/* 지사가 봤는가. 안 봤으면 그 줄이 아직 할 일이라는 뜻이다. */}
+                    {row.status === 'shipped' && !row.ship_read_at && (
+                      <div className={styles.unreadNote}>배송 정보 확인 전</div>
+                    )}
+                    {/* 담당자가 아직 안 본 전달 건. 지사는 이걸 보고 "아직 고칠 수 있다"를 안다. */}
+                    {row.status === 'forwarded' && !row.read_at && (
+                      <div className={styles.unreadNote}>담당자 확인 전</div>
+                    )}
+                    {/* 재신청 사유. 확인 대기 줄에서 바로 읽혀야 한다. */}
+                    {row.status === 'pending_check' && row.check_reason && (
+                      <div className={styles.supplementNote} title={row.check_reason}>
+                        재신청: {row.check_reason}
+                      </div>
+                    )}
+                    {/* 확인을 받고 지나온 건. 어느 관리자가 통과시켰는지가 줄에 남는다. */}
+                    {row.checked_at && row.status !== 'pending_check' && (
+                      <div className={styles.checkedNote}>관리자 확인 {row.checked_by}</div>
+                    )}
+                  </td>
+                  <td className={styles.actionCell}>
+                    <button type="button" className={styles.ghostBtn} onClick={() => actions.onOpen(row)}>
+                      상세
+                    </button>
+                    {actions.onEdit && canEditGiftRequest(row) && (
+                      <button
+                        type="button"
+                        className={styles.ghostBtn}
+                        onClick={() => actions.onEdit!(row)}
+                        title={
+                          row.status === 'forwarded'
+                            ? '담당자가 아직 확인하지 않아 고칠 수 있습니다'
+                            : undefined
+                        }
+                      >
+                        {row.status === 'supplement' ? '보완' : '수정'}
+                      </button>
+                    )}
+                    {actions.onWithdraw && canWithdrawGiftRequest(row) && (
+                      <button
+                        type="button"
+                        className={styles.ghostBtn}
+                        onClick={() => actions.onWithdraw!(row)}
+                      >
+                        철회
+                      </button>
+                    )}
+                    {actions.onDelete && canDeleteGiftRequest(row) && (
+                      <button
+                        type="button"
+                        className={styles.ghostBtn}
+                        onClick={() => actions.onDelete!(row)}
+                      >
+                        삭제
+                      </button>
+                    )}
+                    {actions.onConfirmShip && needsShipCheck(row) && (
+                      <button
+                        type="button"
+                        className={styles.unreadBtn}
+                        onClick={() => actions.onConfirmShip!(row)}
+                        title="채워진 택배사·운송장번호를 확인합니다"
+                      >
+                        배송 정보 확인
+                      </button>
+                    )}
+                    {actions.onCheck && row.status === 'pending_check' && (
+                      <button
+                        type="button"
+                        className={styles.unreadBtn}
+                        onClick={() => actions.onCheck!(row)}
+                        title="같은 주문번호로 들어온 신청을 함께 보고 확인합니다"
+                      >
+                        확인
+                      </button>
+                    )}
+                    {actions.onSupplement && row.status === 'pending_check' && (
+                      <button
+                        type="button"
+                        className={styles.ghostBtn}
+                        onClick={() => actions.onSupplement!(row)}
+                      >
+                        보완 요청
+                      </button>
+                    )}
+                    {actions.onRead && row.status === 'forwarded' && !row.read_at && (
+                      <button
+                        type="button"
+                        className={styles.unreadBtn}
+                        onClick={() => actions.onRead!(row)}
+                        title="확인하면 지사가 더 이상 고칠 수 없습니다"
+                      >
+                        확인
+                      </button>
+                    )}
+                    {actions.onShip && (row.status === 'ordered' || row.status === 'shipped') && (
+                      <button type="button" className={styles.actionBtn} onClick={() => actions.onShip!(row)}>
+                        {row.status === 'shipped' ? '배송 정보 수정' : '배송 정보'}
+                      </button>
+                    )}
+                    {actions.onSupplement && (row.status === 'forwarded' || row.status === 'ordered') && (
+                      <button
+                        type="button"
+                        className={styles.ghostBtn}
+                        onClick={() => actions.onSupplement!(row)}
+                      >
+                        보완 요청
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

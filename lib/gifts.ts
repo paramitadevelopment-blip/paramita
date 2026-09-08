@@ -1,8 +1,9 @@
 /**
  * 사은품 신청 — 화면과 서버가 함께 쓰는 정의.
  *
- * 설계사가 신청하고, 지사가 골라 사은품담당자에게 전달하고, 사은품담당자가
- * 발주해 배송 정보를 적는다. 세 사람이 한 건을 차례로 넘긴다.
+ * 지사가 건을 등록하면 그대로 사은품담당자에게 뜬다. 담당자는 건을 골라
+ * 발주리스트를 만들고, 송장이 나오면 배송 정보를 적는다. 내용이 이상하면
+ * 그 건만 되돌린다. 지사 쪽에서 모아 두는 단계는 없다 — 등록이 곧 전달이다.
  *
  * 신청은 주문번호 하나로 시작한다. 그 번호로 우리가 배포한 기록을 찾아 고객
  * 정보를 끌어오고, 설계사는 나머지 칸만 채운다. **고객명과 전화번호는 기록에서
@@ -20,16 +21,42 @@ export const GIFT_COLUMNS =
   'requester_id, requester_name, group_name, ' +
   'status, forwarded_by, forwarded_at, shipped_by, shipped_at, ' +
   'supplement_reason, supplement_by, supplement_at, ' +
+  'withdrawn_by, withdrawn_at, withdraw_reason, ' +
+  'order_id, read_at, read_by, checked_by, checked_at, check_reason, ' +
+  'ship_read_at, ship_read_by, ' +
   'created_at, updated_at';
 
-export const GIFT_STATUSES = ['requested', 'forwarded', 'shipped', 'supplement'] as const;
+/*
+ * 한 건이 거치는 자리.
+ *   pending_check 같은 주문번호로 다시 신청함. 사유를 달고 관리자 확인 대기
+ *   forwarded   지사가 등록함. 곧바로 담당자의 발주 대기다
+ *   ordered     담당자가 발주리스트에 담아 거래처에 보냄. 송장은 아직
+ *   shipped     택배사·운송장번호가 채워짐
+ *   supplement  담당자가 되돌림. 지사가 고쳐 다시 올린다
+ *   withdrawn   지사가 닫음
+ *
+ * 순서가 곧 화면 탭 순서다. 'requested'(지사 전달 대기)는 없다 — 지사가 모아
+ * 두었다가 보내는 단계를 없앴다. 등록하면 바로 담당자에게 간다.
+ */
+export const GIFT_STATUSES = [
+  'pending_check',
+  'forwarded',
+  'ordered',
+  'shipped',
+  'supplement',
+  'withdrawn',
+] as const;
 export type GiftStatus = (typeof GIFT_STATUSES)[number];
 
 export const GIFT_STATUS_LABEL: Record<GiftStatus, string> = {
-  requested: '지사 전달 대기',
+  // 같은 주문번호의 두 번째 신청. 관리자가 사유를 보고 "또 보내도 되는가"를 본다.
+  pending_check: '관리자 확인 대기',
   forwarded: '발주 대기',
-  shipped: '발주 완료',
+  ordered: '발주 보냄',
+  shipped: '배송 정보 입력됨',
   supplement: '보완 요청',
+  // 신청한 쪽이 "이 신청은 진행하지 않는다"로 닫은 것. 기록은 남는다.
+  withdrawn: '철회',
 };
 
 export interface GiftRequestRow {
@@ -69,6 +96,22 @@ export interface GiftRequestRow {
   supplement_reason: string | null;
   supplement_by: string | null;
   supplement_at: string | null;
+  withdrawn_by: string | null;
+  withdrawn_at: string | null;
+  withdraw_reason: string | null;
+  /** 어느 발주 묶음에 실렸나. 보완으로 빠지면 비워진다. */
+  order_id: number | null;
+  /** 담당자가 봤다. 이 뒤로 지사는 못 고친다. */
+  read_at: string | null;
+  read_by: string | null;
+  /** 같은 주문번호 재신청을 관리자가 확인했다. 확인 뒤 보통의 신청이 된다. */
+  checked_by: string | null;
+  checked_at: string | null;
+  /** 왜 다시 보내는지. 재신청 건에만 있다. */
+  check_reason: string | null;
+  /** 채워진 배송 정보를 지사가 확인했다. 담당자가 고치면 다시 비워진다. */
+  ship_read_at: string | null;
+  ship_read_by: string | null;
 
   created_at: string;
   updated_at: string;
@@ -96,16 +139,42 @@ export interface GiftEditableFields {
   settlement: string;
 }
 
-/** 새로 넣을 때 보내는 것. 주문번호 + 고칠 수 있는 칸. 잠긴 칸은 서버가 기록에서 다시 채운다. */
+/**
+ * 새로 넣을 때 보내는 것. 주문번호 + 고칠 수 있는 칸.
+ *
+ * 고객명·전화번호는 없다 — 서버가 배포 기록에서 다시 채운다. 같은 주문번호로
+ * 이미 신청된 건이 있으면 checkReason(왜 또 보내는지)을 함께 보내야 하고, 그
+ * 건은 관리자 확인을 거친다.
+ */
 export interface GiftRequestInput extends GiftEditableFields {
   orderNo: string;
+  checkReason?: string;
 }
 
-/** 사은품담당자가 발주하며 적는 것. */
+/** 같은 주문번호로 이미 들어가 있는 신청. 재신청 창에서 "전에 무엇을 보냈나"를 보여준다. */
+export interface PriorGiftRequest {
+  id: number;
+  gift_name: string;
+  quantity: number;
+  status: GiftStatus;
+  created_at: string;
+  requester_name: string;
+  address: string | null;
+}
+
+/**
+ * 사은품담당자가 송장이 나온 뒤 적는 것.
+ *
+ * 택배사·운송장번호는 거래처에 보낸 뒤에야 나오는 값이라 따로 받는다.
+ * 발주일은 발주리스트를 만들 때 찍히지만, 거래처가 실제로 내보낸 날이 다르면
+ * 여기서 고친다. 배송메세지도 이때 붙는 일이 있다("부재 시 경비실") —
+ * 신청 때 안 적었어도 송장을 넣으며 함께 적을 수 있게 둔다.
+ */
 export interface GiftShipInput {
-  orderDate: string;
   courier: string;
   trackingNo: string;
+  orderDate?: string;
+  deliveryMemo?: string;
 }
 
 /**
@@ -126,11 +195,37 @@ export interface GiftPrefill {
   fields: GiftEditableFields;
   /** 그 고객이 배정된 소속(departments.name). 남의 지사 고객인지 여기서 가른다. */
   assignedDept: string;
+  /** 같은 주문번호로 이미 들어간 신청. 있으면 재신청이라 사유가 필요하다. */
+  existing?: PriorGiftRequest[];
   sourceFileId: string | null;
   sourceFileName: string | null;
 }
 
 const text = (v: unknown) => String(v ?? '').trim();
+
+/** '한울부원' → '한울부원지사'. 이미 '지사'로 끝나면 그대로. 거래처 파일의 표기다. */
+export function withBranchSuffix(groupName: string): string {
+  const name = text(groupName);
+  if (!name) return '';
+  return name.endsWith('지사') ? name : `${name}지사`;
+}
+
+/**
+ * 정산구분 — 보내시는분이 누구냐로 갈린다.
+ *
+ * 파라인슈가 보내는 건은 DB를 우리가 준 건이라 'DB포함'으로 나가고, 나머지
+ * 지사는 '정산해당'이다. 거래처가 이 칸을 보고 정산을 가르므로 보내는 쪽이
+ * 바뀌면 이 값도 따라 바뀌어야 한다.
+ *
+ * 기본값을 정하는 데 쓴다 — 화면에서 고칠 수 있는 칸이다. 예외가 있으면 사람이
+ * 고쳐 적는다.
+ */
+export const SETTLEMENT_DEFAULT = '정산해당';
+export const SETTLEMENT_DB_INCLUDED = 'DB포함';
+
+export function settlementFor(senderName: string): string {
+  return text(senderName).includes('파라인슈') ? SETTLEMENT_DB_INCLUDED : SETTLEMENT_DEFAULT;
+}
 
 export function giftNameFromProduct(product: string): string {
   const matches = product.match(/\(([^()]*)\)/g);
@@ -158,14 +253,22 @@ export function prefillFromRecord(
       giftName: giftNameFromProduct(product),
       quantity: 1,
       note: '',
-      // 보내는 사람은 지사다. 발주리스트에 '한울부원지사'처럼 적혀 온다.
-      senderName: requester.groupName,
+      // 보내는 사람은 지사다. 발주리스트에 '한울부원지사'처럼 적혀 온다 — 접미를 맞춘다.
+      senderName: withBranchSuffix(requester.groupName),
       senderPhone: '',
       product,
       // 신규 양식의 고객번호는 표준 양식에서 주문번호 자리에 들어가 있다.
       customerNo: text(row['주문번호']),
-      counselor: requester.name,
-      settlement: '정산해당',
+      /*
+       * 상담원은 비워 둔다.
+       *
+       * 지사가 소속 건을 모아 넣으므로, 신청자 이름을 적으면 발주리스트의
+       * '상담원'이 전부 지사 계정 이름이 된다. 실제로 상담한 설계사 이름은
+       * 지사가 알고 있으니 그 자리에서 적는다.
+       */
+      counselor: '',
+      // 보내는 쪽에 따라 갈린다. 파라인슈는 'DB포함', 나머지는 '정산해당'.
+      settlement: settlementFor(withBranchSuffix(requester.groupName)),
     },
     assignedDept: text(row['배정소속']),
     sourceFileId: file.id,
@@ -192,6 +295,9 @@ export function validateGiftInput(raw: Record<string, unknown>): string | null {
   for (const [key, label] of need) {
     if (!text(raw[key])) return `${label}을(를) 입력해 주세요.`;
   }
+
+  if (text(raw.checkReason).length > 500) return '재신청 사유가 너무 깁니다. (500자까지)';
+
   const quantity = Number(raw.quantity);
   if (!Number.isInteger(quantity) || quantity < 1) return '수량은 1 이상의 정수여야 합니다.';
   if (quantity > 99) return '수량이 너무 많습니다. 확인해 주세요.';
@@ -252,27 +358,79 @@ export function toGiftColumns(fields: GiftEditableFields): Record<string, unknow
   };
 }
 
-/**
- * 신청한 사람이 아직 고치거나 지울 수 있는가.
- *
- * 지사가 전달하기 전(requested)이거나, 보완을 요청받아 돌아온 것(supplement)만.
- * 전달된 뒤에 내용이 바뀌면 지사가 본 것과 사은품담당자가 받은 것이 달라진다.
- * 발주된 뒤에는 이미 나간 물건이다.
- */
-export function canEditGiftRequest(row: { status: GiftStatus }): boolean {
-  return row.status === 'requested' || row.status === 'supplement';
+/** 잠금을 판단하는 데 필요한 값. 화면·서버가 같은 것을 본다. */
+export interface GiftLockInput {
+  status: GiftStatus;
+  read_at?: string | null;
 }
 
-export function canDeleteGiftRequest(row: { status: GiftStatus }): boolean {
-  return row.status === 'requested';
+/**
+ * 신청한 쪽이 아직 고칠 수 있는가.
+ *
+ * 민원과 같은 규칙이다 — **윗선이 아직 아무 행위도 안 했으면** 고칠 수 있다.
+ *   pending_check 재신청 확인 대기. 아직 아무도 안 봤다. 여기서 고쳐도 된다
+ *   supplement  보완을 요청받아 돌아온 것. 고치라고 돌려보낸 것이다
+ *   forwarded   등록은 됐지만 담당자가 아직 안 봤으면(read_at 없음) 된다.
+ *               담당자가 확인·발주·보완 중 무엇이든 하는 순간 read_at이 찍혀 닫힌다
+ * 발주된 뒤(ordered·shipped)는 이미 나간 물건이라 안 된다.
+ */
+export function canEditGiftRequest(row: GiftLockInput): boolean {
+  if (row.status === 'pending_check' || row.status === 'supplement') return true;
+  return row.status === 'forwarded' && !row.read_at;
+}
+
+/**
+ * 지울 수 있는가. 담당자가 아직 손대지 않은 것만이다.
+ *
+ * 고칠 수 있는 것과 같은 선이되 보완 요청은 뺀다 — 되돌아온 건을 지우면
+ * 보완 이력까지 사라진다. 그건 고쳐 올리거나 철회한다.
+ */
+export function canDeleteGiftRequest(row: GiftLockInput): boolean {
+  if (row.status === 'pending_check') return true;
+  return row.status === 'forwarded' && !row.read_at;
+}
+
+/**
+ * 관리자 확인을 기다리는 건인가.
+ *
+ * 같은 주문번호로 두 번째 보내는 건이라 "또 보내도 되는가"를 사람이 봐야 한다.
+ * 확인 전에는 담당자에게 가지 않는다 — 관리 화면은 forwarded부터 본다.
+ */
+export function needsAdminCheck(row: { status: GiftStatus }): boolean {
+  return row.status === 'pending_check';
+}
+
+/**
+ * 철회할 수 있는가. 보완 요청을 받은 건만이다.
+ *
+ * 진행할 필요가 없어진 건은 고쳐 올릴 것도 없고 지울 수도 없어 나갈 길이
+ * 없었다. 철회는 지우지 않고 닫는 것이다 — 누가 왜 되돌렸고 왜 안 하기로
+ * 했는지가 그대로 남는다.
+ */
+export function canWithdrawGiftRequest(row: { status: GiftStatus }): boolean {
+  return row.status === 'supplement';
 }
 
 export function validateShipInput(raw: Record<string, unknown>): string | null {
-  if (!text(raw.orderDate)) return '발주일을 입력해 주세요.';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text(raw.orderDate))) return '발주일 형식이 잘못됐습니다.';
   if (!text(raw.courier)) return '택배사를 입력해 주세요.';
   if (!text(raw.trackingNo)) return '운송장번호를 입력해 주세요.';
   if (text(raw.courier).length > 50) return '택배사 이름이 너무 깁니다.';
   if (text(raw.trackingNo).length > 50) return '운송장번호가 너무 깁니다.';
+  if (text(raw.deliveryMemo).length > 300) return '배송메세지가 너무 깁니다. (300자까지)';
+  // 발주일은 비워 둘 수 있다(묶을 때 찍힌 날을 그대로 둔다). 적었다면 날짜여야 한다.
+  const orderDate = text(raw.orderDate);
+  if (orderDate && !/^\d{4}-\d{2}-\d{2}$/.test(orderDate)) {
+    return '발주일을 다시 확인해 주세요.';
+  }
   return null;
+}
+
+/**
+ * 지사가 아직 안 본 배송 정보인가.
+ *
+ * 담당자가 송장을 채우면 그것을 기다리던 쪽은 신청한 지사다. 확인을 누르기
+ * 전까지 지사의 할 일로 센다 — 민원의 '미확인'과 같은 뜻이다.
+ */
+export function needsShipCheck(row: { status: GiftStatus; ship_read_at?: string | null }): boolean {
+  return row.status === 'shipped' && !row.ship_read_at;
 }
