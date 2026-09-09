@@ -128,3 +128,60 @@ describe('잘못 붙여넣은 것', () => {
     expect(parseComplaintPaste('   \n  \n').rows).toHaveLength(0);
   });
 });
+
+/**
+ * 웹 화면의 표를 복사하면 칸마다 줄이 바뀌고 빈 칸은 전각 공백 한 글자로 온다.
+ * 그 줄을 버리면 여덟 칸이 일곱 칸이 되어 그 건이 통째로 사라진다.
+ */
+const 웹표 = (cells: string[]) =>
+  PASTE_HEADERS.join('\t') + '\n\n' + cells.map((c) => (c === '' ? '　' : c)).join('\n\n') + '\n';
+
+const 한건 = [
+  '흥국화재(든든한3N5)_상담예약(보관에어프라이어)',
+  '홍길동',
+  '', // 전화번호2 — 비어 있는 일이 흔하다
+  '2026-09-01',
+  '2026-09-02',
+  '연락 요청',
+  '20896180',
+  '2026-09-08 10:00',
+];
+
+describe('웹 표 복사 — 빈 칸', () => {
+  it('빈 칸이 있어도 그 건을 읽는다', () => {
+    const { rows, skipped } = parseComplaintPaste(웹표(한건));
+    expect(skipped).toBe(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].customerName).toBe('홍길동');
+    expect(rows[0].orderNo).toBe('20896180');
+    expect(rows[0].calledAt).toBe('2026-09-08T10:00');
+  });
+
+  it('빈 칸 뒤의 값이 밀리지 않는다', () => {
+    const { rows } = parseComplaintPaste(웹표(한건));
+    expect(rows[0].phone).toBe('');
+    expect(rows[0].receivedAt).toBe('2026-09-01');
+    expect(rows[0].orderConfirmedAt).toBe('2026-09-02');
+    expect(rows[0].callMemo).toBe('연락 요청');
+  });
+
+  it('두 건이 이어져 있어도 여덟 칸씩 끊는다', () => {
+    const 둘 = [...한건, ...한건.map((c, i) => (i === 1 ? '김철수' : c))];
+    const { rows } = parseComplaintPaste(웹표(둘));
+    expect(rows).toHaveLength(2);
+    expect(rows[0].customerName).toBe('홍길동');
+    expect(rows[1].customerName).toBe('김철수');
+  });
+
+  it('머리글이 여러 번 붙어 있어도 걷어낸다', () => {
+    const text =
+      PASTE_HEADERS.join('\t') +
+      '\n' +
+      PASTE_HEADERS.join('\n') +
+      '\n' +
+      한건.map((c) => (c === '' ? '　' : c)).join('\n');
+    const { rows } = parseComplaintPaste(text);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].customerName).toBe('홍길동');
+  });
+});

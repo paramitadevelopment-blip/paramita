@@ -44,12 +44,25 @@ export interface PasteResult {
   skipped: number;
 }
 
-const clean = (v: string) => v.replace(/\r/g, '').trim();
+/** 줄 끝 정리. 전각 공백·nbsp 까지 뗀다 — 빈 칸 표시로 쓰이는 글자들이다. */
+const clean = (v: string) => v.replace(/\r/g, '').replace(/[　 ]/g, ' ').trim();
 
 /** 머리글 줄인가. 값이 아니라 칸 이름이면 건너뛴다. */
 function isHeaderCell(value: string): boolean {
   const normalized = clean(value).replace(/\s+/g, '');
   return PASTE_HEADERS.some((h) => h.replace(/\s+/g, '') === normalized);
+}
+
+/** 이 줄이 통째로 머리글인가 — 탭으로 붙은 칸 이름들. */
+function isHeaderLine(line: string): boolean {
+  const cells = line.split('\t').map(clean).filter((c) => c.length > 0);
+  return cells.length > 0 && cells.every(isHeaderCell);
+}
+
+/** 이 칸 묶음이 통째로 머리글인가. 빈 칸은 상관없다. */
+function isHeaderGroup(cells: string[]): boolean {
+  const filled = cells.map(clean).filter((c) => c.length > 0);
+  return filled.length > 0 && filled.every(isHeaderCell);
 }
 
 /**
@@ -97,30 +110,48 @@ function toRow(cells: string[]): PasteRow {
 }
 
 /**
- * 붙여넣은 글을 줄 목록으로.
+ * 붙여넣은 글을 칸 묶음 목록으로.
  *
- * 빈 줄은 버린다 — 표 사이의 빈 줄 때문에 칸이 밀리면, 한 줄이 아니라
- * 그 뒤 전부가 어긋난다.
+ * 웹 화면의 표를 복사하면 칸마다 줄이 바뀌고, 칸 사이에 빈 줄이 끼며,
+ * **빈 칸은 전각 공백(　) 한 글자**로 온다. 전화번호2처럼 비어 있는 칸이
+ * 흔한데, 그 줄을 버리면 여덟 칸이 일곱 칸이 되어 그 건이 통째로 사라지거나
+ * 값이 한 칸씩 밀려 엉뚱한 자리에 들어간다.
+ *
+ * 그래서 "아무것도 없는 줄"(칸 사이의 간격)과 "공백만 있는 줄"(빈 칸)을 가른다.
+ * 사은품 붙여넣기(lib/giftPaste.ts)와 같은 규칙이다.
  */
 function toCellGroups(text: string): string[][] {
-  const lines = text
-    .split('\n')
-    .map(clean)
-    .filter((line) => line.length > 0);
-
-  if (lines.length === 0) return [];
+  const allLines = text.replace(/\r/g, '').split('\n');
 
   // 탭이 하나라도 있으면 '한 줄에 여덟 칸' 모양이다.
-  if (lines.some((line) => line.includes('\t'))) {
-    return lines
+  const tabbed = allLines.filter((line) => !isHeaderLine(line));
+  if (tabbed.some((line) => line.includes('\t'))) {
+    return tabbed
       .map((line) => line.split('\t').map(clean))
-      .filter((cells) => !cells.every((c, i) => i >= PASTE_HEADERS.length || isHeaderCell(c)));
+      .filter((cells) => cells.some((c) => c.length > 0))
+      .filter((cells) => !isHeaderGroup(cells));
   }
 
-  // 한 칸씩 줄바꿈된 모양. 머리글 여덟 줄이 앞에 붙어 있으면 걷어낸다.
-  const start = lines.slice(0, PASTE_HEADERS.length).every(isHeaderCell)
-    ? PASTE_HEADERS.length
-    : 0;
+  /*
+   * 한 칸씩 줄바꿈된 모양.
+   *
+   * 아무것도 없는 줄은 칸 사이의 간격이라 버리고, 공백만 있는 줄(전각 공백 등)은
+   * 빈 칸이라 남긴다 — 그래서 길이를 먼저 재고 그 뒤에 다듬는다.
+   */
+  const lines = allLines
+    .filter((line) => !(line.includes('\t') && isHeaderLine(line)))
+    .filter((line) => line.length > 0)
+    .map(clean);
+  if (lines.length === 0) return [];
+
+  // 앞에 붙은 머리글 덩어리를 걷어낸다. 여러 번 붙어 있으면 여러 번.
+  let start = 0;
+  while (
+    start + PASTE_HEADERS.length <= lines.length &&
+    isHeaderGroup(lines.slice(start, start + PASTE_HEADERS.length))
+  ) {
+    start += PASTE_HEADERS.length;
+  }
 
   const groups: string[][] = [];
   for (let at = start; at < lines.length; at += PASTE_HEADERS.length) {
