@@ -130,13 +130,30 @@ describe('성공·실패 갈라 보기', () => {
 });
 
 describe('검색', () => {
-  it('아이디·이름·소속·IP 를 함께 뒤진다', async () => {
+  it('표에 뜨는 칸을 전부 뒤진다 — 기기·OS·브라우저·실패 사유까지', async () => {
     await GET(req('http://localhost/api/login-records?search=para'));
 
     const [, expr] = filters.find(([col]) => col === 'or')!;
-    for (const col of ['username', 'user_name', 'user_department', 'ip_address']) {
-      expect(expr).toContain(`${col}.ilike.%para%`);
+    for (const col of [
+      'username',
+      'user_name',
+      'user_department',
+      'ip_address',
+      'device_type',
+      'os_name',
+      'browser_name',
+      'fail_reason',
+    ]) {
+      // 값은 escapeOr를 거쳐 따옴표에 싸인다 — 쉼표·괄호가 들어가도 조건이 안 쪼개진다.
+      expect(expr).toContain(`${col}.ilike."%para%"`);
     }
+  });
+
+  it('날짜로 치면 그날 기록도 걸린다', async () => {
+    await GET(req('http://localhost/api/login-records?search=2026-09-08'));
+
+    const [, expr] = filters.find(([col]) => col === 'or')!;
+    expect(expr).toContain('logged_in_at.gte.2026-09-08');
   });
 
   it('빈 검색어는 조건을 안 건다', async () => {
