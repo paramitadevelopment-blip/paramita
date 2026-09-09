@@ -4,6 +4,7 @@ import React, { memo, useMemo, useState } from 'react';
 import { MdClose, MdContentPaste } from 'react-icons/md';
 import { parseComplaintPaste, PASTE_HEADERS } from '@/lib/complaintPaste';
 import type { ComplaintInput, BulkRegisterResult } from '@/app/hooks/useComplaints';
+import { useAlert } from '@/app/components/Alert/Alert';
 import styles from '../page.module.css';
 
 /**
@@ -24,8 +25,8 @@ const ComplaintPasteModal = memo(function ComplaintPasteModalComponent({
   onSubmit,
   isSubmitting,
 }: ComplaintPasteModalProps) {
+  const { showAlert } = useAlert();
   const [text, setText] = useState('');
-  const [result, setResult] = useState<BulkRegisterResult | null>(null);
 
   // 붙여넣는 대로 다시 읽는다. 글자가 많아도 계산이 가벼워 그때그때 해도 된다.
   const parsed = useMemo(() => parseComplaintPaste(text), [text]);
@@ -39,7 +40,30 @@ const ComplaintPasteModal = memo(function ComplaintPasteModalComponent({
     // 문제가 있는 줄은 빼고 나머지만 보낸다. 고칠 줄은 사람이 메일에서 다시 본다.
     const rows = parsed.rows.filter((_, at) => !problemAt.has(at + 1));
     const done = await onSubmit(rows);
-    if (done) setResult(done);
+    if (!done) return;
+    /*
+     * 결과는 우리 알림창으로 낸다. 창 안에 결과 화면을 따로 그리면 같은 일에
+     * 두 가지 모양이 생긴다 — 다른 화면은 전부 이 창으로 말한다.
+     */
+    const bad = done.results.filter((r) => !r.ok);
+    showAlert({
+      type: bad.length > 0 ? 'warning' : 'success',
+      title: '붙여넣기 등록',
+      message: (
+        <>
+          <p>
+            {done.created}건이 등록되었습니다.
+            {done.failed > 0 && ` (${done.failed}건 실패)`}
+          </p>
+          {bad.map((r) => (
+            <p key={r.at}>
+              {r.at + 1}번째 줄 — {r.error}
+            </p>
+          ))}
+        </>
+      ),
+    });
+    onClose();
   };
 
   return (
@@ -53,27 +77,6 @@ const ComplaintPasteModal = memo(function ComplaintPasteModalComponent({
           </button>
         </div>
 
-        {result ? (
-          <div className={styles.pasteDone}>
-            <p className={styles.resultOk}>
-              {result.created}건이 등록되었습니다.
-              {result.failed > 0 && ` (${result.failed}건 실패)`}
-            </p>
-            {result.results
-              .filter((r) => !r.ok)
-              .map((r) => (
-                <p key={r.at} className={styles.pasteProblem}>
-                  {r.at + 1}번째 줄 — {r.error}
-                </p>
-              ))}
-            <div className={styles.formActions}>
-              <button type="button" className={styles.submitBtn} onClick={onClose}>
-                닫기
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
             <p className={styles.pasteGuide}>
               메일의 표를 그대로 붙여넣으세요. 머리글이 있어도 됩니다.
               <span className={styles.pasteHeaders}>{PASTE_HEADERS.join(' · ')}</span>
@@ -149,8 +152,6 @@ const ComplaintPasteModal = memo(function ComplaintPasteModalComponent({
                 {isSubmitting ? '등록 중…' : `${okCount}건 등록`}
               </button>
             </div>
-          </>
-        )}
       </div>
     </div>
   );
