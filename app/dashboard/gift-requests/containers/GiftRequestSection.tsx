@@ -10,6 +10,7 @@ import {
   useRequestGift,
   useGiftBadgeCount,
   useRegisterGifts,
+  useBulkShipRead,
 } from '@/app/hooks/useGifts';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { toAssignableDepartmentGroups } from '@/lib/departments';
@@ -66,6 +67,7 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
   const list = useGiftRequests();
   const request = useRequestGift();
   const registerMany = useRegisterGifts();
+  const bulkShipRead = useBulkShipRead();
   const { data: badge } = useGiftBadgeCount();
   // 소속 목록은 관리자만 쓴다. 지사는 서버가 자기 범위로 고정한다.
   const { data: departments } = useDepartments(isAdmin);
@@ -162,6 +164,31 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
     if (isAdmin || !needsShipCheck(row)) return;
     // 보러 온 사람에게 오류창을 띄우지 않는다. 실패하면 목록이 '미확인' 그대로다.
     list.patch({ id: row.id, body: { action: 'confirmShip' } }).catch(() => {});
+  };
+
+  /*
+   * 송장이 채워진 건을 한 번에 확인한다.
+   *
+   * 하나씩 열어야 배지가 내려가는데, 발주가 한 번에 스무 건씩 나가면 스무 번을
+   * 열어야 한다. 서버가 소속 것 전부를 한 번의 UPDATE로 찍는다.
+   */
+  const readAllShipped = () => {
+    // 탭 배지가 이미 세고 있는 수다. 몇 건인지 보고 누르게 한다.
+    const waiting = badge?.tabs?.shipped ?? 0;
+    if (waiting === 0) {
+      showAlert({ type: 'info', title: '확인할 것이 없음', message: '아직 안 본 배송 정보가 없습니다.' });
+      return;
+    }
+    showAlert({
+      type: 'info',
+      title: '전체 확인',
+      message: `선택된 ${waiting}건을 확인 처리하시겠습니까?`,
+      showCancelButton: true,
+      onConfirm: async () => {
+        const read = await bulkShipRead.mutateAsync();
+        showAlert({ type: 'success', title: '확인 완료', message: `${read}건을 확인했습니다.` });
+      },
+    });
   };
 
   const askWithdraw = (row: GiftRequestRow) => {
@@ -338,6 +365,27 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
                   {name}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/*
+            송장을 한 번에 확인하는 자리. 관리자에게는 안 보인다 — 송장을 기다린
+            쪽은 신청한 지사이고, 관리자가 대신 누르면 지사 배지가 아무도 안 본
+            채로 내려간다.
+          */}
+          {!isAdmin && (
+            <div className={styles.readAllRow}>
+              <button
+                type="button"
+                className={styles.readAllBtn}
+                onClick={readAllShipped}
+                disabled={bulkShipRead.isPending}
+              >
+                {bulkShipRead.isPending ? '확인 중…' : '전체 확인'}
+              </button>
+              <span className={styles.readAllHint}>
+                송장이 채워졌는데 아직 안 본 건을 한 번에 확인 처리합니다
+              </span>
             </div>
           )}
 
