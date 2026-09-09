@@ -13,6 +13,7 @@ import {
   GIFT_COLUMNS,
   canDeleteGiftRequest,
   canEditGiftRequest,
+  canShipGiftRequest,
   canWithdrawGiftRequest,
   readGiftFields,
   toGiftColumns,
@@ -261,11 +262,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       /*
        * 발주리스트에 담겨 나간 것만. 발주일은 그때 찍혔고, 여기서는 거래처에서
        * 송장이 나온 뒤 택배사·운송장번호를 채운다. 전달만 된 건(forwarded)은
-       * 아직 발주리스트에 안 실렸으니 송장이 있을 수 없다.
+       * 아직 발주리스트에 안 실렸으니 송장이 있을 수 없고, 이미 채운 건은
+       * 물건이 나간 뒤라 못 고친다.
        */
-      if (guard.status !== 'ordered' && guard.status !== 'shipped') {
+      if (!canShipGiftRequest(guard)) {
         return NextResponse.json(
-          { error: '발주리스트에 담긴 신청만 배송 정보를 적을 수 있습니다.' },
+          {
+            error:
+              guard.status === 'shipped'
+                ? '이미 배송 정보가 입력된 신청입니다. 운송장번호가 나왔다는 것은 이미 발송했다는 뜻이라 고칠 수 없습니다 — 바뀔 일이 생겼다면 새로 신청해 주세요.'
+                : '발주리스트에 담긴 신청만 배송 정보를 적을 수 있습니다.',
+          },
           { status: 400 }
         );
       }
@@ -278,14 +285,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       const courier = String(body.courier).trim();
       const trackingNo = String(body.trackingNo).trim();
       /*
-       * 지사의 확인은 **송장이 바뀌었을 때만** 다시 받는다.
-       *
-       * 바뀐 값은 다시 봐야 한다 — 운송장번호가 바뀌었는데 지사 화면에 이미
-       * '확인'이 붙어 있으면 바뀐 줄 모르고 지나간다. 반대로 같은 값을 다시
-       * 저장했을 뿐인데 확인이 풀리면, 지사는 이미 본 송장을 또 확인하라는
-       * 배지를 받는다. 배지가 거짓말을 하기 시작하면 아무도 안 본다.
+       * 처음 채우는 자리다(위에서 '발주 보냄'만 통과시킨다). 지사는 아직 이
+       * 송장을 본 적이 없으므로 확인 자리를 비워 둔다 — 그게 곧 지사의 할 일이다.
        */
-      const changed = courier !== (guard.courier ?? '') || trackingNo !== (guard.tracking_no ?? '');
       return await applyUpdate(giftId, {
         status: 'shipped',
         courier,
@@ -295,7 +297,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         ...(memo ? { delivery_memo: memo } : {}),
         shipped_by: user.username,
         shipped_at: now,
-        ...(changed ? { ship_read_at: null, ship_read_by: null } : {}),
+        ship_read_at: null,
+        ship_read_by: null,
         updated_at: now,
       });
     }

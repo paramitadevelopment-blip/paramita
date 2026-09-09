@@ -173,8 +173,14 @@ const GiftManageModal = memo(function GiftManageModalComponent({
                   maxLength={300}
                 />
               </label>
+              {/*
+                한 번만 적는 자리라는 것을 누르기 전에 말한다. 저장하고 나서
+                "고치는 버튼이 왜 없냐"고 묻게 두지 않는다.
+              */}
               <p className={styles.fieldHint}>
-                저장하면 신청한 지사에게 &apos;배송 정보 확인&apos;으로 뜹니다.
+                저장하면 신청한 지사에게 &apos;배송 정보 확인&apos;으로 뜹니다.{' '}
+                <strong>한 번 저장하면 고칠 수 없습니다</strong> — 운송장번호가 나왔다는 것은 이미
+                발송했다는 뜻이라, 바뀔 일이 생기면 새로 신청합니다.
               </p>
             </>
           ) : (

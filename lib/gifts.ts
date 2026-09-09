@@ -443,6 +443,18 @@ export function validateShipInput(raw: Record<string, unknown>): string | null {
 }
 
 /**
+ * 배송 정보를 적을 수 있는가.
+ *
+ * 발주리스트에 담겨 나간 것만이다. 전달만 된 건은 아직 발주처에 안 갔으니
+ * 송장이 있을 수 없고, **이미 채워진 건은 물건이 나간 뒤라 못 고친다** —
+ * 운송장번호가 나왔다는 것은 이미 발송했다는 뜻이고, 그 뒤에 바꿀 일이
+ * 생겼다면 같은 발송의 수정이 아니라 새 발송이다. 새로 신청한다.
+ */
+export function canShipGiftRequest(row: { status: GiftStatus }): boolean {
+  return row.status === 'ordered';
+}
+
+/**
  * 지사가 아직 안 본 배송 정보인가.
  *
  * 담당자가 송장을 채우면 그것을 기다리던 쪽은 신청한 지사다. 확인을 누르기

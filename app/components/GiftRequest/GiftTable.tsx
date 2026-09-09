@@ -6,6 +6,7 @@ import {
   GIFT_STATUS_LABEL,
   canDeleteGiftRequest,
   canEditGiftRequest,
+  canShipGiftRequest,
   canWithdrawGiftRequest,
   type GiftRequestRow,
 } from '@/lib/gifts';
@@ -299,9 +300,13 @@ const GiftTable = memo(function GiftTableComponent({
                         보완 요청
                       </button>
                     )}
-                    {actions.onShip && (row.status === 'ordered' || row.status === 'shipped') && (
+                    {/*
+                      배송 정보는 한 번만 적는다. 운송장번호가 나왔다는 것은 이미
+                      발송했다는 뜻이라, 채워진 뒤에는 고치는 버튼을 내지 않는다.
+                    */}
+                    {actions.onShip && canShipGiftRequest(row) && (
                       <button type="button" className={styles.actionBtn} onClick={() => actions.onShip!(row)}>
-                        {row.status === 'shipped' ? '배송 정보 수정' : '배송 정보'}
+                        배송 정보
                       </button>
                     )}
                     {actions.onSupplement && (row.status === 'forwarded' || row.status === 'ordered') && (

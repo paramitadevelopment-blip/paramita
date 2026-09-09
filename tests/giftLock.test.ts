@@ -3,6 +3,7 @@ import {
   canEditGiftRequest,
   canDeleteGiftRequest,
   canWithdrawGiftRequest,
+  canShipGiftRequest,
   needsStaffRead,
   validateShipInput,
   needsShipCheck,
@@ -217,5 +218,25 @@ describe('담당자가 열면 확인을 찍어야 하는가', () => {
     expect(needsStaffRead({ status: 'shipped' })).toBe(false);
     expect(needsStaffRead({ status: 'supplement' })).toBe(false);
     expect(needsStaffRead({ status: 'pending_check' })).toBe(false);
+  });
+});
+
+/**
+ * 배송 정보는 한 번만 적는다. 운송장번호가 나왔다는 것은 이미 발송했다는 뜻이라,
+ * 그 뒤에 바꿀 일이 생겼다면 같은 발송의 수정이 아니라 새 발송이다.
+ */
+describe('배송 정보를 적을 수 있는가', () => {
+  it('발주리스트에 담겨 나간 것만 된다', () => {
+    expect(canShipGiftRequest({ status: 'ordered' })).toBe(true);
+  });
+
+  it('이미 채워진 건은 안 된다 — 물건이 나간 뒤다', () => {
+    expect(canShipGiftRequest({ status: 'shipped' })).toBe(false);
+  });
+
+  it('발주 전·되돌린 것·닫힌 것도 안 된다', () => {
+    for (const status of ['pending_check', 'forwarded', 'supplement', 'withdrawn'] as const) {
+      expect(canShipGiftRequest({ status })).toBe(false);
+    }
   });
 });

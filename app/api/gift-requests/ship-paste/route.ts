@@ -19,9 +19,6 @@ interface Candidate {
   customer_name: string;
   status: string;
   order_id: number | null;
-  /** 지금 적혀 있는 송장. 같은 값이 다시 오면 지사 확인을 건드리지 않는다. */
-  courier: string | null;
-  tracking_no: string | null;
 }
 
 /**
@@ -67,15 +64,18 @@ export async function POST(request: NextRequest) {
     ];
 
     /*
-     * 채울 수 있는 건만 후보로 든다 — 발주리스트에 실려 나간 것(ordered)과 이미
-     * 채워진 것(shipped). 아직 발주 전이거나 되돌린 건은 발주처가 들고 있을 수
-     * 없으므로 그 줄은 남의 줄로 본다.
+     * 아직 안 채운 건만 후보로 든다 — 발주리스트에 실려 나갔고(ordered) 송장이
+     * 아직 없는 것. 발주 전이거나 되돌린 건은 발주처가 들고 있을 수 없고, 이미
+     * 채운 건은 물건이 나간 뒤라 고치지 않는다.
+     *
+     * 발주처는 누적 표를 보낸다 — 지난주 줄이 이번 주 표에도 그대로 있다. 그
+     * 줄들은 여기서 후보에 안 들어 조용히 건너뛴다. 오류가 아니라 이미 끝난 줄이다.
      */
     const { data: found, error: findError } = await supabase
       .from('gift_requests')
-      .select('id, order_no, gift_name, quantity, customer_name, status, order_id, courier, tracking_no')
+      .select('id, order_no, gift_name, quantity, customer_name, status, order_id')
       .in('order_no', orderNos.length > 0 ? orderNos : [''])
-      .in('status', ['ordered', 'shipped'])
+      .eq('status', 'ordered')
       .order('id', { ascending: true });
     if (findError) throw findError;
 
@@ -112,8 +112,12 @@ export async function POST(request: NextRequest) {
 
       const candidates = (byOrderNo.get(orderNo) ?? []).filter((c) => !used.has(c.id));
       if (candidates.length === 0) {
-        // 우리 신청이 아니거나 이 표의 다른 줄이 이미 가져갔다. 오류가 아니다.
-        results.push({ at, ok: false, skipped: true, reason: '우리 신청에 없는 주문번호입니다.' });
+        /*
+         * 우리 신청이 아니거나, 이미 배송 정보가 들어갔거나, 이 표의 다른 줄이
+         * 먼저 가져갔다. 셋 다 오류가 아니다 — 발주처 표에는 남의 회사 건과
+         * 지난주에 이미 끝난 건이 함께 온다.
+         */
+        results.push({ at, ok: false, skipped: true, reason: '채울 신청이 없는 주문번호입니다(남의 줄이거나 이미 입력됨).' });
         continue;
       }
 
@@ -121,14 +125,6 @@ export async function POST(request: NextRequest) {
       const target =
         candidates.find((c) => (c.gift_name ?? '').trim() === giftName) ?? candidates[0];
       used.add(target.id);
-
-      /*
-       * 발주처는 누적 표를 보낸다 — 지난주 줄이 이번 주 표에도 그대로 있다.
-       * 그 줄을 또 붙여넣었다고 지사 확인을 풀면, 지사는 이미 본 송장을 또
-       * 확인하라는 배지를 받는다. 송장이 실제로 바뀐 줄만 다시 보게 한다.
-       */
-      const changed =
-        courier !== (target.courier ?? '') || trackingNo !== (target.tracking_no ?? '');
 
       const { data, error } = await supabase
         .from('gift_requests')
@@ -141,7 +137,9 @@ export async function POST(request: NextRequest) {
           ...(deliveryMemo ? { delivery_memo: deliveryMemo } : {}),
           shipped_by: user.username,
           shipped_at: now,
-          ...(changed ? { ship_read_at: null, ship_read_by: null } : {}),
+          // 처음 채우는 자리다. 지사는 아직 이 송장을 본 적이 없다.
+          ship_read_at: null,
+          ship_read_by: null,
           updated_at: now,
         })
         .eq('id', target.id)
