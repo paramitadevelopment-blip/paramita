@@ -401,7 +401,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
             </>
           ) : (
             <span className={styles.forwardHint}>
-              발주할 건을 체크하거나 [전체 선택]을 누르세요
+              확인하거나 발주할 건을 체크하세요 · 전부 고르려면 [전체 선택]
             </span>
           )}
         </div>
