@@ -143,6 +143,17 @@ describe('발주리스트 행', () => {
     expect(out).not.toContain('null');
   });
 
+  it('비고에 신청 사유가 실린다 — 물건 싸는 쪽이 왜 두 장인지 안다', () => {
+    const only = orderSheetRow(row({ note: null, check_reason: '두 번째 상품 가입분' }));
+    expect(only[11]).toBe('두 번째 상품 가입분');
+
+    const both = orderSheetRow(row({ note: '문 앞에', check_reason: '고객이 추가로 요청' }));
+    expect(both[11]).toBe('문 앞에 / 고객이 추가로 요청');
+
+    const neither = orderSheetRow(row({ note: null, check_reason: null }));
+    expect(neither[11]).toBe('');
+  });
+
   it('행마다 열 수가 정확히 18이다', () => {
     expect(orderSheetRow(row())).toHaveLength(18);
     expect(orderSheetRows([row(), row({ id: 2 })])[3]).toHaveLength(18);

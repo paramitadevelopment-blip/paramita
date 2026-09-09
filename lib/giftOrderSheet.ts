@@ -80,7 +80,14 @@ export function orderSheetRow(row: GiftRequestRow): (string | number)[] {
     text(row.delivery_memo),
     text(row.gift_name),
     row.quantity ?? 1,
-    text(row.note),
+    /*
+     * 비고 — 지사가 적은 말과, 같은 주문번호로 여러 건인 사유.
+     *
+     * 한 주문번호로 두 상품이 나가면 받는 쪽은 왜 두 장인지 모른다. 사유는
+     * 우리 안에서만 돌던 값인데, 물건을 싸는 사람이 볼 자리가 여기다.
+     * 둘 다 있으면 지사가 적은 말을 앞에 둔다.
+     */
+    [text(row.note), text(row.check_reason)].filter(Boolean).join(' / '),
     text(row.sender_name),
     text(row.sender_phone),
     text(row.product),
