@@ -83,6 +83,14 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+/**
+ * 한 번에 골라 줄 수 있는 최대 건수.
+ *
+ * 발주리스트 한 장의 상한(500)보다 넉넉히 잡는다 — 고르기까지는 되고 묶을 때
+ * 걸리는 편이, 고르는 단계에서 이유 없이 막히는 것보다 낫다.
+ */
+const ID_SCAN_LIMIT = 1000;
+
 const SORTABLE = [
   'created_at',
   'customer_name',
@@ -203,6 +211,27 @@ export async function GET(request: NextRequest) {
       }
 
       query = query.or(terms.join(','));
+    }
+
+    /*
+     * 아이디만 달라는 요청.
+     *
+     * 화면의 머리 체크박스는 그 페이지에 뜬 줄만 고른다. 백 건이면 열 페이지를
+     * 돌아야 하므로 "지금 조건에 맞는 전부"를 한 번에 고를 길이 필요하다. 화면은
+     * 한 페이지밖에 모르니 서버가 골라 준다 — 위에서 건 조건(소속·검색·상태)이
+     * 그대로 걸린 채로 아이디만 낸다.
+     */
+    if (searchParams.get('idsOnly') === 'true') {
+      const { data: picked, error: pickError } = await query
+        .order('id', { ascending: true })
+        .limit(ID_SCAN_LIMIT);
+      if (pickError) {
+        console.error('Gift requests id scan error:', pickError);
+        return NextResponse.json({ error: '목록을 불러올 수 없습니다.' }, { status: 500 });
+      }
+      const ids = (picked ?? []).map((r) => (r as unknown as { id: number }).id);
+      // 한도에 닿았으면 그 사실을 알려 준다 — 조용히 잘라 내면 몇 건이 빠졌는지 모른다.
+      return NextResponse.json({ ids, truncated: ids.length >= ID_SCAN_LIMIT });
     }
 
     // 동점이면 순서가 고정되지 않아 페이지를 넘길 때 행이 중복되거나 빠진다.

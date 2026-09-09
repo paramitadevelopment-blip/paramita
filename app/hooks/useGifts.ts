@@ -188,6 +188,34 @@ export function useGiftRequests(
   };
 }
 
+/**
+ * 지금 조건에 맞는 발주 대기 건의 아이디 전부.
+ *
+ * 머리 체크박스는 그 페이지 것만 고른다. 백 건이면 열 페이지를 돌아야 하므로,
+ * 검색·지사를 걸어 둔 채로 "발주할 수 있는 것 전부"를 한 번에 받아 온다.
+ * 상태는 늘 '발주 대기'다 — 다른 상태는 애초에 고를 수 없다.
+ */
+export function usePickAllForwarded() {
+  const { showAlert } = useAlert();
+
+  return useMutation({
+    mutationFn: async (filters: { search?: string; group?: string }): Promise<number[]> => {
+      const params = new URLSearchParams({
+        idsOnly: 'true',
+        scope: 'manage',
+        status: 'forwarded',
+        search: filters.search ?? '',
+        group: filters.group ?? '',
+      });
+      const response = await fetch(`/api/gift-requests?${params}`, { credentials: 'include' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '목록을 불러올 수 없습니다.');
+      return result.ids ?? [];
+    },
+    onError: (err: Error) => showAlert({ type: 'error', title: '오류', message: err.message }),
+  });
+}
+
 /** 주문번호로 신청서를 미리 채운다. 성공하면 채울 값, 실패하면 이유를 던진다. */
 export function useGiftLookup() {
   return useMutation({

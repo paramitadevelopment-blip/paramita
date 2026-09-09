@@ -1,13 +1,20 @@
 'use client';
 
 import React, { memo, useState } from 'react';
-import { MdExpandMore, MdListAlt, MdOutlineInventory, MdLocalShipping } from 'react-icons/md';
+import {
+  MdExpandMore,
+  MdListAlt,
+  MdOutlineInventory,
+  MdLocalShipping,
+  MdChecklist,
+} from 'react-icons/md';
 import { useAlert } from '@/app/components/Alert/Alert';
 import {
   useGiftRequests,
   useCreateGiftOrder,
   useGiftBadgeCount,
   useShipPaste,
+  usePickAllForwarded,
   downloadGiftOrderExcel,
 } from '@/app/hooks/useGifts';
 import { useDepartments } from '@/app/hooks/useDepartments';
@@ -51,6 +58,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
   const { data: badge } = useGiftBadgeCount();
   const waitingCount = badge?.manage ?? 0;
   const createOrder = useCreateGiftOrder();
+  const pickAll = usePickAllForwarded();
   const shipPaste = useShipPaste();
   const { data: departments } = useDepartments();
   const groups = toAssignableDepartmentGroups(departments);
@@ -83,6 +91,30 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
       }
       return next;
     });
+
+  /*
+   * 지금 조건에 맞는 발주 대기 건을 통째로 고른다.
+   *
+   * 머리 체크박스는 그 페이지 것만 고르므로 백 건이면 열 페이지를 돌아야 한다.
+   * 검색·지사를 걸어 둔 채로 고르므로 "한울부원 것만 전부"도 된다.
+   */
+  const pickAllForwarded = async () => {
+    const ids = await pickAll.mutateAsync({ search: list.search, group: list.group });
+    if (ids.length === 0) {
+      showAlert({
+        type: 'info',
+        title: '고를 것이 없음',
+        message: '지금 조건에 맞는 발주 대기 건이 없습니다.',
+      });
+      return;
+    }
+    setPicked(new Set(ids));
+    showAlert({
+      type: 'success',
+      title: '전체 선택',
+      message: `발주 대기 ${ids.length}건을 골랐습니다.`,
+    });
+  };
 
   /*
    * 상세를 여는 것이 곧 확인이다.
@@ -227,6 +259,19 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
           </select>
           <MdExpandMore className={styles.selectIcon} />
         </div>
+        {/*
+          머리 체크박스는 그 페이지 것만 고른다. 백 건이면 열 페이지를 돌게 되므로
+          지금 걸어 둔 검색·지사에 맞는 발주 대기 건을 한 번에 고르는 자리를 둔다.
+        */}
+        <button
+          type="button"
+          className={styles.ghostBtn}
+          onClick={pickAllForwarded}
+          disabled={pickAll.isPending}
+        >
+          <MdChecklist />
+          {pickAll.isPending ? '고르는 중…' : '발주 대기 전부 고르기'}
+        </button>
       </div>
 
       <div className={styles.statusTabs}>
