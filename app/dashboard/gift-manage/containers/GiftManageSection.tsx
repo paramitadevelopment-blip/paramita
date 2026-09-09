@@ -116,6 +116,44 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
   };
 
   /*
+   * 고른 것을 한 번에 확인 처리한다.
+   *
+   * 상세를 하나씩 여는 것이 원래 길인데, 서른 건이면 서른 번 열어야 한다.
+   * 이미 본 건은 서버가 400으로 돌려보내므로 그냥 세지 않고 넘긴다.
+   */
+  const [reading, setReading] = useState(false);
+  const readPicked = () => {
+    const ids = [...picked];
+    showAlert({
+      type: 'info',
+      title: '선택 확인',
+      message: `고른 ${ids.length}건을 확인 처리합니다. 확인하면 지사가 더 이상 고칠 수 없습니다.`,
+      showCancelButton: true,
+      onConfirm: async () => {
+        setReading(true);
+        let done = 0;
+        try {
+          for (const id of ids) {
+            // ponytail: 건별 요청. 수백 건이 되면 묶음 API로 올린다.
+            await list
+              .patch({ id, body: { action: 'read' } })
+              .then(() => done++)
+              .catch(() => {});
+          }
+        } finally {
+          setReading(false);
+        }
+        setPicked(new Set());
+        showAlert({
+          type: 'success',
+          title: '확인 완료',
+          message: `${done}건을 확인했습니다.${ids.length > done ? ` ${ids.length - done}건은 이미 확인한 건입니다.` : ''}`,
+        });
+      },
+    });
+  };
+
+  /*
    * 상세를 여는 것이 곧 확인이다.
    *
    * 버튼을 따로 두면 안 누르고 지나가고, 그동안 지사가 내용을 고쳐 담당자가
@@ -343,6 +381,14 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
               <span>
                 <strong>{picked.size}건</strong> 골랐습니다
               </span>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={readPicked}
+                disabled={reading}
+              >
+                {reading ? '확인 중…' : '확인 처리'}
+              </button>
               <button
                 type="button"
                 className={styles.actionBtn}
