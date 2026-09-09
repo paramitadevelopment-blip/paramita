@@ -55,7 +55,7 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
 
         {result ? (
           <div className={styles.pasteDone}>
-            <p className={styles.resultOk}>{result.filled}건에 배송 정보를 채웠습니다.</p>
+            <p className={styles.resultOk}>{result.filled}건에 배송 정보를 입력했습니다.</p>
             {result.skipped > 0 && (
               <p className={styles.pasteCheck}>
                 {result.skipped}건은 우리 신청이 아니거나 채울 것이 없어 건너뛰었습니다.
@@ -167,7 +167,7 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
                 disabled={parsed.rows.length === 0 || isSubmitting}
               >
                 <MdLocalShipping />
-                {isSubmitting ? '채우는 중…' : `${parsed.rows.length}줄 채우기`}
+                {isSubmitting ? '입력 중…' : `${parsed.rows.length}줄 입력`}
               </button>
             </div>
           </>
