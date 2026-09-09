@@ -190,8 +190,8 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
     if (existing.length > 0 && !checkReason.trim()) {
       showAlert({
         type: 'warning',
-        title: '재신청 사유',
-        message: '같은 주문번호로 이미 신청된 건이 있습니다. 왜 다시 보내는지 적어 주세요.',
+        title: '신청 사유',
+        message: '같은 주문번호로 이미 신청된 건이 있습니다. 한 주문번호로 여러 건인 사유를 적어 주세요.',
       });
       return;
     }
@@ -276,7 +276,7 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
               </ul>
               <label className={styles.modalField}>
                 <span>
-                  재신청 사유 <b className={styles.required}>*</b>
+                  신청 사유 <b className={styles.required}>*</b>
                 </span>
                 <textarea
                   value={checkReason}
@@ -286,7 +286,7 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
                   placeholder="예: 두 번째 상품 가입분 / 고객이 추가로 요청"
                 />
                 <span className={styles.fieldHint}>
-                  관리자가 이 사유를 보고 확인한 뒤 사은품담당자에게 전달됩니다.
+                  한 주문번호로 여러 상품을 보내는 경우입니다. 이유를 적으면 관리자가 확인한 뒤 사은품담당자에게 전달됩니다.
                 </span>
               </label>
             </div>

@@ -125,7 +125,7 @@ const GiftCheckModal = memo(function GiftCheckModalComponent({
                   )}
                   {entry.check_reason && (
                     <div className={styles.threadHandled}>
-                      <span className={styles.threadHandledLabel}>재신청 사유</span>
+                      <span className={styles.threadHandledLabel}>신청 사유</span>
                       <p className={styles.threadHandledBody}>{entry.check_reason}</p>
                     </div>
                   )}

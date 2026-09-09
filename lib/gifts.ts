@@ -303,7 +303,7 @@ export function validateGiftInput(raw: Record<string, unknown>): string | null {
     if (!text(raw[key])) return `${label}을(를) 입력해 주세요.`;
   }
 
-  if (text(raw.checkReason).length > 500) return '재신청 사유가 너무 깁니다. (500자까지)';
+  if (text(raw.checkReason).length > 500) return '사유가 너무 깁니다. (500자까지)';
 
   const quantity = Number(raw.quantity);
   if (!Number.isInteger(quantity) || quantity < 1) return '수량은 1 이상의 정수여야 합니다.';

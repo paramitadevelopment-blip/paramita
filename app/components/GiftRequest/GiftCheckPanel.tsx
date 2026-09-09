@@ -62,7 +62,7 @@ const GiftCheckPanel = memo(function GiftCheckPanelComponent({
       showAlert({
         type: 'success',
         title: '확인 완료',
-        message: `${row.customer_name} 님 재신청을 확인했습니다. 곧바로 사은품담당자에게 전달됩니다.`,
+        message: `${row.customer_name} 님 신청을 확인했습니다.`,
       });
     } finally {
       setBusy(false);
@@ -102,14 +102,13 @@ const GiftCheckPanel = memo(function GiftCheckPanelComponent({
           value={list.search}
           onChange={list.setSearch}
           onReset={() => list.setSearch('')}
-          placeholder="모든 항목 검색 — 고객명 · 주소 · 사은품 · 주문번호 · 재신청 사유 · 날짜"
+          placeholder="모든 항목 검색 — 고객명 · 주소 · 사은품 · 주문번호 · 신청 사유 · 날짜"
         />
       </div>
 
       <p className={styles.checkGuide}>
         <MdVerified />
-        같은 주문번호로 이미 신청된 적이 있는 건입니다. 그 번호로 지난번에 무엇이 나갔는지 위에
-        함께 세웠습니다 — 보고 또 보내도 되는지 확인해 주세요.
+        같은 주문번호로 이미 신청된 적이 있는 건입니다.
       </p>
 
       {list.rows.length === 0 ? (
@@ -117,7 +116,7 @@ const GiftCheckPanel = memo(function GiftCheckPanelComponent({
       ) : (
         <>
           <div className={styles.tableContainer}>
-            <table className={styles.table}>
+            <table className={`${styles.table} ${styles.checkTable}`}>
               <thead>
                 <tr>
                   <th>신청일</th>
@@ -203,7 +202,7 @@ const GiftCheckPanel = memo(function GiftCheckPanelComponent({
                           </span>
                           {row.check_reason && (
                             <span className={styles.checkReasonNote} title={row.check_reason}>
-                              재신청: {row.check_reason}
+                              사유: {row.check_reason}
                             </span>
                           )}
                         </div>

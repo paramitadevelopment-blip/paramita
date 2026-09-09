@@ -116,7 +116,7 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
           {/* 같은 주문번호의 재신청. 왜 또 보냈고 누가 통과시켰는지가 여기 남는다. */}
           {row.check_reason && (
             <>
-              <Line label="재신청 사유">{row.check_reason}</Line>
+              <Line label="신청 사유">{row.check_reason}</Line>
               <Line label="관리자 확인">
                 {row.checked_at ? (
                   `${dateTimeText(row.checked_at)} · ${row.checked_by}`

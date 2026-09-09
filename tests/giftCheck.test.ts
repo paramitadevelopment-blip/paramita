@@ -41,7 +41,7 @@ describe('주문번호와 재신청 사유', () => {
   it('재신청 사유는 비워도 되고(첫 신청), 적었으면 길이를 본다', () => {
     expect(validateGiftInput(form({ checkReason: '' }))).toBeNull();
     expect(validateGiftInput(form({ checkReason: '두 번째 상품 가입' }))).toBeNull();
-    expect(validateGiftInput(form({ checkReason: '가'.repeat(501) }))).toMatch(/재신청 사유/);
+    expect(validateGiftInput(form({ checkReason: '가'.repeat(501) }))).toMatch(/사유가 너무 깁니다/);
   });
 });
 

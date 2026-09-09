@@ -246,10 +246,10 @@ const GiftTable = memo(function GiftTableComponent({
                         {[row.courier, row.tracking_no].filter(Boolean).join(' · ')}
                       </div>
                     )}
-                    {/* 재신청 사유. 확인 대기 줄에서 바로 읽혀야 한다. */}
+                    {/* 신청 사유. 확인 대기 줄에서 바로 읽혀야 한다. */}
                     {row.status === 'pending_check' && row.check_reason && (
                       <div className={styles.supplementNote} title={row.check_reason}>
-                        재신청: {row.check_reason}
+                        사유: {row.check_reason}
                       </div>
                     )}
                     {/* 확인을 받고 지나온 건. 어느 관리자가 통과시켰는지가 줄에 남는다. */}
