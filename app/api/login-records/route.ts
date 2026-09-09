@@ -3,6 +3,7 @@ import { canViewAccessLogs } from '@/lib/roles';
 import { getUserFromRequest } from '@/lib/jwt';
 import { createClient } from '@supabase/supabase-js';
 import { parsePagination } from '@/lib/pagination';
+import { ilikeTerms, dateSpanOf } from '@/lib/listSearch';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -34,6 +35,19 @@ const SORT_COLUMNS: Record<string, string[]> = {
 const LIST_COLUMNS =
   'id, user_id, username, user_name, user_department, user_role, ' +
   'success, fail_reason, ip_address, device_type, os_name, browser_name, logged_in_at';
+
+/** 검색이 훑는 칸 — 표에 뜨는 글자는 전부 여기 있다. */
+const SEARCH_COLUMNS = [
+  'username',
+  'user_name',
+  'user_department',
+  'ip_address',
+  'device_type',
+  'os_name',
+  'browser_name',
+  // 왜 실패했는지. 결과 열이 이 값을 보여준다.
+  'fail_reason',
+] as const;
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,15 +85,21 @@ export async function GET(request: NextRequest) {
     if (status === 'success') query = query.eq('success', true);
     else if (status === 'failed') query = query.eq('success', false);
 
+    /*
+     * 검색은 표에 뜨는 글자 칸을 전부 훑는다. 기기 열이 보이는데 검색이 그 셋을
+     * 안 보면, "아이폰으로 들어온 것"을 눈으로 훑으라는 말이 된다.
+     *
+     * 값은 escapeOr(ilikeTerms 안)를 거친다 — 이름에 쉼표나 괄호가 들어가면
+     * 조건이 거기서 쪼개져 엉뚱한 줄이 나온다.
+     */
     if (search) {
-      query = query.or(
-        [
-          `username.ilike.%${search}%`,
-          `user_name.ilike.%${search}%`,
-          `user_department.ilike.%${search}%`,
-          `ip_address.ilike.%${search}%`,
-        ].join(',')
-      );
+      const terms = ilikeTerms(SEARCH_COLUMNS, search);
+
+      // 날짜로 치면 그날(또는 그달)에 들어온 기록.
+      const span = dateSpanOf(search);
+      if (span) terms.push(`and(logged_in_at.gte.${span.from},logged_in_at.lte.${span.to})`);
+
+      query = query.or(terms.join(','));
     }
 
     // 값이 없는 행(기기를 못 읽은 건)은 어느 방향이든 뒤로 보낸다.
