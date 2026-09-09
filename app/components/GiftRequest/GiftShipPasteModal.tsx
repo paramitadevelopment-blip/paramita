@@ -37,6 +37,26 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
   // 붙여넣는 대로 다시 읽는다. 글자가 많아도 계산이 가벼워 그때그때 해도 된다.
   const parsed = useMemo(() => parseShipPaste(text), [text]);
 
+  /*
+   * 건너뛴 줄을 이유별로 묶는다.
+   *
+   * 서버는 줄마다 왜 건너뛰었는지 말해 주는데 한 줄로 뭉쳐 버리면 "우리 신청이
+   * 아니거나 채울 것이 없어"가 된다 — 다른 회사 줄이라 넘긴 것과 우리 줄인데
+   * 택배사가 비어 넘긴 것은 할 일이 다르다. 어느 주문번호인지도 같이 낸다.
+   */
+  const skippedByReason = useMemo(() => {
+    if (!result) return [];
+    const by = new Map<string, string[]>();
+    for (const r of result.results) {
+      if (!r.skipped) continue;
+      const reason = r.reason ?? '건너뛰었습니다.';
+      const orderNo = parsed.rows[r.at]?.orderNo || '';
+      if (!by.has(reason)) by.set(reason, []);
+      if (orderNo) by.get(reason)!.push(orderNo);
+    }
+    return [...by.entries()].map(([reason, orderNos]) => ({ reason, orderNos }));
+  }, [result, parsed.rows]);
+
   const handleSubmit = async () => {
     const done = await onSubmit(parsed.rows);
     if (done) setResult(done);
@@ -55,12 +75,22 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
 
         {result ? (
           <div className={styles.pasteDone}>
-            <p className={styles.resultOk}>{result.filled}건에 배송 정보를 입력했습니다.</p>
-            {result.skipped > 0 && (
-              <p className={styles.pasteCheck}>
-                {result.skipped}건은 우리 신청이 아니거나 채울 것이 없어 건너뛰었습니다.
+            <p className={result.filled > 0 ? styles.resultOk : styles.pasteCheck}>
+              {result.filled > 0
+                ? `${result.filled}건에 배송 정보를 입력했습니다.`
+                : '배송 정보가 입력된 건이 없습니다.'}
+            </p>
+            {skippedByReason.map(({ reason, orderNos }) => (
+              <p key={reason} className={styles.pasteCheck}>
+                {orderNos.length}건 — {reason}
+                {orderNos.length > 0 && (
+                  <span className={styles.priorAddress}>
+                    주문번호 {orderNos.slice(0, 10).join(', ')}
+                    {orderNos.length > 10 ? ` 외 ${orderNos.length - 10}건` : ''}
+                  </span>
+                )}
               </p>
-            )}
+            ))}
             {result.failed > 0 && (
               <p className={styles.pasteProblem}>{result.failed}건은 저장하지 못했습니다.</p>
             )}
@@ -82,9 +112,6 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
                     </li>
                   ))}
                 </ul>
-                <span className={styles.fieldHint}>
-                  이 건들은 발주처에 다시 물어 주세요. 받은 뒤 다시 붙여넣으면 채워집니다.
-                </span>
               </div>
             ) : (
               result.filled > 0 && (
@@ -92,9 +119,6 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
               )
             )}
 
-            <p className={styles.fieldHint}>
-              채운 건은 &apos;배송 정보 입력됨&apos;이 되고, 신청한 지사에 확인 요청으로 뜹니다.
-            </p>
             <div className={styles.formActions}>
               <button type="button" className={styles.submitBtn} onClick={onClose}>
                 닫기
@@ -104,8 +128,7 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
         ) : (
           <>
             <p className={styles.pasteGuide}>
-              발주처가 채워 준 표를 그대로 붙여넣으세요. 머리글이 있어도 되고, 다른 회사 건이
-              섞여 있어도 됩니다 — <b>고객번호가 우리 신청과 맞는 줄만</b> 채워집니다.
+              발주리스트 양식을 붙여넣어 주세요.
               <span className={styles.pasteHeaders}>{GIFT_PASTE_HEADERS.join(' · ')}</span>
             </p>
 
