@@ -364,24 +364,13 @@ async function createOne(
     .neq('status', 'withdrawn');
   const duplicate = (prior ?? []).length > 0;
   const checkReason = String(raw.checkReason ?? '').trim();
-  /*
-   * 붙여넣기부터 가른다. 붙여넣기에는 사유를 적을 자리가 없어서 "사유를 적으면
-   * 된다"는 말이 틀린 안내가 된다 — 어디로 가야 하는지만 말한다.
-   */
-  if (duplicate && opts.bulk) {
-    return {
-      ok: false,
-      status: 409,
-      code: 'duplicate',
-      error: '이미 신청된 주문번호입니다. 붙여넣기 말고 사은품 신청을 통해 접수해 주세요.',
-    };
-  }
+  // code가 'duplicate'면 화면은 사유 칸을 연다 — 한 건 창이든 붙여넣기든.
   if (duplicate && !checkReason) {
     return {
       ok: false,
       status: 409,
       code: 'duplicate',
-      error: `이미 신청된 주문번호입니다(${prior!.length}건). 왜 다시 보내는지 사유를 적으면 관리자 확인 후 진행됩니다.`,
+      error: `이미 신청된 주문번호입니다(${prior!.length}건). 한 주문번호로 여러 건인 사유를 적으면 관리자 확인 후 진행됩니다.`,
     };
   }
 
@@ -480,22 +469,20 @@ export async function POST(request: NextRequest) {
       /*
        * 한 줄이 잘못돼도 나머지는 넣는다 — 스무 건 중 하나 때문에 열아홉 건을
        * 다시 붙여넣게 하면, 사람은 그 하나를 찾느라 전부를 다시 본다.
-       * 같은 붙여넣기 안에서 겹치는 고객번호는 뒤의 것을 뺀다.
+       *
+       * 같은 붙여넣기 안에 같은 고객번호가 여럿이면 앞 줄이 먼저 들어가고 뒷
+       * 줄은 그것을 '이미 신청된 건'으로 만난다 — 한 주문번호로 여러 상품을
+       * 보내는 경우라, 사유를 받아 관리자 확인으로 보내면 된다. 따로 안 거른다.
        */
-      const seen = new Set<string>();
-      const results: Array<{ at: number; ok: boolean; error?: string; data?: unknown }> = [];
+      const results: Array<{ at: number; ok: boolean; error?: string; code?: string; data?: unknown }> = [];
       for (const [at, raw] of (body.rows as Record<string, unknown>[]).entries()) {
-        const orderNo = String(raw?.orderNo ?? '').trim();
-        if (orderNo && seen.has(orderNo)) {
-          results.push({ at, ok: false, error: '같은 고객번호가 앞에 이미 있습니다.' });
-          continue;
-        }
-        seen.add(orderNo);
         const expectedName =
           typeof raw?.pastedName === 'string' && raw.pastedName.trim() ? raw.pastedName.trim() : undefined;
         const outcome = await createOne(user, raw ?? {}, { department, expectedName, bulk: true });
         results.push(
-          outcome.ok ? { at, ok: true, data: outcome.data } : { at, ok: false, error: outcome.error }
+          outcome.ok
+            ? { at, ok: true, data: outcome.data }
+            : { at, ok: false, error: outcome.error, code: outcome.code }
         );
       }
       return NextResponse.json(
