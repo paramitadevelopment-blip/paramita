@@ -336,6 +336,10 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
           </button>
           {picked.size > 0 ? (
             <>
+              {/* 고르기와 푸는 것은 짝이라 나란히 둔다. */}
+              <button type="button" className={styles.ghostBtn} onClick={() => setPicked(new Set())}>
+                선택 해제
+              </button>
               <span>
                 <strong>{picked.size}건</strong> 골랐습니다
               </span>
@@ -347,9 +351,6 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
               >
                 <MdOutlineInventory />
                 발주리스트 만들기
-              </button>
-              <button type="button" className={styles.ghostBtn} onClick={() => setPicked(new Set())}>
-                선택 해제
               </button>
             </>
           ) : (
