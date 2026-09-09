@@ -362,6 +362,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (reason.length > 500) {
         return NextResponse.json({ error: '보완 사유가 너무 깁니다.' }, { status: 400 });
       }
+      /*
+       * 이력을 먼저 쌓는다. 신청 행의 supplement_reason 은 '지금 무엇 때문에
+       * 멈춰 있나'를 보여줄 뿐이라 다음 보완 때 덮인다 — 지나간 사유는 여기 남는다.
+       * 이력을 못 남겨도 되돌리기 자체는 진행한다. 그 편이 일이 멈추지 않는다.
+       */
+      const { error: logError } = await supabase.from('gift_supplements').insert({
+        gift_request_id: giftId,
+        reason,
+        returned_by_id: user.id,
+        returned_by: user.username,
+      });
+      if (logError) {
+        console.error('Gift supplement log error:', logError);
+      }
+
       return await applyUpdate(giftId, {
         status: 'supplement',
         supplement_reason: reason,

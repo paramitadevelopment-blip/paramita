@@ -8,6 +8,9 @@ import {
   canEditGiftRequest,
   canShipGiftRequest,
   canWithdrawGiftRequest,
+  daysSince,
+  isOverdueGiftRequest,
+  waitingSince,
   type GiftRequestRow,
 } from '@/lib/gifts';
 import styles from './GiftRequest.module.css';
@@ -146,9 +149,15 @@ const GiftTable = memo(function GiftTableComponent({
         </thead>
         <tbody>
           {rows.map((row) => {
+            /*
+              사흘 넘게 그 자리에 서 있는 건. 아직 누군가 손대야 하는 자리만
+              센다 — 다 끝난 줄까지 붉으면 색이 뜻을 잃는다.
+            */
+            const overdue = isOverdueGiftRequest(row);
+            const waiting = daysSince(waitingSince(row));
             return (
               <Fragment key={row.id}>
-                <tr>
+                <tr className={overdue ? styles.rowOverdue : ''}>
                   {select && (
                     <td className={styles.checkCell}>
                       {select.selectable(row) && (
@@ -161,7 +170,10 @@ const GiftTable = memo(function GiftTableComponent({
                       )}
                     </td>
                   )}
-                  <td>{dateText(row.created_at)}</td>
+                  <td className={overdue ? styles.overdueCell : ''} title={overdue ? `${waiting}일째 이 자리에 있습니다` : undefined}>
+                    {dateText(row.created_at)}
+                    {overdue && <span className={styles.overdueTag}>{waiting}일</span>}
+                  </td>
                   <td>{row.customer_name}</td>
                   <td>{row.phone1 || '-'}</td>
                   <td>{row.gift_name}</td>

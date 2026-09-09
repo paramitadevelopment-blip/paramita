@@ -37,6 +37,11 @@ interface GiftDetailModalProps {
 }
 
 const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }: GiftDetailModalProps) {
+  // 서버가 순서를 보장하지 않는다. 오래된 것부터 세워야 '1차·2차'가 맞는다.
+  const supplements = [...(row.gift_supplements ?? [])].sort((a, b) =>
+    a.returned_at.localeCompare(b.returned_at)
+  );
+
   return (
     <div className={styles.modalOverlay}>
       <div className={`${styles.modal} ${styles.detailModal}`}>
@@ -162,6 +167,26 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
             </>
           )}
         </dl>
+
+        {/*
+          보완 이력. 고쳐서 다시 올리면 위의 상태는 바뀌지만 여기 기록은 남는다 —
+          몇 번 오갔고 그때마다 무엇이 문제였는지가 그 건의 사정이다.
+        */}
+        {supplements.length > 0 && (
+          <>
+            <h4 className={styles.detailTitle}>보완 이력 ({supplements.length}회)</h4>
+            <dl className={styles.detailList}>
+              {supplements.map((r, at) => (
+                <Line key={`${r.returned_at}-${at}`} label={`${at + 1}차 보완`}>
+                  <span className={styles.detailNote}>{r.reason}</span>
+                  <span className={styles.returnMeta}>
+                    {r.returned_by} · {dateTimeText(r.returned_at)}
+                  </span>
+                </Line>
+              ))}
+            </dl>
+          </>
+        )}
 
         <div className={styles.modalActions}>
           <button type="button" className={styles.actionBtn} onClick={onClose}>

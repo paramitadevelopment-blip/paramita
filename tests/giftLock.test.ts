@@ -4,6 +4,9 @@ import {
   canDeleteGiftRequest,
   canWithdrawGiftRequest,
   canShipGiftRequest,
+  isOverdueGiftRequest,
+  waitingSince,
+  GIFT_OVERDUE_DAYS,
   needsStaffRead,
   validateShipInput,
   needsShipCheck,
@@ -238,5 +241,61 @@ describe('배송 정보를 적을 수 있는가', () => {
     for (const status of ['pending_check', 'forwarded', 'supplement', 'withdrawn'] as const) {
       expect(canShipGiftRequest({ status })).toBe(false);
     }
+  });
+});
+
+/**
+ * 밀린 건. 자리마다 기다리는 사람이 다르므로 재는 시각도 다르다.
+ * 다 끝난 줄까지 붉으면 색이 뜻을 잃으므로, 손댈 자리만 센다.
+ */
+describe('밀린 사은품', () => {
+  const 지금 = new Date('2026-09-10T09:00:00+09:00');
+  const 나흘전 = '2026-09-06T09:00:00+09:00';
+  const 어제 = '2026-09-09T09:00:00+09:00';
+
+  it('사흘이 기준이다', () => {
+    expect(GIFT_OVERDUE_DAYS).toBe(3);
+  });
+
+  it('관리자 확인 대기는 신청한 날부터 센다', () => {
+    expect(isOverdueGiftRequest({ status: 'pending_check', created_at: 나흘전 }, 지금)).toBe(true);
+    expect(isOverdueGiftRequest({ status: 'pending_check', created_at: 어제 }, 지금)).toBe(false);
+  });
+
+  it('발주 대기는 전달된 날부터 — 신청일이 아니다', () => {
+    // 오래전에 신청됐어도 어제 전달됐다면 담당자는 어제부터 기다린 것이다.
+    expect(
+      isOverdueGiftRequest({ status: 'forwarded', created_at: 나흘전, forwarded_at: 어제 }, 지금)
+    ).toBe(false);
+    expect(
+      isOverdueGiftRequest({ status: 'forwarded', created_at: 어제, forwarded_at: 나흘전 }, 지금)
+    ).toBe(true);
+  });
+
+  it('발주 보냄은 발주일부터 — 발주처에서 송장이 와야 넘어간다', () => {
+    expect(
+      isOverdueGiftRequest({ status: 'ordered', created_at: 어제, order_date: '2026-09-06' }, 지금)
+    ).toBe(true);
+    expect(
+      isOverdueGiftRequest({ status: 'ordered', created_at: 나흘전, order_date: '2026-09-09' }, 지금)
+    ).toBe(false);
+  });
+
+  it('보완 요청은 되돌린 날부터 — 지사가 고쳐 올려야 넘어간다', () => {
+    expect(
+      isOverdueGiftRequest({ status: 'supplement', created_at: 어제, supplement_at: 나흘전 }, 지금)
+    ).toBe(true);
+  });
+
+  it('끝난 자리는 아무리 오래돼도 안 센다', () => {
+    for (const status of ['shipped', 'withdrawn'] as const) {
+      expect(isOverdueGiftRequest({ status, created_at: '2026-01-01T00:00:00+09:00' }, 지금)).toBe(false);
+      expect(waitingSince({ status, created_at: '2026-01-01T00:00:00+09:00' })).toBeNull();
+    }
+  });
+
+  it('기준 시각이 비어 있으면 신청일로 대신한다 — 안 세는 것보다 낫다', () => {
+    expect(waitingSince({ status: 'forwarded', created_at: 나흘전 })).toBe(나흘전);
+    expect(isOverdueGiftRequest({ status: 'forwarded', created_at: 나흘전 }, 지금)).toBe(true);
   });
 });

@@ -2069,3 +2069,46 @@
   font-size: 15px;
   font-weight: 500;
 }
+
+/* 보완 이력 한 줄의 '누가 언제'. 사유 아래에 작게 붙는다. */
+.returnMeta {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  color: #999;
+}
+
+/* 사유 본문. 줄바꿈은 적은 그대로 살리고 긴 줄은 창 너비에서 접는다. */
+.detailNote {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── 밀린 건 ────────────────────────────────────────────────
+ * 사흘 넘게 같은 자리에 서 있는 줄. 목록에서 이 색만 좇으면 밀린 건이 보인다.
+ */
+.rowOverdue td {
+  background: #fff8f8;
+}
+
+.rowOverdue:hover td {
+  background: #ffefef;
+}
+
+.overdueCell {
+  color: #c8434f;
+  font-weight: 700;
+}
+
+/* 며칠째인지. 날짜 옆에 붙여 한 칸을 더 쓰지 않는다. */
+.overdueTag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: #c8434f;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}

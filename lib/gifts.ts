@@ -24,7 +24,9 @@ export const GIFT_COLUMNS =
   'withdrawn_by, withdrawn_at, withdraw_reason, ' +
   'order_id, read_at, read_by, checked_by, checked_at, check_reason, ' +
   'ship_read_at, ship_read_by, ' +
-  'created_at, updated_at';
+  'created_at, updated_at, ' +
+  // 지나간 보완. 신청 행의 supplement_* 는 '지금 보완 상태인가'만 나타낸다.
+  'gift_supplements(reason, returned_by, returned_at)';
 
 /*
  * 한 건이 거치는 자리.
@@ -109,6 +111,11 @@ export interface GiftRequestRow {
   checked_at: string | null;
   /** 왜 다시 보내는지. 재신청 건에만 있다. */
   check_reason: string | null;
+  /**
+   * 지나간 보완 전부. 고쳐서 다시 올리면 위의 supplement_* 는 비워지지만
+   * 여기 기록은 남는다 — 몇 번 오갔고 그때마다 무엇이 문제였는지가 그 건의 사정이다.
+   */
+  gift_supplements?: Array<{ reason: string; returned_by: string; returned_at: string }>;
   /** 채워진 배송 정보를 지사가 확인했다. 담당자가 고치면 다시 비워진다. */
   ship_read_at: string | null;
   ship_read_by: string | null;
@@ -440,6 +447,65 @@ export function validateShipInput(raw: Record<string, unknown>): string | null {
     return '발주일을 다시 확인해 주세요.';
   }
   return null;
+}
+
+/** 며칠이 지났나. 날짜 단위로 센다 — 시각까지 따지면 '어제 것'이 오늘 걸렸다 안 걸렸다 한다. */
+export function daysSince(iso: string | null, now: Date = new Date()): number {
+  if (!iso) return 0;
+  const day = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const passed = (day(now) - day(new Date(iso))) / 86400000;
+  return passed > 0 ? Math.floor(passed) : 0;
+}
+
+/** 며칠부터 밀린 것으로 보나. 민원과 같은 사흘이다. */
+export const GIFT_OVERDUE_DAYS = 3;
+
+/** 그 상태에서 기다리기 시작한 시각. 자리마다 기다리는 사람이 다르다. */
+export function waitingSince(row: {
+  status: GiftStatus;
+  created_at: string;
+  forwarded_at?: string | null;
+  order_date?: string | null;
+  supplement_at?: string | null;
+}): string | null {
+  switch (row.status) {
+    // 관리자가 봐 줘야 넘어간다. 넣은 날부터 센다.
+    case 'pending_check':
+      return row.created_at;
+    // 담당자가 발주에 담아야 넘어간다.
+    case 'forwarded':
+      return row.forwarded_at ?? row.created_at;
+    // 발주처에서 송장이 와야 넘어간다.
+    case 'ordered':
+      return row.order_date ?? row.created_at;
+    // 지사가 고쳐 올려야 넘어간다.
+    case 'supplement':
+      return row.supplement_at ?? row.created_at;
+    // 끝난 자리. 기다리는 사람이 없다.
+    default:
+      return null;
+  }
+}
+
+/**
+ * 밀린 건인가.
+ *
+ * 아직 누군가 손대야 하는 자리만 센다. 그래야 목록에서 색이 붙은 줄이 곧
+ * '지금 손봐야 할 것'이 된다 — 민원의 isOverdueComplaint와 같은 생각이다.
+ */
+export function isOverdueGiftRequest(
+  row: {
+    status: GiftStatus;
+    created_at: string;
+    forwarded_at?: string | null;
+    order_date?: string | null;
+    supplement_at?: string | null;
+  },
+  now: Date = new Date()
+): boolean {
+  const since = waitingSince(row);
+  if (!since) return false;
+  return daysSince(since, now) >= GIFT_OVERDUE_DAYS;
 }
 
 /**
