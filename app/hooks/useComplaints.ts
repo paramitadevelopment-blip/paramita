@@ -211,6 +211,60 @@ export function useComplaints(options: { status?: ComplaintFilter } = {}) {
 }
 
 /**
+ * 고른 민원을 한 번에 확인 처리한다.
+ *
+ * 건별로 부르지 않는다 — 서른 건이면 서른 번 오가느라 사람이 기다린다.
+ * 서버가 한 번의 UPDATE로 끝내고, 아직 안 본 것만 찍으므로 처음 본 시각은
+ * 덮이지 않는다.
+ */
+export function useBulkReadComplaints() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: number[]) => {
+      const response = await fetch('/api/complaints/read-all', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+        body: JSON.stringify({ ids }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '확인 처리하지 못했습니다.');
+      return result.read as number;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: COMPLAINTS_KEY });
+      queryClient.invalidateQueries({ queryKey: UNREAD_COMPLAINTS_KEY });
+    },
+  });
+}
+
+/**
+ * 아직 확인 안 한 건의 아이디 전부.
+ *
+ * 상세를 하나씩 여는 것이 원래 길인데 스무 건이면 스무 번 열어야 한다.
+ * 검색·소속을 걸어 둔 채로 미확인 건만 받아 온다.
+ */
+export function useUnreadComplaintIds() {
+  const { showAlert } = useAlert();
+
+  return useMutation({
+    mutationFn: async (filters: { search?: string; group?: string }): Promise<number[]> => {
+      const params = new URLSearchParams({
+        unreadIds: 'true',
+        search: filters.search ?? '',
+        group: filters.group ?? '',
+      });
+      const response = await fetch(`/api/complaints?${params}`, { credentials: 'include' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '목록을 불러올 수 없습니다.');
+      return result.ids ?? [];
+    },
+    onError: (err: Error) => showAlert({ type: 'error', title: '오류', message: err.message }),
+  });
+}
+
+/**
  * 민원 접수.
  *
  * 등록 화면에서만 쓴다. 목록 조회와 한 훅에 두면 등록 화면이 안 쓰는 조회

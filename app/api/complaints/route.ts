@@ -332,6 +332,26 @@ export async function GET(request: NextRequest) {
       query = query.or(terms.join(','));
     }
 
+    /*
+     * 아직 안 본 건의 아이디만 달라는 요청.
+     *
+     * 화면의 [전체 확인]이 쓴다. 상세를 하나씩 여는 것이 원래 길인데 스무 건이면
+     * 스무 번 열어야 한다. 위에서 건 조건(소속·검색·상태)이 그대로 걸린 채로
+     * 아직 확인 안 한 것만 낸다.
+     */
+    if (searchParams.get('unreadIds') === 'true') {
+      const { data: unread, error: pickError } = await query
+        .eq('status', 'branch')
+        .is('read_at', null)
+        .order('id', { ascending: true })
+        .limit(1000);
+      if (pickError) {
+        console.error('Complaint unread id scan error:', pickError);
+        return NextResponse.json({ error: '목록을 불러올 수 없습니다.' }, { status: 500 });
+      }
+      return NextResponse.json({ ids: (unread ?? []).map((r) => (r as unknown as { id: number }).id) });
+    }
+
     // 동점이면 순서가 고정되지 않아 페이지를 넘길 때 행이 중복되거나 빠진다.
     const { data, error, count } = await query
       .order(sortBy, { ascending })

@@ -2012,17 +2012,8 @@
  * 여기서는 색이 곧 뜻이다 — 머리줄은 노랑, 지난 신청은 회색, 이번 건은 흰색.
  * 손을 올렸다고 그 색이 회색으로 덮이면 어느 줄이 이번 건인지 흐려진다.
  */
-.checkGroup tr:hover {
+.table.checkTable tbody tr:hover {
   background: transparent;
-}
-.checkGroupHead:hover td {
-  background: #fffbe6;
-}
-.checkPrior:hover td {
-  background: #fafafa;
-}
-.checkCurrent:hover td {
-  background: #fff;
 }
 
 /* 송장이 덜 들어온 발주 장. 발주처에 다시 물어야 하는 자리라 눈에 띄어야 한다. */

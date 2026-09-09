@@ -189,6 +189,61 @@ export function useGiftRequests(
 }
 
 /**
+ * 고른 신청을 한 번에 확인 처리한다.
+ *
+ * 건별로 부르지 않는다 — 서른 건이면 서른 번 오가느라 사람이 기다린다.
+ * 서버가 한 번의 UPDATE로 끝낸다.
+ */
+export function useBulkReadGifts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: number[]) => {
+      const response = await fetch('/api/gift-requests/read-all', {
+        method: 'POST',
+        credentials: 'include',
+        headers: headers(),
+        body: JSON.stringify({ ids }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '확인 처리하지 못했습니다.');
+      return result.read as number;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: GIFTS_KEY });
+      queryClient.invalidateQueries({ queryKey: GIFT_BADGE_KEY });
+    },
+  });
+}
+
+/**
+ * 지사: 송장이 채워졌는데 아직 안 본 건을 한 번에 확인한다.
+ *
+ * 고를 것이 없다 — 지사는 자기 소속 것만 보므로 서버가 소속으로 범위를 잡는다.
+ */
+export function useBulkShipRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/gift-requests/read-all', {
+        method: 'POST',
+        credentials: 'include',
+        headers: headers(),
+        body: JSON.stringify({ kind: 'ship' }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '확인 처리하지 못했습니다.');
+      return result.read as number;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: GIFTS_KEY });
+      queryClient.invalidateQueries({ queryKey: GIFT_BADGE_KEY });
+    },
+  });
+}
+
+/**
  * 지금 조건에 맞는 발주 대기 건의 아이디 전부.
  *
  * 머리 체크박스는 그 페이지 것만 고른다. 백 건이면 열 페이지를 돌아야 하므로,
@@ -302,7 +357,8 @@ export function useGiftThread(id: number | null, enabled = true) {
 
 /** 여러 건을 한 번에 넣은 결과. 줄마다 됐는지 안 됐는지가 온다. */
 export interface BulkGiftResult {
-  results: Array<{ at: number; ok: boolean; error?: string; data?: GiftRequestRow }>;
+  /** code가 'duplicate'면 이미 신청된 주문번호 — 사유를 적어 다시 보내면 들어간다. */
+  results: Array<{ at: number; ok: boolean; error?: string; code?: string; data?: GiftRequestRow }>;
   created: number;
   failed: number;
 }

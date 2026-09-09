@@ -14,6 +14,7 @@ import {
   useGiftBadgeCount,
   useShipPaste,
   usePickAllForwarded,
+  useBulkReadGifts,
   downloadGiftOrderExcel,
 } from '@/app/hooks/useGifts';
 import { useDepartments } from '@/app/hooks/useDepartments';
@@ -58,6 +59,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
   const waitingCount = badge?.manage ?? 0;
   const createOrder = useCreateGiftOrder();
   const pickAll = usePickAllForwarded();
+  const bulkRead = useBulkReadGifts();
   const shipPaste = useShipPaste();
   const { data: departments } = useDepartments();
   const groups = toAssignableDepartmentGroups(departments);
@@ -107,12 +109,8 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
       });
       return;
     }
+    // 알림창은 없다. 체크가 다 켜지고 그 옆에 'N건 골랐습니다'가 이미 뜬다.
     setPicked(new Set(ids));
-    showAlert({
-      type: 'success',
-      title: '전체 선택',
-      message: `발주 대기 ${ids.length}건을 골랐습니다.`,
-    });
   };
 
   /*
@@ -121,34 +119,17 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
    * 상세를 하나씩 여는 것이 원래 길인데, 서른 건이면 서른 번 열어야 한다.
    * 이미 본 건은 서버가 400으로 돌려보내므로 그냥 세지 않고 넘긴다.
    */
-  const [reading, setReading] = useState(false);
   const readPicked = () => {
     const ids = [...picked];
     showAlert({
       type: 'info',
       title: '선택 확인',
-      message: `고른 ${ids.length}건을 확인 처리합니다. 확인하면 지사가 더 이상 고칠 수 없습니다.`,
+      message: `선택된 ${ids.length}건을 확인 처리하시겠습니까?`,
       showCancelButton: true,
       onConfirm: async () => {
-        setReading(true);
-        let done = 0;
-        try {
-          for (const id of ids) {
-            // ponytail: 건별 요청. 수백 건이 되면 묶음 API로 올린다.
-            await list
-              .patch({ id, body: { action: 'read' } })
-              .then(() => done++)
-              .catch(() => {});
-          }
-        } finally {
-          setReading(false);
-        }
+        await bulkRead.mutateAsync(ids);
         setPicked(new Set());
-        showAlert({
-          type: 'success',
-          title: '확인 완료',
-          message: `${done}건을 확인했습니다.${ids.length > done ? ` ${ids.length - done}건은 이미 확인한 건입니다.` : ''}`,
-        });
+        showAlert({ type: 'success', title: '확인 완료', message: `${ids.length}건을 확인했습니다.` });
       },
     });
   };
@@ -177,7 +158,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
     showAlert({
       type: 'info',
       title: '발주리스트 만들기',
-      message: `고른 ${ids.length}건으로 발주리스트를 만드시겠습니까? 만들면 거래처 양식 엑셀이 내려받아지고, 그 건들은 '발주 보냄'이 됩니다.`,
+      message: `선택된 ${ids.length}건으로 발주리스트를 만드시겠습니까?`,
       showCancelButton: true,
       onConfirm: async () => {
         const result = await createOrder.mutateAsync(ids);
@@ -378,16 +359,13 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
               <button type="button" className={styles.ghostBtn} onClick={() => setPicked(new Set())}>
                 선택 해제
               </button>
-              <span>
-                <strong>{picked.size}건</strong> 골랐습니다
-              </span>
               <button
                 type="button"
                 className={styles.ghostBtn}
                 onClick={readPicked}
-                disabled={reading}
+                disabled={bulkRead.isPending}
               >
-                {reading ? '확인 중…' : '확인 처리'}
+                {bulkRead.isPending ? '확인 중…' : '확인 처리'}
               </button>
               <button
                 type="button"
@@ -398,10 +376,13 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
                 <MdOutlineInventory />
                 발주리스트 만들기
               </button>
+              <span>
+                <strong>{picked.size}건</strong> 골랐습니다
+              </span>
             </>
           ) : (
             <span className={styles.forwardHint}>
-              확인하거나 발주할 건을 체크하세요 · 전부 고르려면 [전체 선택]
+              확인하거나 발주할 건을 체크하세요
             </span>
           )}
         </div>

@@ -5,7 +5,7 @@ import { MdExpandMore } from 'react-icons/md';
 import { useAuthStore } from '@/app/store/authStore';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { isAdminRole } from '@/lib/roles';
-import { useComplaints, useUnreadComplaintCount } from '@/app/hooks/useComplaints';
+import { useBulkReadComplaints, useUnreadComplaintIds, useComplaints, useUnreadComplaintCount } from '@/app/hooks/useComplaints';
 import { useDepartments } from '@/app/hooks/useDepartments';
 import { toAssignableDepartmentGroups } from '@/lib/departments';
 import {
@@ -67,6 +67,32 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
   const manageTabs = badge?.manageTabs ?? {};
   // 소속 목록은 관리자만 쓴다. 지사는 서버가 자기 범위로 고정한다.
   const { data: departments } = useDepartments(isAdmin);
+  const unreadIds = useUnreadComplaintIds();
+  const bulkRead = useBulkReadComplaints();
+
+  /*
+   * 아직 안 본 건을 한 번에 확인 처리한다.
+   *
+   * 상세를 하나씩 여는 것이 원래 길인데 스무 건이면 스무 번 열어야 한다.
+   * 지금 걸어 둔 검색·소속에 맞는 미확인 건만 찍는다.
+   */
+  const readAllUnread = async () => {
+    const ids = await unreadIds.mutateAsync({ search: list.search, group: list.group });
+    if (ids.length === 0) {
+      showAlert({ type: 'info', title: '확인할 것이 없음', message: '아직 안 본 민원이 없습니다.' });
+      return;
+    }
+    showAlert({
+      type: 'info',
+      title: '전체 확인',
+      message: `선택된 ${ids.length}건을 확인 처리하시겠습니까?`,
+      showCancelButton: true,
+      onConfirm: async () => {
+        await bulkRead.mutateAsync(ids);
+        showAlert({ type: 'success', title: '확인 완료', message: `${ids.length}건을 확인했습니다.` });
+      },
+    });
+  };
   /*
    * 상세를 여는 것이 곧 확인이다.
    *
@@ -226,6 +252,27 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
           ))}
         </div>
       )}
+
+      {/*
+        확인은 지사가 하는 일이지만 관리자도 누를 수 있게 둔다 — 누가 눌렀는지는
+        read_by 에 남으므로 기록이 거짓이 되지 않는다. 관리자가 소속을 걸어 두면
+        그 지사 것만 찍힌다.
+      */}
+      <div className={styles.readAllRow}>
+        <button
+          type="button"
+          className={styles.readAllBtn}
+          onClick={readAllUnread}
+          disabled={bulkRead.isPending || unreadIds.isPending}
+        >
+          {bulkRead.isPending ? '확인 중…' : '전체 확인'}
+        </button>
+        <span className={styles.readAllHint}>
+          아직 안 본 민원을 한 번에 확인 처리합니다
+          {isAdmin && list.group ? ` — 지금은 ${list.group}만` : ''}
+        </span>
+      </div>
+
 
       {list.isLoading ? (
         <Spinner />
