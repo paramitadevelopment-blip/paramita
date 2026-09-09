@@ -9,6 +9,7 @@ import { maskJumin } from '@/lib/columnAliases';
 import type { BlacklistKey } from '@/lib/blacklist';
 import { attachSourceFiles, type SourceFile, type SourceFileHit } from '@/lib/blacklistFiles';
 import { recordBlacklistHistory } from '@/lib/blacklistStore';
+import { ilikeTerms, phoneVariants, dateSpanOf } from '@/lib/listSearch';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -38,6 +39,19 @@ const SORTABLE = [
 
 const LIST_COLUMNS =
   'id, customer_name, product_name, birth, tel1, tel2, reason, request_count, registered_by, source_file_id, source_file_name, registered_at, released_at, release_reason';
+
+/** 검색이 훑는 칸 — 목록·상세에 뜨는 글자는 전부 여기 있다. */
+const SEARCH_COLUMNS = [
+  'customer_name',
+  'product_name',
+  'birth',
+  'tel1',
+  'tel2',
+  'reason',
+  'release_reason',
+  'source_file_name',
+  'registered_by',
+] as const;
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,21 +95,31 @@ export async function GET(request: NextRequest) {
       query = query.is('released_at', null);
     }
 
+    /*
+     * 검색은 화면에 뜨는 글자 칸을 전부 훑는다. 표에 보이는데 검색으로 못 찾으면
+     * 눈으로 훑으라는 말이 된다 — 사유가 그랬다.
+     *
+     * 값은 escapeOr(ilikeTerms 안)를 거친다. 이름에 쉼표나 괄호가 들어가면
+     * 조건이 거기서 쪼개져 엉뚱한 줄이 나온다.
+     */
     if (search) {
-      // 이름·상품·전화·생년월일 어디에 걸려도 찾히게 한다. 전화번호는 사람이
-      // 하이픈을 넣거나 빼서 검색하므로 두 형태를 모두 훑는다.
-      const digits = search.replace(/\D/g, '');
-      const terms = [
-        `customer_name.ilike.%${search}%`,
-        `product_name.ilike.%${search}%`,
-        `birth.ilike.%${search}%`,
-        `tel1.ilike.%${search}%`,
-        `tel2.ilike.%${search}%`,
-        `source_file_name.ilike.%${search}%`,
-      ];
-      if (digits) {
-        terms.push(`phone_keys.cs.{${digits}}`);
+      const terms = ilikeTerms(SEARCH_COLUMNS, search);
+
+      // '01012345678'로 쳐도 '010-1234-5678'로 저장된 줄이 나온다.
+      for (const shape of phoneVariants(search)) {
+        terms.push(...ilikeTerms(['tel1', 'tel2'], shape));
       }
+      const digits = search.replace(/\D/g, '');
+      if (digits) terms.push(`phone_keys.cs.{${digits}}`);
+
+      // 날짜로 치면 그날(또는 그달)에 올라온 것.
+      const span = dateSpanOf(search);
+      if (span) {
+        for (const column of ['registered_at', 'released_at']) {
+          terms.push(`and(${column}.gte.${span.from},${column}.lte.${span.to})`);
+        }
+      }
+
       query = query.or(terms.join(','));
     }
 

@@ -4,6 +4,7 @@ import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { createClient } from '@supabase/supabase-js';
 import { parsePagination } from '@/lib/pagination';
+import { ilikeTerms, phoneVariants, dateSpanOf } from '@/lib/listSearch';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -48,6 +49,21 @@ const LIST_COLUMNS =
   'assigned_dept, assigned_group, previous_applied_at, assigned_file_id, assigned_file_name, ' +
   'read_at, read_by, created_at';
 
+/** 검색이 훑는 칸 — 목록에 뜨는 글자는 전부 여기 있다. */
+const SEARCH_COLUMNS = [
+  'customer_name',
+  'birth',
+  'tel1',
+  'tel2',
+  'product_name',
+  'reason',
+  'order_no',
+  'source_file_name',
+  'assigned_dept',
+  'assigned_group',
+  'assigned_file_name',
+] as const;
+
 export async function GET(request: NextRequest) {
   try {
     const user = getUserFromRequest(request);
@@ -81,16 +97,28 @@ export async function GET(request: NextRequest) {
 
     if (unreadOnly) query = query.is('read_at', null);
 
+    /*
+     * 검색은 화면에 뜨는 글자 칸을 전부 훑는다. 표에 생년월일·결과·배정 소속이
+     * 보이는데 검색으로는 이름·상품·전화만 찾히면 나머지는 눈으로 훑으란 말이 된다.
+     */
     if (search) {
-      // 사람이 하이픈을 넣거나 빼서 검색하므로 두 형태를 모두 훑는다.
+      const terms = ilikeTerms(SEARCH_COLUMNS, search);
+
+      // '01012345678'로 쳐도 '010-1234-5678'로 저장된 줄이 나온다.
+      for (const shape of phoneVariants(search)) {
+        terms.push(...ilikeTerms(['tel1', 'tel2'], shape));
+      }
       const digits = search.replace(/\D/g, '');
-      const terms = [
-        `customer_name.ilike.%${search}%`,
-        `product_name.ilike.%${search}%`,
-        `tel1.ilike.%${search}%`,
-        `tel2.ilike.%${search}%`,
-      ];
       if (digits) terms.push(`phone_keys.cs.{${digits}}`);
+
+      // 날짜로 치면 그날(또는 그달)에 걸린 건.
+      const span = dateSpanOf(search);
+      if (span) {
+        for (const column of ['applied_at', 'previous_applied_at', 'created_at']) {
+          terms.push(`and(${column}.gte.${span.from},${column}.lte.${span.to})`);
+        }
+      }
+
       query = query.or(terms.join(','));
     }
 

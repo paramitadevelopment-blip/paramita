@@ -232,3 +232,33 @@ describe('numberOf — 번호로 부르는 것', () => {
     expect(numberOf('')).toBeNull();
   });
 });
+
+/**
+ * 통합검색이 훑는 칸 목록.
+ *
+ * 화면 표에 열이 보이는데 검색이 그 칸을 안 보면, 사람은 눈으로 훑게 된다.
+ * 새 열을 표에 붙일 때 여기도 같이 늘어나야 한다.
+ */
+describe('통합검색이 훑는 칸', () => {
+  it('블랙리스트: 사유·해제 사유까지 본다', () => {
+    const columns = ['customer_name', 'product_name', 'birth', 'tel1', 'tel2', 'reason', 'release_reason', 'source_file_name', 'registered_by'];
+    const terms = ilikeTerms(columns, '홍길동');
+    expect(terms).toHaveLength(columns.length);
+    expect(terms).toContain('reason.ilike."%홍길동%"');
+    expect(terms).toContain('release_reason.ilike."%홍길동%"');
+  });
+
+  it('재신청 고객: 생년월일·결과·주문번호·배정 소속·근거 파일까지 본다', () => {
+    const columns = ['customer_name', 'birth', 'tel1', 'tel2', 'product_name', 'reason', 'order_no', 'source_file_name', 'assigned_dept', 'assigned_group', 'assigned_file_name'];
+    const terms = ilikeTerms(columns, '한울부원');
+    expect(terms).toContain('birth.ilike."%한울부원%"');
+    expect(terms).toContain('order_no.ilike."%한울부원%"');
+    expect(terms).toContain('assigned_dept.ilike."%한울부원%"');
+    expect(terms).toContain('assigned_file_name.ilike."%한울부원%"');
+  });
+
+  it('쉼표·괄호가 든 값도 조건이 쪼개지지 않는다', () => {
+    const terms = ilikeTerms(['reason'], '중복 (이름, 전화)');
+    expect(terms[0]).toBe('reason.ilike."%중복 (이름, 전화)%"');
+  });
+});

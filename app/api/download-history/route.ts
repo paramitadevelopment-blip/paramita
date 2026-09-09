@@ -89,15 +89,24 @@ export async function GET(request: NextRequest) {
       }
 
       const searchLower = search.toLowerCase();
+      /*
+       * 화면에 뜨는 글자 칸은 전부 훑는다. 표에 소속·IP·기기·OS·브라우저가
+       * 보이는데 검색이 파일명·아이디·이름·사번만 보면, 나머지 다섯 열은
+       * 눈으로 훑으라는 말이 된다. downloaded_by는 로그인 아이디다.
+       */
+      const SEARCH_FIELDS = [
+        'file_name',
+        'downloaded_by',
+        'user_name',
+        'user_employee_id',
+        'user_department',
+        'ip_address',
+        'device_type',
+        'os_name',
+        'browser_name',
+      ];
       const matched = (data || []).filter((record: any) => {
-        // downloaded_by는 로그인 아이디다. 실명(user_name)·사번으로 찾는 경우가
-        // 더 많은데 이 두 값이 빠져 있으면 아이디를 정확히 알 때만 걸린다.
-        if (
-          record.file_name.toLowerCase().includes(searchLower) ||
-          record.downloaded_by.toLowerCase().includes(searchLower) ||
-          String(record.user_name ?? '').toLowerCase().includes(searchLower) ||
-          String(record.user_employee_id ?? '').toLowerCase().includes(searchLower)
-        ) {
+        if (SEARCH_FIELDS.some((f) => String(record[f] ?? '').toLowerCase().includes(searchLower))) {
           return true;
         }
 
