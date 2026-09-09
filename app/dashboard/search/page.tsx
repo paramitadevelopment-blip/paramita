@@ -15,6 +15,7 @@ import BlacklistSection from './components/BlacklistSection';
 import ReapplySection from './components/ReapplySection';
 import ComplaintSection from './components/ComplaintSection';
 import GiftRequestSection from './components/GiftRequestSection';
+import DeletedRecordsSection from './components/DeletedRecordsSection';
 import styles from './page.module.css';
 
 function SearchPage() {
@@ -122,6 +123,12 @@ function SearchPage() {
               */}
               <ComplaintSection searchQuery={searchQuery} formatDateTime={formatDateTime} />
               <GiftRequestSection searchQuery={searchQuery} formatDateTime={formatDateTime} />
+              {/*
+                지워진 건. 목록에서는 사라졌으니 여기가 유일하게 되짚는 자리다 —
+                "이 고객 민원 어디 갔지?"에 답한다. 관리자만 보인다(서버가 가른다).
+                맨 아래에 둔다: 살아 있는 것을 먼저 보고, 없을 때 여기를 본다.
+              */}
+              <DeletedRecordsSection searchQuery={searchQuery} formatDateTime={formatDateTime} />
             </div>
           )}
 
