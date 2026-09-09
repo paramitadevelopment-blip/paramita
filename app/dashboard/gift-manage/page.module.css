@@ -2034,3 +2034,37 @@
   color: #2e7d32;
   font-weight: 700;
 }
+
+/* 표 위의 [전체 선택]. 지금 조건에 맞는 발주 대기 건을 통째로 고른다. */
+.selectAllBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border: 1px solid #db1a62;
+  border-radius: 8px;
+  background: white;
+  color: #db1a62;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.selectAllBtn:hover:not(:disabled) {
+  background: #db1a62;
+  color: white;
+}
+
+.selectAllBtn:disabled {
+  border-color: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+}
+
+/* 아직 아무것도 안 골랐을 때의 안내. 무엇을 하는 줄인지 말해 준다. */
+.forwardHint {
+  color: #888;
+  font-size: 16px;
+}

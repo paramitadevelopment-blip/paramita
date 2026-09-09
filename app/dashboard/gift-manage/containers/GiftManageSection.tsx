@@ -6,7 +6,6 @@ import {
   MdListAlt,
   MdOutlineInventory,
   MdLocalShipping,
-  MdChecklist,
 } from 'react-icons/md';
 import { useAlert } from '@/app/components/Alert/Alert';
 import {
@@ -259,19 +258,6 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
           </select>
           <MdExpandMore className={styles.selectIcon} />
         </div>
-        {/*
-          머리 체크박스는 그 페이지 것만 고른다. 백 건이면 열 페이지를 돌게 되므로
-          지금 걸어 둔 검색·지사에 맞는 발주 대기 건을 한 번에 고르는 자리를 둔다.
-        */}
-        <button
-          type="button"
-          className={styles.ghostBtn}
-          onClick={pickAllForwarded}
-          disabled={pickAll.isPending}
-        >
-          <MdChecklist />
-          {pickAll.isPending ? '고르는 중…' : '발주 대기 전부 고르기'}
-        </button>
       </div>
 
       <div className={styles.statusTabs}>
@@ -330,24 +316,47 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
         </div>
       )}
 
-      {/* 고른 것을 발주리스트로 묶는 자리. 고른 게 있을 때만 나온다. */}
-      {picked.size > 0 && (
+      {/*
+        고르고 묶는 자리. 표 바로 위에 둔다 — 고르는 일은 표에서 하는 일이다.
+
+        [전체 선택]은 고른 것이 없어도 늘 보여야 한다. 머리 체크박스는 그 페이지
+        것만 고르므로 백 건이면 열 페이지를 돌게 되는데, 그 사실을 아는 사람만
+        찾아 쓰는 자리에 두면 없는 것과 같다.
+      */}
+      {!list.isLoading && list.rows.length > 0 && (
         <div className={styles.forwardBar}>
-          <span>
-            <strong>{picked.size}건</strong> 골랐습니다
-          </span>
           <button
             type="button"
-            className={styles.actionBtn}
-            onClick={askOrder}
-            disabled={createOrder.isPending}
+            className={styles.selectAllBtn}
+            onClick={pickAllForwarded}
+            disabled={pickAll.isPending}
+            title="지금 걸어 둔 검색·지사에 맞는 발주 대기 건을 전부 고릅니다"
           >
-            <MdOutlineInventory />
-            발주리스트 만들기
+            {pickAll.isPending ? '고르는 중…' : '전체 선택'}
           </button>
-          <button type="button" className={styles.ghostBtn} onClick={() => setPicked(new Set())}>
-            선택 해제
-          </button>
+          {picked.size > 0 ? (
+            <>
+              <span>
+                <strong>{picked.size}건</strong> 골랐습니다
+              </span>
+              <button
+                type="button"
+                className={styles.actionBtn}
+                onClick={askOrder}
+                disabled={createOrder.isPending}
+              >
+                <MdOutlineInventory />
+                발주리스트 만들기
+              </button>
+              <button type="button" className={styles.ghostBtn} onClick={() => setPicked(new Set())}>
+                선택 해제
+              </button>
+            </>
+          ) : (
+            <span className={styles.forwardHint}>
+              발주할 건을 체크하거나 [전체 선택]을 누르세요
+            </span>
+          )}
         </div>
       )}
 
