@@ -119,8 +119,8 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
 
             {text.trim().length > 0 && (
               <div className={styles.pasteSummary}>
-                <b>{parsed.rows.length}줄</b>에서 배송 정보를 읽었습니다
-                {parsed.skipped > 0 && ` · 채울 것이 없어 버린 줄 ${parsed.skipped}개`}
+                <b>{parsed.rows.length}건</b>의 배송 정보를 읽었습니다
+                {parsed.skipped > 0 && ` · 입력할 것이 없어 버린 줄 ${parsed.skipped}개`}
               </div>
             )}
 
@@ -167,7 +167,7 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
                 disabled={parsed.rows.length === 0 || isSubmitting}
               >
                 <MdLocalShipping />
-                {isSubmitting ? '입력 중…' : `${parsed.rows.length}줄 입력`}
+                {isSubmitting ? '등록 중…' : `${parsed.rows.length}건 등록`}
               </button>
             </div>
           </>
