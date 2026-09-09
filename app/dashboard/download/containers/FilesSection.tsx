@@ -42,6 +42,11 @@ interface UploadedFile {
   } | null;
   is_original?: boolean;
   original_file_id?: string | null;
+  /**
+   * 이 사람이 지금 이 파일을 받을 수 있는가. 서버가 계산해 준다(관리자에게는
+   * 제한이 없어 안 온다). 한 번에 내려받을 때 받을 수 있는 줄만 고르는 데 쓴다.
+   */
+  myDownloadStatus?: 'available' | 'downloaded' | 'pending_request' | 'rejected';
 }
 
 interface FilesSectionProps {
@@ -254,6 +259,78 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
       }
     );
   }, [downloadMutation, showAlert]);
+
+  /*
+   * 고른 것을 한 번에 내려받는다.
+   *
+   * 한 건씩 차례로 보낸다. 다운로드는 파일마다 한 번으로 묶여 있고 서버가 그
+   * 횟수를 센다 — 한꺼번에 보내면 같은 파일에 두 번이 겹쳐 한쪽이 409로 밀리고,
+   * 받지도 못한 채 횟수만 닳는다.
+   *
+   * 받을 수 없는 줄은 애초에 빼고 센다. 이미 받은 것, 요청 중인 것, 거부된 것이
+   * 섞여 있으면 "다섯 건 골랐는데 셋만 왔다"가 되므로 누르기 전에 알려 준다.
+   */
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+
+  const downloadableSelected = useMemo(
+    () =>
+      filesWithFormattedDate.filter(
+        (f: UploadedFile) =>
+          selectedFileIds.has(f.id) && (isAdmin || f.myDownloadStatus === 'available')
+      ),
+    [filesWithFormattedDate, selectedFileIds, isAdmin]
+  );
+
+  const handleBulkDownload = useCallback(() => {
+    const targets = downloadableSelected;
+    const blocked = selectedFileIds.size - targets.length;
+
+    if (targets.length === 0) {
+      showAlert({
+        type: 'warning',
+        title: '내려받을 파일 없음',
+        message: '고른 파일 중 지금 받을 수 있는 것이 없습니다. 이미 받았거나 요청 중인 파일입니다.',
+      });
+      return;
+    }
+
+    showAlert({
+      type: 'info',
+      title: '선택 항목 내려받기',
+      message:
+        blocked > 0
+          ? `${targets.length}건을 내려받습니다. 고른 것 중 ${blocked}건은 이미 받았거나 요청 중이라 빠집니다.`
+          : `${targets.length}건을 내려받습니다.`,
+      showCancelButton: true,
+      onConfirm: async () => {
+        setBulkDownloading(true);
+        let done = 0;
+        const failed: string[] = [];
+        try {
+          for (const file of targets) {
+            try {
+              await downloadMutation.mutateAsync({ fileId: file.id, fileName: file.name });
+              done++;
+            } catch (error: any) {
+              // 한 건이 막혀도 나머지는 계속 받는다. 무엇이 막혔는지는 끝나고 한 번에 말한다.
+              failed.push(`${file.name} — ${error?.message ?? '실패'}`);
+            }
+          }
+        } finally {
+          setBulkDownloading(false);
+        }
+        clearSelection();
+        showAlert({
+          type: failed.length > 0 ? 'warning' : 'success',
+          title: '내려받기 완료',
+          message:
+            failed.length > 0
+              ? `${done}건을 받았습니다. ${failed.length}건은 받지 못했습니다.\n${failed.join('\n')}`
+              : `${done}건을 받았습니다.`,
+        });
+      },
+    });
+  }, [downloadableSelected, selectedFileIds, downloadMutation, clearSelection, showAlert]);
 
   const handleRedownloadRequest = useCallback((fileId: string, fileName: string) => {
     setRedownloadFileId(fileId);
@@ -588,6 +665,34 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
             </div>
           )}
         </>
+      )}
+
+      {/*
+        고른 것으로 하는 일. 체크칸은 지사에게도 보이므로 지사가 할 수 있는 일이
+        여기 있어야 한다 — 없으면 체크칸이 무엇에 쓰는 것인지 알 수 없다.
+      */}
+      {selectedFileIds.size > 0 && (
+        <div className={styles.selectionBar}>
+          <span>
+            <strong>{selectedFileIds.size}건</strong> 골랐습니다
+            {!isAdmin && downloadableSelected.length !== selectedFileIds.size && (
+              <span className={styles.selectionNote}>
+                {' '}
+                · 받을 수 있는 것 {downloadableSelected.length}건
+              </span>
+            )}
+          </span>
+          <button
+            className={styles.bulkDownloadBtn}
+            onClick={handleBulkDownload}
+            disabled={bulkDownloading || downloadableSelected.length === 0}
+          >
+            {bulkDownloading ? '내려받는 중…' : `선택 항목 내려받기 (${downloadableSelected.length})`}
+          </button>
+          <button className={styles.clearSelectionBtn} onClick={clearSelection}>
+            선택 해제
+          </button>
+        </div>
       )}
 
       {isAdmin && (

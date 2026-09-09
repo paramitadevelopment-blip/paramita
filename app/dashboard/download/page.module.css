@@ -1141,3 +1141,67 @@
   font-size: 18px;
   font-weight: 600;
 }
+
+/* ── 고른 것으로 하는 일 ─────────────────────────────────────
+ * 체크칸은 지사에게도 보인다. 고른 것이 있을 때만 나오는 줄이라,
+ * 평소에는 자리를 차지하지 않는다.
+ */
+.selectionBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 14px 20px;
+  border: 1px solid #f3c3d4;
+  border-radius: 10px;
+  background: #fff5f7;
+  font-size: 18px;
+}
+
+.selectionBar strong {
+  color: #db1a62;
+}
+
+/* 고른 것 중 지금 받을 수 있는 수. 실제로 받아지는 건수를 미리 알려 준다. */
+.selectionNote {
+  color: #888;
+  font-size: 16px;
+}
+
+.bulkDownloadBtn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #db1a62;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bulkDownloadBtn:hover:not(:disabled) {
+  background: #a01a49;
+}
+
+.bulkDownloadBtn:disabled {
+  background: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.clearSelectionBtn {
+  padding: 10px 18px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  color: #666;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clearSelectionBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
