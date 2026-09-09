@@ -99,17 +99,27 @@ describe('발주리스트 열', () => {
 });
 
 describe('발주리스트 행', () => {
-  it('발주일·택배사·운송장번호는 비워서 낸다 — 거래처가 채우는 값이다', () => {
-    const out = orderSheetRow(row({ order_date: null, courier: null, tracking_no: null }));
-    expect(out.slice(0, 3)).toEqual(['', '', '']);
+  it('발주일은 묶음을 만든 날로 적는다 — 우리가 발주한 날이다', () => {
+    const out = orderSheetRow(row({ order_date: '2026-09-09', courier: null, tracking_no: null }));
+    expect(out.slice(0, 3)).toEqual(['2026-09-09', '', '']);
   });
 
-  it('송장이 채워진 건(shipped)은 택배사·운송장을 그대로 낸다 — 발주일은 여전히 비운다', () => {
+  it('택배사·운송장번호는 비워서 낸다 — 거래처가 채우는 값이다', () => {
+    const out = orderSheetRow(row({ order_date: '2026-09-09', courier: null, tracking_no: null }));
+    expect(out[1]).toBe('');
+    expect(out[2]).toBe('');
+  });
+
+  it('아직 안 묶인 건은 발주일이 빈다 — 없는 날을 지어내지 않는다', () => {
+    const out = orderSheetRow(row({ order_date: null, courier: null, tracking_no: null }));
+    expect(out[0]).toBe('');
+  });
+
+  it('송장이 채워진 건(shipped)은 셋 다 그대로 낸다', () => {
     const out = orderSheetRow(
       row({ status: 'shipped', order_date: '2026-09-07', courier: 'CJ대한통운', tracking_no: '1234-5678' })
     );
-    // 발주일은 거래처가 실제로 내보낸 날이라 우리는 모른다. order_date(묶은 날)와 뜻이 다르다.
-    expect(out.slice(0, 3)).toEqual(['', 'CJ대한통운', '1234-5678']);
+    expect(out.slice(0, 3)).toEqual(['2026-09-07', 'CJ대한통운', '1234-5678']);
   });
 
   it('값이 열 이름과 같은 자리에 선다', () => {
@@ -192,7 +202,7 @@ describe('통합 문서', () => {
     expect(addr.font?.size).toBe(9);
     expect(addr.alignment?.horizontal).toBe('left');
     expect(addr.border?.left?.style).toBe('thin');
-    expect(sheet.getCell('A3').numFmt).toBe('m/d/yy');
+    expect(sheet.getCell('A3').numFmt).toBe('yyyy-mm-dd');
   });
 
   it('숫자로만 된 고객번호는 숫자 셀로 낸다 — 실제 파일이 그렇다', () => {

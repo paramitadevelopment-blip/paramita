@@ -10,7 +10,7 @@ import type { GiftRequestRow } from '@/lib/gifts';
  * 채움·테두리·글꼴·정렬을 그대로 옮겼다. 사은품담당자가 화면을 보고 옮겨 적던
  * 것을 이 파일로 대신하므로, 받는 쪽이 "늘 오던 그 파일"로 읽어야 한다.
  *
- * 발주일·택배사·운송장번호는 **비워서 낸다.** 우리가 채워 보내는 값이 아니라
+ * 택배사·운송장번호는 **비워서 낸다.** 우리가 채워 보내는 값이 아니라
  * 발주 뒤 송장이 나오면 담당자가 채우는 값이다(실제 파일 14건 전부 빈칸).
  * 다만 이미 채워진 건(shipped)을 다시 내려받을 때는 그 값을 그대로 낸다.
  *
@@ -63,11 +63,13 @@ const text = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 export function orderSheetRow(row: GiftRequestRow): (string | number)[] {
   return [
     /*
-     * 발주일은 늘 비운다. 거래처가 실제로 내보낸 날을 적는 칸이라 우리는 모른다.
-     * 우리가 가진 order_date는 "발주리스트를 만든 날"이지 그 날이 아니다 —
-     * 다른 뜻의 날짜를 같은 칸에 넣으면 거래처 쪽 기록이 어긋난다.
+     * 발주일 — 우리가 발주한 날, 곧 이 묶음을 만든 날이다.
+     *
+     * 오늘 날짜를 그때그때 찍지 않고 묶음에 찍힌 order_date 를 쓴다. 둘은 만든
+     * 날에는 같지만 지난 장을 다시 받을 때 갈린다 — 오늘로 찍으면 지난주에 보낸
+     * 장이 오늘 발주한 것처럼 나온다.
      */
-    '',
+    text(row.order_date),
     text(row.courier),
     text(row.tracking_no),
     text(row.customer_name),
@@ -106,7 +108,7 @@ const solid = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'soli
  *
  *   1행  '*필수' 표시. 10pt, 흰 채움, 위·좌·우 테두리
  *   2행  열 이름. Arial 굵게 10pt, 가운데 정렬, 회색 채움(뒤 세 칸은 주황), 사방 테두리
- *   3행~ 데이터. 9pt, 왼쪽 정렬, 사방 테두리. 발주일 칸은 날짜 서식(m/d/yy)
+ *   3행~ 데이터. 9pt, 왼쪽 정렬, 사방 테두리. 발주일 칸은 날짜 서식(yyyy-mm-dd)
  * 열 너비·기본 행 높이·확대 비율·자동 필터도 실제 파일과 같다.
  */
 export function buildOrderWorkbook(rows: GiftRequestRow[]): ExcelJS.Workbook {
@@ -153,7 +155,9 @@ export function buildOrderWorkbook(rows: GiftRequestRow[]): ExcelJS.Workbook {
       cell.border = ALL_BORDERS;
       cell.alignment = { horizontal: 'left', vertical: 'middle' };
       if (col === 1) {
-        cell.numFmt = 'm/d/yy';
+        // 우리가 적는 값이 'YYYY-MM-DD'이므로 서식도 그 모양으로 맞춘다.
+        // 거래처가 이 칸에 날짜를 쳐 넣어도 같은 모양으로 보인다.
+        cell.numFmt = 'yyyy-mm-dd';
         cell.fill = solid(WHITE);
       }
     });
