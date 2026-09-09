@@ -235,15 +235,19 @@ export async function GET(request: NextRequest) {
 /**
  * 사은품 신청 — 한 건이든 여러 건이든 같은 길을 지난다.
  *
- * 주문번호로 배포 기록을 찾아 고객명·전화번호를 **서버가 다시 채운다.** 화면이
- * 미리 보여준 값을 그대로 믿지 않는다 — 요청은 직접 만들 수 있고, 잠근 칸이
- * 뚫리면 사은품이 엉뚱한 사람에게 간다.
+ * 주문번호로 배포 기록을 찾는 것은 어느 쪽이든 같다. 그 기록으로 (1) 우리가
+ * 배포한 고객인지, (2) 어느 지사 고객인지를 가른다. 남의 지사 고객은 못 넣는다 —
+ * 배포 기록의 배정소속이 신청자의 소속과 다르면 다른 지사가 받은 사람이다.
+ * 관리자급만 예외다.
  *
- * 남의 지사 고객은 못 넣는다. 배포 기록의 배정소속이 신청자의 소속과 다르면
- * 그 고객은 다른 지사가 받은 사람이다. 관리자급만 예외다.
+ * 고객명·전화번호를 어디서 가져오는지는 갈린다.
+ *   한 건 등록   기록에서. 화면이 조회로 채워 보여주고 그 칸을 잠그므로,
+ *                보이는 값과 저장되는 값이 같아야 한다
+ *   붙여넣기     붙여넣은 값 그대로. 지사가 정리해 둔 표가 곧 보낼 내용이고
+ *                사람은 그 표를 보고 있다
  *
- * 붙여넣기로 온 건은 고객명을 함께 들고 온다. 기록의 이름과 다르면 넣지 않는다 —
- * 고객번호 한 자리가 틀려 남의 기록에 붙는 것이 붙여넣기에서 가장 흔한 사고다.
+ * 붙여넣기도 고객명은 기록과 대조한다. 고객번호 한 자리가 틀려 남의 기록에
+ * 붙는 것이 붙여넣기에서 가장 흔한 사고이고, 그때는 배정 지사까지 어긋난다.
  */
 const BULK_LIMIT = 200;
 
@@ -299,7 +303,13 @@ async function createOne(
     { name: user.name, groupName }
   );
 
-  // 붙여넣은 이름이 기록과 다르면 남의 기록이다. 공백 차이는 봐준다.
+  /*
+   * 붙여넣은 이름이 기록과 다르면 남의 기록이다. 공백 차이는 봐준다.
+   *
+   * 저장은 붙여넣은 값으로 하지만 대조는 그대로 둔다 — 고객번호 한 자리가
+   * 틀려 엉뚱한 기록에 붙는 것이 붙여넣기에서 가장 흔한 사고이고, 그때는
+   * 배정 지사까지 남의 지사가 된다.
+   */
   if (opts.expectedName !== undefined) {
     const same = (a: string) => a.replace(/\s+/g, '');
     if (same(opts.expectedName) !== same(prefill.locked.customerName)) {
@@ -346,6 +356,30 @@ async function createOne(
     };
   }
 
+  /*
+   * 고객명·전화번호를 어디서 가져오나.
+   *
+   * 한 건 등록은 기록에서. 화면이 주문번호로 조회해 그 값을 채워 보여주고 칸을
+   * 잠근다 — 보이는 값과 저장되는 값이 같아야 하므로 화면이 보낸 값은 안 쓴다.
+   *
+   * 붙여넣기는 붙여넣은 값 그대로. 지사가 거래처 양식으로 정리해 둔 표가 곧
+   * 보낼 내용이고 사람은 그 표를 보고 있다. 기록의 번호로 덮어쓰면 표에 적힌
+   * 번호와 다른 번호로 나가는데, 붙여넣은 사람은 끝까지 모른다. 고객이 번호를
+   * 바꿨거나 받는 사람 번호가 따로인 경우가 실제로 있다.
+   */
+  const pasted = (key: string) => String(raw[key] ?? '').trim();
+  const identity = opts.bulk
+    ? {
+        customer_name: pasted('pastedName') || prefill.locked.customerName,
+        phone1: pasted('pastedPhone') || null,
+        phone2: pasted('pastedPhone2') || null,
+      }
+    : {
+        customer_name: prefill.locked.customerName,
+        phone1: prefill.locked.phone1 || null,
+        phone2: prefill.locked.phone2 || null,
+      };
+
   const fields = readGiftFields(raw);
   /*
    * 정산구분을 안 적어 왔으면 보내는 쪽으로 정한다 — 파라인슈는 'DB포함',
@@ -362,10 +396,7 @@ async function createOne(
       order_no: orderNo,
       source_file_id: source.fileId,
       source_file_name: source.fileName,
-      // 잠긴 칸은 기록에서. 화면이 보낸 값은 쓰지 않는다.
-      customer_name: prefill.locked.customerName,
-      phone1: prefill.locked.phone1 || null,
-      phone2: prefill.locked.phone2 || null,
+      ...identity,
       ...toGiftColumns(fields),
       requester_id: user.id,
       requester_name: user.name,

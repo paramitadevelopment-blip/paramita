@@ -248,3 +248,21 @@ describe('*필수 표시 줄', () => {
     expect(skipped).toBe(0);
   });
 });
+
+describe('붙여넣은 고객 정보', () => {
+  it('고객명·전화번호1·2를 그대로 들고 온다 — 저장도 이 값으로 한다', () => {
+    const cells = [...CELLS];
+    cells[4] = '01041883979';
+    cells[5] = '010-1111-2222';
+    const { rows } = parseGiftPaste(cells.join('	'));
+    expect(rows[0].pastedName).toBe('이경덕');
+    // 하이픈 없이 붙여넣어도 보기 좋은 꼴로 맞춰 둔다.
+    expect(rows[0].pastedPhone).toBe('010-4188-3979');
+    expect(rows[0].pastedPhone2).toBe('010-1111-2222');
+  });
+
+  it('전화번호2가 비면 빈 값 — 없는 번호를 지어내지 않는다', () => {
+    const { rows } = parseGiftPaste(CELLS.join('	'));
+    expect(rows[0].pastedPhone2).toBe('');
+  });
+});

@@ -23,9 +23,14 @@ import { formatPhone } from '@/lib/phoneFormat';
 export const GIFT_PASTE_HEADERS = ORDER_SHEET_HEADERS;
 
 export interface GiftPasteRow extends GiftRequestInput {
-  /** 붙여넣은 고객명. 저장에는 안 쓰고 기록의 이름과 맞는지 대조하는 데 쓴다. */
+  /**
+   * 붙여넣은 고객명. 그대로 저장하되, 기록의 이름과 맞는지도 대조한다 —
+   * 고객번호 한 자리가 틀려 남의 기록에 붙는 것이 붙여넣기에서 가장 흔한 사고다.
+   */
   pastedName: string;
+  /** 붙여넣은 전화번호. 표에 적힌 번호가 곧 보낼 번호다. */
   pastedPhone: string;
+  pastedPhone2: string;
 }
 
 export interface GiftPasteResult {
@@ -70,6 +75,7 @@ function toRow(cells: string[]): GiftPasteRow {
     orderNo: c[15],
     pastedName: c[3],
     pastedPhone: formatPhone(c[4]),
+    pastedPhone2: formatPhone(c[5]),
     zip: c[6],
     address: c[7],
     deliveryMemo: c[8],
