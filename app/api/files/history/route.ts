@@ -49,20 +49,30 @@ export async function GET(request: NextRequest) {
         .ilike('name', `%${search}%`);
       const matchedUsernames = (matchedUsers || []).map((u) => u.username);
 
-      // 파일명·내용뿐 아니라 "누가 지웠는지"로도 찾을 수 있어야 한다.
-      // deleted_by는 파일이 아니라 이벤트 쪽 컬럼이라 따로 조회한다.
-      const [{ data: allDeletedFiles }, { data: eventsByLoginId }, { data: eventsByName }] =
-        await Promise.all([
-          supabase.from('deleted_files').select('id, deletion_event_id, name, file_content'),
-          supabase.from('file_deletion_events').select('id').ilike('deleted_by', `%${search}%`),
-          matchedUsernames.length > 0
-            ? supabase.from('file_deletion_events').select('id').in('deleted_by', matchedUsernames)
-            : Promise.resolve({ data: [] as Array<{ id: number }> }),
-        ]);
+      // 파일명·내용뿐 아니라 "누가 지웠는지"·"왜 지웠는지"로도 찾을 수 있어야 한다.
+      // deleted_by와 삭제 사유는 파일이 아니라 이벤트 쪽 컬럼이라 따로 조회한다.
+      const [
+        { data: allDeletedFiles },
+        { data: eventsByLoginId },
+        { data: eventsByName },
+        { data: eventsByReason },
+      ] = await Promise.all([
+        // uploaded_by_name도 훑는다 — 지워진 파일을 "누가 올렸던 것"으로 찾는 일이 있다.
+        supabase
+          .from('deleted_files')
+          .select('id, deletion_event_id, name, file_content, uploaded_by_name'),
+        supabase.from('file_deletion_events').select('id').ilike('deleted_by', `%${search}%`),
+        matchedUsernames.length > 0
+          ? supabase.from('file_deletion_events').select('id').in('deleted_by', matchedUsernames)
+          : Promise.resolve({ data: [] as Array<{ id: number }> }),
+        // 삭제 사유. 왜 지웠는지가 남는 유일한 자리라 여기로도 되짚는다.
+        supabase.from('file_deletion_events').select('id').ilike('reason', `%${search}%`),
+      ]);
 
       const matchedEventIds = new Set<number>([
         ...(eventsByLoginId || []).map((e) => e.id),
         ...(eventsByName || []).map((e) => e.id),
+        ...(eventsByReason || []).map((e) => e.id),
       ]);
       const fileIds = new Set<string>();
 
@@ -74,8 +84,10 @@ export async function GET(request: NextRequest) {
           return;
         }
 
-        // 파일명 검색
-        let found = String(file.name || '').toLowerCase().includes(searchLower);
+        // 파일명·올린 사람 검색
+        let found =
+          String(file.name || '').toLowerCase().includes(searchLower) ||
+          String(file.uploaded_by_name || '').toLowerCase().includes(searchLower);
 
         // 엑셀 내용(file_content) 검색
         if (!found && Array.isArray(file.file_content)) {
