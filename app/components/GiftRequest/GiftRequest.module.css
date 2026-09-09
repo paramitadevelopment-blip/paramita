@@ -1956,10 +1956,20 @@
   border-top-color: transparent;
 }
 
+/*
+ * 줄 색은 td 가 아니라 tr 에 칠한다.
+ *
+ * 마지막 칸(.actionCell)이 flex 라 줄 높이를 못 채운다. 색을 td 에 두면 그
+ * 못 채운 만큼 tbody 의 흰색이 그대로 비친다 — 지난 신청 줄에서만 눈에 띈 것은
+ * 거기만 회색이라 흰 자리가 드러나기 때문이다. tr 에 칠하면 그 자리까지 덮인다.
+ */
+
 /* 묶음 머리 — 주문번호·고객·건수. */
+.checkGroupHead {
+  background: #fffbe6;
+}
 .checkGroupHead td {
   padding: 10px 14px;
-  background: #fffbe6;
   text-align: left;
   border-bottom: 1px solid #ffe58f;
 }
@@ -1981,14 +1991,18 @@
 }
 
 /* 이미 나간 지난 신청. 읽는 줄이라 가라앉혀 둔다. */
-.checkPrior td {
+.checkPrior {
   background: #fafafa;
+}
+.checkPrior td {
   color: #777;
 }
 
 /* 이번에 판정할 줄. */
-.checkCurrent td {
+.checkCurrent {
   background: white;
+}
+.checkCurrent td {
   font-weight: 500;
 }
 
@@ -2032,19 +2046,16 @@
  * 확인 목록에서는 줄에 마우스를 올려도 색이 바뀌지 않는다.
  *
  * 여기서는 색이 곧 뜻이다 — 머리줄은 노랑, 지난 신청은 회색, 이번 건은 흰색.
- * 손을 올렸다고 그 색이 회색으로 덮이면 어느 줄이 이번 건인지 흐려진다.
+ * 손을 올렸다고 그 색이 덮이면 어느 줄이 이번 건인지 흐려진다.
  */
-.checkGroup tr:hover {
-  background: transparent;
-}
-.checkGroupHead:hover td {
+.table.checkTable tbody tr.checkGroupHead:hover {
   background: #fffbe6;
 }
-.checkPrior:hover td {
+.table.checkTable tbody tr.checkPrior:hover {
   background: #fafafa;
 }
-.checkCurrent:hover td {
-  background: #fff;
+.table.checkTable tbody tr.checkCurrent:hover {
+  background: white;
 }
 
 /* 송장이 덜 들어온 발주 장. 발주처에 다시 물어야 하는 자리라 눈에 띄어야 한다. */
@@ -2111,4 +2122,19 @@
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+/* 붙여넣기 창의 사유 칸. 이미 신청된 주문번호 줄에만 열린다. */
+.pasteReason {
+  width: 100%;
+  min-width: 260px;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.pasteReason:focus {
+  outline: none;
+  border-color: #db1a62;
 }
