@@ -67,13 +67,13 @@ interface GiftRequestFormModalProps {
 const TITLE = {
   create: '사은품 신청',
   edit: '신청 내용 수정',
-  resubmit: '보완 후 다시 올리기',
+  resubmit: '보완 후 다시 제출',
 } as const;
 
 const SUBMIT_LABEL = {
   create: '신청',
   edit: '수정',
-  resubmit: '다시 올리기',
+  resubmit: '다시 제출',
 } as const;
 
 const dateText = (value: string) => new Date(value).toLocaleDateString('ko-KR').slice(0, -1);
@@ -149,8 +149,8 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
         ok: true,
         text:
           (found.existing?.length ?? 0) > 0
-            ? `${found.locked.customerName} 님 — 기록에서 찾았습니다. 이 주문번호로 이미 ${found.existing!.length}건 신청돼 있어 아래에 사유를 적어야 합니다.`
-            : `${found.locked.customerName} 님 — 기록에서 찾았습니다. 아래 칸을 확인하고 채워 주세요.`,
+            ? `${found.locked.customerName} 님 — 기록에서 찾았습니다. 이 주문번호로 이미 ${found.existing!.length}건 신청돼 있어 아래에 사유를 적어 주세요.`
+            : `${found.locked.customerName} 님 — 기록에서 찾았습니다. 아래 항목을 확인하고 입력해 주세요.`,
       });
     } catch (err) {
       setLocked(null);
@@ -184,14 +184,14 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
       return;
     }
     if (!addrBase.trim()) {
-      showAlert({ type: 'warning', title: '주소 확인', message: '[주소 검색]으로 주소를 골라 주세요.' });
+      showAlert({ type: 'warning', title: '주소 확인', message: '[주소 검색]으로 주소를 선택해 주세요.' });
       return;
     }
     if (existing.length > 0 && !checkReason.trim()) {
       showAlert({
         type: 'warning',
         title: '신청 사유',
-        message: '같은 주문번호로 이미 신청된 건이 있습니다. 한 주문번호로 여러 건인 사유를 적어 주세요.',
+        message: '같은 주문번호로 이미 신청된 건이 있습니다. 사유를 적어 주세요.',
       });
       return;
     }
@@ -338,7 +338,7 @@ const GiftRequestFormModal = memo(function GiftRequestFormModalComponent({
                   value={addrBase}
                   readOnly
                   tabIndex={-1}
-                  placeholder="[주소 검색]을 눌러 고르세요"
+                  placeholder="[주소 검색]을 눌러 선택하세요"
                 />
               </label>
               <button type="button" className={styles.actionBtn} onClick={handlePickAddress}>

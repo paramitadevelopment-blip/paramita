@@ -304,7 +304,7 @@ async function createOne(
     return {
       ok: false,
       status: 404,
-      error: '배포 기록에 없는 주문번호입니다. 우리가 배포한 고객만 신청할 수 있습니다.',
+      error: '배포 기록에 없는 주문번호입니다.',
     };
   }
 
@@ -370,7 +370,7 @@ async function createOne(
       ok: false,
       status: 409,
       code: 'duplicate',
-      error: `이미 신청된 주문번호입니다(${prior!.length}건). 한 주문번호로 여러 건인 사유를 적으면 관리자 확인 후 진행됩니다.`,
+      error: `이미 신청된 주문번호입니다(${prior!.length}건). 사유를 적어 주세요.`,
     };
   }
 

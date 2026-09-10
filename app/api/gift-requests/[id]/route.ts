@@ -138,10 +138,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (!canEditGiftRequest(guard)) {
         const why =
           guard.status === 'forwarded'
-            ? '사은품담당자가 이미 확인한 신청은 고칠 수 없습니다. 보완 요청이 오면 그때 고칩니다.'
+            ? '사은품담당자가 확인한 신청은 수정할 수 없습니다.'
             : guard.status === 'ordered' || guard.status === 'shipped'
-              ? '이미 발주리스트에 담겨 나간 신청은 고칠 수 없습니다.'
-              : '이 상태의 신청은 고칠 수 없습니다.';
+              ? '이미 발주된 신청은 수정할 수 없습니다.'
+              : '이 상태의 신청은 수정할 수 없습니다.';
         return NextResponse.json({ error: why }, { status: 409 });
       }
       // 주문번호는 못 바꾼다. 바꾸려면 새로 넣는다 — 고객이 바뀌는 일이다.
@@ -270,8 +270,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           {
             error:
               guard.status === 'shipped'
-                ? '이미 배송 정보가 입력된 신청입니다. 운송장번호가 나왔다는 것은 이미 발송했다는 뜻이라 고칠 수 없습니다 — 바뀔 일이 생겼다면 새로 신청해 주세요.'
-                : '발주리스트에 담긴 신청만 배송 정보를 적을 수 있습니다.',
+                ? '이미 배송 정보가 입력된 신청입니다.'
+                : '발주리스트에 포함된 신청만 배송 정보를 입력할 수 있습니다.',
           },
           { status: 400 }
         );
@@ -392,7 +392,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       });
     }
 
-    return NextResponse.json({ error: '알 수 없는 동작입니다.' }, { status: 400 });
+    return NextResponse.json({ error: '처리할 수 없는 요청입니다.' }, { status: 400 });
   } catch (error) {
     console.error('Gift request PATCH error:', error);
     return NextResponse.json({ error: '신청을 바꾸지 못했습니다.' }, { status: 500 });
@@ -455,10 +455,10 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     if (!canDeleteGiftRequest(guard, isAdmin)) {
       const reason =
         guard.status === 'supplement'
-          ? '보완 요청을 받은 신청은 지울 수 없습니다. 고쳐서 다시 올리거나 철회하세요.'
+          ? '보완 요청을 받은 신청은 삭제할 수 없습니다.'
           : guard.status === 'ordered' || guard.status === 'shipped'
-            ? '이미 발주리스트에 담겨 나간 신청은 지울 수 없습니다.'
-            : '사은품담당자가 이미 확인한 신청은 지울 수 없습니다.';
+            ? '이미 발주된 신청은 삭제할 수 없습니다.'
+            : '사은품담당자가 확인한 신청은 삭제할 수 없습니다.';
       return NextResponse.json({ error: reason }, { status: 409 });
     }
 

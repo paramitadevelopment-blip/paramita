@@ -216,9 +216,9 @@ const GiftOrdersPanel = memo(function GiftOrdersPanelComponent({
         <div className={styles.controlsSection}>{perPageSelect}</div>
 
         {every.length === 0 ? (
-          <EmptyState message="아직 만든 발주리스트가 없습니다. 신청 건 탭에서 발주 대기 건을 골라 만드세요." />
+          <EmptyState message="아직 만든 발주리스트가 없습니다." />
         ) : sorted.length === 0 ? (
-          <EmptyState message={`'${search}' 로 찾은 발주리스트가 없습니다.`} />
+          <EmptyState message={`'${search}' 검색 결과가 없습니다.`} />
         ) : (
           <>
             <div className={styles.tableContainer}>
@@ -227,7 +227,7 @@ const GiftOrdersPanel = memo(function GiftOrdersPanelComponent({
                   <tr>
                     <Head label="발주 번호" column="id" />
                     <Head label="만든 날짜" column="created_at" />
-                    <Head label="실린 건" column="count" />
+                    <Head label="포함 건수" column="count" />
                     <Head label="송장" column="shipped" />
                     <Head label="지사" column="groups" />
                     <Head label="만든 사람" column="created_by" />
@@ -270,7 +270,7 @@ const GiftOrdersPanel = memo(function GiftOrdersPanelComponent({
                           className={styles.actionBtn}
                           onClick={() => download(o.id)}
                           disabled={downloading !== null || o.count === 0}
-                          title={o.count === 0 ? '실린 건이 없습니다' : '거래처 양식 엑셀'}
+                          title={o.count === 0 ? '포함된 건이 없습니다' : '거래처 양식 엑셀'}
                         >
                           <MdDownload />
                           {downloading === o.id ? '만드는 중…' : '엑셀'}
@@ -341,7 +341,7 @@ const GiftOrdersPanel = memo(function GiftOrdersPanelComponent({
         <span className={styles.totalCount}>
           총 <span>{sortedItems.length}</span>건
           {search && items.length !== sortedItems.length && (
-            <span className={styles.searchNote}> / 실린 건 {items.length}건</span>
+            <span className={styles.searchNote}> / 포함 {items.length}건</span>
           )}
         </span>
         <SearchBar
@@ -355,9 +355,9 @@ const GiftOrdersPanel = memo(function GiftOrdersPanelComponent({
       <div className={styles.controlsSection}>{perPageSelect}</div>
 
       {items.length === 0 ? (
-        <EmptyState message="이 장에 남아 있는 건이 없습니다. 보완으로 되돌린 건은 장에서 빠집니다." />
+        <EmptyState message="이 발주리스트에 남은 건이 없습니다." />
       ) : sortedItems.length === 0 ? (
-        <EmptyState message={`'${search}' 로 찾은 건이 이 장에 없습니다.`} />
+        <EmptyState message={`'${search}' 검색 결과가 이 발주리스트에 없습니다.`} />
       ) : (
         <>
           <GiftTable

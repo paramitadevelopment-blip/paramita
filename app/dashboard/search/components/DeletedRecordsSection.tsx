@@ -113,7 +113,7 @@ function DeletedRecordsSection({ searchQuery, formatDateTime }: DeletedRecordsSe
     ['orderNo', '주문번호'],
     ['group', '소속'],
     ['summary', '내용'],
-    ['status', '지울 때 상태'],
+    ['status', '삭제 시 상태'],
     ['reason', '삭제 사유'],
     ['deletedBy', '지운 사람'],
     ['deletedAt', '지운 시각'],

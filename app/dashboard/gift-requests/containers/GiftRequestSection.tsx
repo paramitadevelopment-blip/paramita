@@ -54,8 +54,8 @@ type View = 'items' | 'checks';
  */
 const TAB_COUNT_HINT: Partial<Record<GiftStatus, string>> = {
   pending_check: '관리자 확인을 기다리는 재신청',
-  supplement: '보완 요청을 받아 고쳐 올려야 하는 건',
-  shipped: '배송 정보가 채워졌는데 아직 확인하지 않은 건',
+  supplement: '보완 요청을 받아 수정해 다시 제출해야 하는 건',
+  shipped: '배송 정보가 입력되었으나 확인하지 않은 건',
 };
 
 const GiftRequestSection = memo(function GiftRequestSectionComponent() {
@@ -90,8 +90,8 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
       type: 'success',
       title: waiting ? '재신청 — 관리자 확인 요청' : '신청 등록',
       message: waiting
-        ? `${created.customer_name} 님 ${created.gift_name} 재신청을 넣었습니다. 같은 주문번호로 이미 신청된 적이 있어 관리자 확인을 거친 뒤 담당자에게 갑니다.`
-        : `${created.customer_name} 님 ${created.gift_name} 신청을 넣었습니다. 사은품담당자에게 바로 전달됩니다.`,
+        ? `${created.customer_name} 님 ${created.gift_name} 재신청을 등록했습니다. 관리자 확인 후 전달됩니다.`
+        : `${created.customer_name} 님 ${created.gift_name} 신청을 등록했습니다.`,
     });
   };
 
@@ -103,10 +103,10 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
     setEditing(null);
     showAlert({
       type: 'success',
-      title: wasSupplement ? '다시 올림' : '수정 완료',
+      title: wasSupplement ? '재제출 완료' : '수정 완료',
       message: wasSupplement
-        ? '고친 내용으로 다시 올렸습니다. 사은품담당자에게 다시 전달됩니다.'
-        : '신청 내용을 고쳤습니다.',
+        ? '수정한 내용으로 다시 제출했습니다.'
+        : '신청 내용을 수정했습니다.',
     });
   };
 
@@ -131,7 +131,7 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
             <input
               type="text"
               maxLength={500}
-              placeholder="예: 시험 삼아 넣은 건"
+              placeholder="예: 시험 삼아 등록한 건"
               onChange={(e) => {
                 reason = e.target.value;
               }}
@@ -176,7 +176,7 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
     // 탭 배지가 이미 세고 있는 수다. 몇 건인지 보고 누르게 한다.
     const waiting = badge?.tabs?.shipped ?? 0;
     if (waiting === 0) {
-      showAlert({ type: 'info', title: '확인할 것이 없음', message: '아직 안 본 배송 정보가 없습니다.' });
+      showAlert({ type: 'info', title: '확인할 것이 없음', message: '확인하지 않은 배송 정보가 없습니다.' });
       return;
     }
     showAlert({
@@ -384,7 +384,7 @@ const GiftRequestSection = memo(function GiftRequestSectionComponent() {
                 {bulkShipRead.isPending ? '확인 중…' : '전체 확인'}
               </button>
               <span className={styles.readAllHint}>
-                송장이 채워졌는데 아직 안 본 건을 한 번에 확인 처리합니다
+                송장이 입력되었으나 확인하지 않은 건을 한 번에 확인 처리합니다
               </span>
             </div>
           )}

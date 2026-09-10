@@ -24,7 +24,7 @@ export function useClassifyAlerts(onClose: () => void) {
     showAlert({
       type: 'warning',
       title: '오류가 있어 배포할 수 없습니다',
-      message: `${result.totalRows}건 중 ${result.errorCount}개 행에 오류가 있습니다.\n\n${detail}\n\n오류를 고친 뒤 다시 올려주세요.`,
+      message: `${result.totalRows}건 중 ${result.errorCount}개 행에 오류가 있습니다.\n\n${detail}\n\n오류를 수정한 뒤 다시 업로드해 주세요.`,
       // 오류가 있으면 어차피 배포할 수 없다. 확인을 누르면 업로드 화면으로 돌려보낸다.
       onConfirm: onClose,
     });

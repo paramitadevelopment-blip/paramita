@@ -158,7 +158,7 @@ const GiftCheckModal = memo(function GiftCheckModalComponent({
               onChange={(e) => setReason(e.target.value)}
               rows={2}
               maxLength={500}
-              placeholder="무엇이 모자란지 적어 주세요. 신청한 지사가 이 내용을 보고 고칩니다."
+              placeholder="보완할 내용을 적어 주세요."
               autoFocus
             />
           </label>

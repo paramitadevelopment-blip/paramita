@@ -75,7 +75,7 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
           }
         : {
             ok: false,
-            message: `${created.customer_name} 님은 배포 기록에서 찾지 못했습니다. 관리자가 확인 후 지사를 정합니다.`,
+            message: `${created.customer_name} 님은 배포 기록에 없습니다. 관리자가 지사를 정합니다.`,
           },
     );
     setFormOpen(false);
@@ -102,7 +102,7 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
             }
           : {
               ok: false,
-              message: `${row.customer_name} 님은 배포 기록에서 찾지 못했습니다. 관리자가 확인 후 지사를 정합니다.`,
+              message: `${row.customer_name} 님은 배포 기록에 없습니다. 관리자가 지사를 정합니다.`,
             },
       );
     }
@@ -133,7 +133,7 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
             <input
               type="text"
               maxLength={500}
-              placeholder="예: 시험 삼아 넣은 건"
+              placeholder="예: 시험 삼아 등록한 건"
               onChange={(e) => {
                 reason = e.target.value;
               }}
@@ -285,7 +285,7 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
             >
               {COMPLAINT_STATUS_LABEL[status]}
               {todo > 0 && (
-                <span className={styles.tabCount} title="고쳐서 다시 보내야 하는 건">
+                <span className={styles.tabCount} title="수정해 다시 전달해야 하는 건">
                   {todo}
                 </span>
               )}
@@ -303,7 +303,7 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
       {list.isLoading ? (
         <Spinner />
       ) : list.complaints.length === 0 ? (
-        <EmptyState message="아직 넣은 민원이 없습니다." />
+        <EmptyState message="아직 등록한 민원이 없습니다." />
       ) : (
         <>
           <RegisteredTable

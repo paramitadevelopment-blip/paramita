@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       : [];
 
     if (ids.length === 0) {
-      return NextResponse.json({ error: '발주할 신청을 골라 주세요.' }, { status: 400 });
+      return NextResponse.json({ error: '발주할 신청을 선택해 주세요.' }, { status: 400 });
     }
     if (ids.length > ORDER_LIMIT) {
       return NextResponse.json(
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     const readyIds = (ready ?? []).map((r) => r.id as number);
     if (readyIds.length === 0) {
       return NextResponse.json(
-        { error: '고른 신청 중 발주 대기 상태인 것이 없습니다.' },
+        { error: '선택한 신청 중 발주 대기 상태인 것이 없습니다.' },
         { status: 400 }
       );
     }
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
       // 경쟁으로 전부 빠졌다. 빈 묶음은 남기지 않는다.
       await supabase.from('gift_orders').delete().eq('id', order.id);
       return NextResponse.json(
-        { error: '고른 신청이 그 사이 다른 상태로 바뀌었습니다. 목록을 새로고침해 주세요.' },
+        { error: '신청 상태가 바뀌었습니다. 새로고침해 주세요.' },
         { status: 409 }
       );
     }

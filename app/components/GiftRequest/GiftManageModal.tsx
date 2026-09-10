@@ -122,7 +122,7 @@ const GiftManageModal = memo(function GiftManageModalComponent({
         */}
         {kind === 'supplement' && row.status === 'ordered' && (
           <p className={styles.fieldHint}>
-            이 건은 발주 #{row.order_id}에 담겨 나갔습니다. 보완을 요청하면 그 묶음에서 빠지고,
+            이 건은 발주 #{row.order_id}에 포함되어 발주되었습니다. 보완을 요청하면 해당 발주에서 제외되고,
             고쳐서 올라오면 다음 발주리스트에 실립니다.
           </p>
         )}
@@ -179,7 +179,7 @@ const GiftManageModal = memo(function GiftManageModalComponent({
                 onChange={(e) => setReason(e.target.value)}
                 rows={4}
                 maxLength={500}
-                placeholder="무엇을 고쳐야 하는지 적어 주세요. 신청한 지사가 이 내용을 보고 고칩니다."
+                placeholder="보완할 내용을 적어 주세요."
                 required
                 autoFocus
               />

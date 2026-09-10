@@ -289,7 +289,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
       showAlert({
         type: 'warning',
         title: '내려받을 파일 없음',
-        message: '고른 파일 중 지금 받을 수 있는 것이 없습니다. 이미 받았거나 요청 중인 파일입니다.',
+        message: '선택한 파일 중 내려받을 수 있는 것이 없습니다.',
       });
       return;
     }
@@ -299,7 +299,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
       title: '선택 항목 내려받기',
       message:
         blocked > 0
-          ? `${targets.length}건을 내려받습니다. 고른 것 중 ${blocked}건은 이미 받았거나 요청 중이라 빠집니다.`
+          ? `${targets.length}건을 내려받습니다. ${blocked}건은 제외됩니다.`
           : `${targets.length}건을 내려받습니다.`,
       showCancelButton: true,
       onConfirm: async () => {

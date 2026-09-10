@@ -145,8 +145,8 @@ const RegisteredTable = memo(function RegisteredTableComponent({
                     className={`${styles.statusBadge} ${styles.readBadge} ${row.read_at ? styles.read_yes : styles.read_no}`}
                     title={
                       row.read_at
-                        ? `${dateText(row.read_at)} 지사 확인 — 이제 고칠 수 없습니다`
-                        : '지사가 아직 안 봤습니다 — 지금은 고칠 수 있습니다'
+                        ? `${dateText(row.read_at)} 지사 확인 — 이제 수정할 수 없습니다`
+                        : '지사 확인 전 — 지금은 수정할 수 있습니다'
                     }
                   >
                     {row.read_at ? '확인' : '미확인'}

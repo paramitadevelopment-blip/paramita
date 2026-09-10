@@ -170,7 +170,7 @@ const GiftTable = memo(function GiftTableComponent({
                       )}
                     </td>
                   )}
-                  <td className={overdue ? styles.overdueCell : ''} title={overdue ? `${waiting}일째 이 자리에 있습니다` : undefined}>
+                  <td className={overdue ? styles.overdueCell : ''} title={overdue ? `현재 상태로 ${waiting}일 지났습니다` : undefined}>
                     {dateText(row.created_at)}
                     {overdue && <span className={styles.overdueTag}>{waiting}일</span>}
                   </td>
@@ -215,7 +215,7 @@ const GiftTable = memo(function GiftTableComponent({
                         title={
                           row.read_at
                             ? `담당자 확인 ${dateText(row.read_at)}`
-                            : '담당자가 아직 열지 않음 — 지사가 고칠 수 있음'
+                            : '담당자 확인 전 — 지사가 수정할 수 있음'
                         }
                       >
                         {row.read_at ? '확인' : '미확인'}
@@ -228,7 +228,7 @@ const GiftTable = memo(function GiftTableComponent({
                         title={
                           row.ship_read_at
                             ? `지사 확인 ${dateText(row.ship_read_at)}`
-                            : '지사가 아직 열지 않음'
+                            : '지사 확인 전'
                         }
                       >
                         {row.ship_read_at ? '확인' : '미확인'}
@@ -268,7 +268,7 @@ const GiftTable = memo(function GiftTableComponent({
                         onClick={() => actions.onEdit!(row)}
                         title={
                           row.status === 'forwarded'
-                            ? '담당자가 아직 확인하지 않아 고칠 수 있습니다'
+                            ? '담당자 확인 전이라 수정할 수 있습니다'
                             : undefined
                         }
                       >

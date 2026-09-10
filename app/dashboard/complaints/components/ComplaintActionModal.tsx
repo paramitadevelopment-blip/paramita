@@ -160,7 +160,7 @@ const ComplaintActionModal = memo(function ComplaintActionModalComponent({
               {/* 화살표는 다른 화면과 같이 react-icons 를 쓴다. */}
               <div className={styles.selectWrapper}>
                 <select value={group} onChange={(e) => setGroup(e.target.value)} required>
-                  <option value="">지사를 고르세요</option>
+                  <option value="">지사를 선택하세요</option>
                   {groupChoices.map((name) => (
                     <option key={name} value={name}>
                       {name}
@@ -201,7 +201,7 @@ const ComplaintActionModal = memo(function ComplaintActionModalComponent({
                 onChange={(e) => setReason(e.target.value)}
                 rows={4}
                 maxLength={500}
-                placeholder="무엇을 고쳐야 하는지 적어 주세요."
+                placeholder="보완할 내용을 적어 주세요."
                 required
               />
             </label>
@@ -271,7 +271,7 @@ const ComplaintActionModal = memo(function ComplaintActionModalComponent({
                 onChange={(e) => setNote(e.target.value)}
                 rows={5}
                 maxLength={2000}
-                placeholder="어떻게 처리했는지 적어 주세요. 올린 민원담당자가 이 내용을 봅니다."
+                placeholder="처리 내용을 적어 주세요."
                 required
               />
               {unfinished > 1 && (

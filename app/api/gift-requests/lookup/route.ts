@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const source = await findGiftSource(supabase, orderNo);
     if (!source) {
       return NextResponse.json(
-        { error: '배포 기록에 없는 주문번호입니다. 우리가 배포한 고객만 신청할 수 있습니다.' },
+        { error: '배포 기록에 없는 주문번호입니다.' },
         { status: 404 }
       );
     }

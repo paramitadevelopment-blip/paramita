@@ -182,7 +182,7 @@ const UserForm = memo(function UserForm({
      * 로그인해도 빈손이 된다. 저장 자체를 막는다.
      */
     if (isStaffRole(formData.role) && (formData.extra_permissions ?? []).length === 0) {
-      result.extra_permissions = '담당 업무를 하나 이상 고르세요.';
+      result.extra_permissions = '담당 업무를 하나 이상 선택해 주세요.';
     }
     if (!hasFixedDepartment(formData.role) && !formData.department) {
       result.department = '소속을 선택해주세요.';
@@ -420,7 +420,7 @@ const UserForm = memo(function UserForm({
             <span className={styles.error}>{errors.extra_permissions}</span>
           ) : (
             <span className={styles.hint}>
-              맡을 일을 고릅니다. 바꾸면 그 사람이 다시 로그인해야 반영됩니다.
+              담당 업무를 선택합니다. 변경하면 다시 로그인해야 반영됩니다.
             </span>
           )}
         </div>

@@ -176,8 +176,8 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
           title: '발주리스트 생성',
           message:
             result.skipped > 0
-              ? `발주 #${result.order.id} — ${result.ordered}건을 담았습니다. ${result.skipped}건은 발주 대기가 아니어서 빠졌습니다.`
-              : `발주 #${result.order.id} — ${result.ordered}건을 담았습니다.`,
+              ? `발주 #${result.order.id} — ${result.ordered}건을 포함했습니다. ${result.skipped}건은 제외되었습니다.`
+              : `발주 #${result.order.id} — ${result.ordered}건을 포함했습니다.`,
         });
       },
     });
@@ -304,7 +304,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
             >
               {GIFT_STATUS_LABEL[status]}
               {todo > 0 && (
-                <span className={styles.tabCount} title="아직 발주리스트에 담지 않은 건">
+                <span className={styles.tabCount} title="아직 발주리스트에 포함하지 않은 건">
                   {todo}
                 </span>
               )}
@@ -349,7 +349,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
             className={styles.selectAllBtn}
             onClick={pickAllForwarded}
             disabled={pickAll.isPending}
-            title="지금 걸어 둔 검색·지사에 맞는 발주 대기 건을 전부 고릅니다"
+            title="검색·지사 조건에 맞는 발주 대기 건을 전부 선택합니다"
           >
             {pickAll.isPending ? '고르는 중…' : '전체 선택'}
           </button>
@@ -382,7 +382,7 @@ const GiftManageSection = memo(function GiftManageSectionComponent() {
             </>
           ) : (
             <span className={styles.forwardHint}>
-              확인하거나 발주할 건을 체크하세요
+              확인하거나 발주할 건을 선택하세요
             </span>
           )}
         </div>

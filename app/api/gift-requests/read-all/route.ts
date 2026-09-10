@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       ? body.ids.map(Number).filter((n: number) => Number.isInteger(n) && n > 0).slice(0, LIMIT)
       : [];
     if (ids.length === 0) {
-      return NextResponse.json({ error: '확인할 신청을 골라 주세요.' }, { status: 400 });
+      return NextResponse.json({ error: '확인할 신청을 선택해 주세요.' }, { status: 400 });
     }
 
     const { data, error } = await supabase

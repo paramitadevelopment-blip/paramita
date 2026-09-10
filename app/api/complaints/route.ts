@@ -183,7 +183,7 @@ async function nextSequenceNo(threadKey: string): Promise<number> {
   return (count ?? 0) + 1;
 }
 
-const DUPLICATE_MESSAGE = '같은 통화일시로 이미 등록된 민원입니다. 같은 내용을 두 번 넣으신 것 같습니다.';
+const DUPLICATE_MESSAGE = '같은 통화일시로 이미 등록된 민원입니다.';
 
 /**
  * 이 사용자의 소속.

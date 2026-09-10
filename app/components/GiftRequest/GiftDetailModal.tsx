@@ -121,7 +121,7 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
                 {row.checked_at ? (
                   `${dateTimeText(row.checked_at)} · ${row.checked_by}`
                 ) : (
-                  <span className={styles.muted}>아직 확인 전 — 담당자에게 가지 않습니다</span>
+                  <span className={styles.muted}>담당자 확인 전 — 아직 전달되지 않았습니다</span>
                 )}
               </Line>
             </>
@@ -143,7 +143,7 @@ const GiftDetailModal = memo(function GiftDetailModalComponent({ row, onClose }:
               {row.read_at ? (
                 `${dateTimeText(row.read_at)} · ${row.read_by}`
               ) : (
-                <span className={styles.muted}>아직 확인 전 — 지사가 고칠 수 있습니다</span>
+                <span className={styles.muted}>담당자 확인 전 — 지사가 수정할 수 있습니다</span>
               )}
             </Line>
           )}

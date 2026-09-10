@@ -94,7 +94,7 @@ const ComplaintPasteModal = memo(function ComplaintPasteModalComponent({
               <div className={styles.pasteSummary}>
                 <b>{parsed.rows.length}건</b>을 읽었습니다
                 {okCount !== parsed.rows.length && ` · 등록 가능 ${okCount}건`}
-                {parsed.skipped > 0 && ` · 칸이 모자라 버린 것 ${parsed.skipped}개`}
+                {parsed.skipped > 0 && ` · 항목이 부족해 제외된 줄 ${parsed.skipped}개`}
               </div>
             )}
 

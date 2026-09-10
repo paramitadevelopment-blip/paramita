@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
      * 로그인해도 빈손이고, 권한 없는 'staff'는 합치기 전 토큰과 구별되지 않는다.
      */
     if (isStaffRole(role) && extraPermissions.length === 0) {
-      return NextResponse.json({ error: '담당 업무를 하나 이상 고르세요.' }, { status: 400 });
+      return NextResponse.json({ error: '담당 업무를 하나 이상 선택해 주세요.' }, { status: 400 });
     }
 
     /*
@@ -403,7 +403,7 @@ export async function PUT(request: NextRequest) {
 
     // 수정도 같다. 역할을 안 바꿨어도 지금 담당자면 업무가 비면 안 된다.
     if (isStaffRole(role ?? targetUser.role) && extraPermissions?.length === 0) {
-      return NextResponse.json({ error: '담당 업무를 하나 이상 고르세요.' }, { status: 400 });
+      return NextResponse.json({ error: '담당 업무를 하나 이상 선택해 주세요.' }, { status: 400 });
     }
 
     // 필수 필드 검증

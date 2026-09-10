@@ -44,10 +44,10 @@ function doneMessage(
   result: { closed?: number } | undefined
 ): string {
   const who = `${row.customer_name} 님 민원`;
-  if (body.action === 'assign_dept') return `${who}을 ${body.group} 지사로 넘겼습니다.`;
+  if (body.action === 'assign_dept') return `${who}을 ${body.group} 지사로 전달했습니다.`;
   // 무엇을 했는지만 적는다. 그다음 일은 화면이 상태로 말한다.
   if (body.action === 'return') return `${who}에 보완을 요청했습니다.`;
-  if (body.action === 'bounce') return `${who}을 관리자에게 되돌렸습니다. 관리자가 지사를 다시 정합니다.`;
+  if (body.action === 'bounce') return `${who}을 관리자에게 되돌렸습니다.`;
 
   // 같은 건이 함께 끝났으면 그 수를 말한다. 한 건뿐이면 굳이 세지 않는다.
   const closed = result?.closed ?? 1;
@@ -79,7 +79,7 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
   const readAllUnread = async () => {
     const ids = await unreadIds.mutateAsync({ search: list.search, group: list.group });
     if (ids.length === 0) {
-      showAlert({ type: 'info', title: '확인할 것이 없음', message: '아직 안 본 민원이 없습니다.' });
+      showAlert({ type: 'info', title: '확인할 것이 없음', message: '확인하지 않은 민원이 없습니다.' });
       return;
     }
     showAlert({
@@ -268,7 +268,7 @@ const ComplaintSection = memo(function ComplaintSectionComponent() {
           {bulkRead.isPending ? '확인 중…' : '전체 확인'}
         </button>
         <span className={styles.readAllHint}>
-          아직 안 본 민원을 한 번에 확인 처리합니다
+          확인하지 않은 민원을 한 번에 확인 처리합니다
           {isAdmin && list.group ? ` — 지금은 ${list.group}만` : ''}
         </span>
       </div>

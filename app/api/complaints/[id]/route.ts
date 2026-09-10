@@ -93,9 +93,9 @@ function checkOwnEditable(
           ? '이미 철회된 민원입니다.'
           : '보완 요청을 받은 민원만 철회할 수 있습니다.'
         : complaint.status === 'withdrawn'
-          ? '철회된 민원은 고치거나 지울 수 없습니다.'
+          ? '철회된 민원은 수정·삭제할 수 없습니다.'
           : intent === 'delete' && complaint.status === 'returned'
-            ? '보완 요청을 받은 민원은 지울 수 없습니다. 고쳐서 다시 보내거나 철회하세요.'
+            ? '보완 요청을 받은 민원은 삭제할 수 없습니다.'
             : `이미 처리가 시작된 민원은 ${intent === 'edit' ? '고칠' : '지울'} 수 없습니다.`;
     return NextResponse.json({ error: reason }, { status: 409 });
   }
@@ -181,7 +181,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       const group = String(body.group ?? '').trim();
       if (!group) {
-        return NextResponse.json({ error: '지사를 골라 주세요.' }, { status: 400 });
+        return NextResponse.json({ error: '지사를 선택해 주세요.' }, { status: 400 });
       }
       /*
        * 화면에 없는 값이 요청으로 직접 올 수 있다. '관리자'·'담당자' 같은
@@ -200,7 +200,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
 
       if (complaint.status === 'branch' && complaint.assigned_group === group) {
-        return NextResponse.json({ error: '이미 그 지사에 가 있는 민원입니다.' }, { status: 400 });
+        return NextResponse.json({ error: '이미 해당 지사로 전달된 민원입니다.' }, { status: 400 });
       }
 
       /*
@@ -242,14 +242,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
       if (complaint.status !== 'branch' || !complaint.assigned_group) {
         return NextResponse.json(
-          { error: closedReason ?? '지사에 와 있는 민원만 되돌릴 수 있습니다.' },
+          { error: closedReason ?? '지사로 전달된 민원만 되돌릴 수 있습니다.' },
           { status: 400 }
         );
       }
       const reason = String(body.reason ?? '').trim();
       // 사유 없이 돌아오면 관리자는 어디로 보내야 할지 모른다.
       if (!reason) {
-        return NextResponse.json({ error: '왜 우리 지사 건이 아닌지 적어 주세요.' }, { status: 400 });
+        return NextResponse.json({ error: '우리 지사 건이 아닌 사유를 적어 주세요.' }, { status: 400 });
       }
       if (reason.length > 500) {
         return NextResponse.json({ error: '사유가 너무 깁니다.' }, { status: 400 });
@@ -380,7 +380,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
       if (complaint.status !== 'branch') {
         return NextResponse.json(
-          { error: closedReason ?? '지사에 와 있는 민원만 확인할 수 있습니다.' },
+          { error: closedReason ?? '지사로 전달된 민원만 확인할 수 있습니다.' },
           { status: 400 }
         );
       }
@@ -528,7 +528,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           kind: 'auto',
           from: complaint.assigned_group,
           to: nextGroup,
-          reason: '넣은 사람이 내용을 고쳐 다시 찾음',
+          reason: '등록한 사람이 내용을 수정해 다시 조회함',
           byId: user.id,
           byName: user.username,
           at: now,
