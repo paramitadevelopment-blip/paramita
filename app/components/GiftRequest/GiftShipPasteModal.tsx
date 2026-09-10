@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useMemo, useState } from 'react';
-import { MdClose, MdLocalShipping } from 'react-icons/md';
+import { MdCheckCircle, MdClose, MdInfoOutline, MdLocalShipping } from 'react-icons/md';
 import {
   parseShipPaste,
   GIFT_PASTE_HEADERS,
@@ -75,48 +75,63 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
 
         {result ? (
           <div className={styles.pasteDone}>
-            <p className={result.filled > 0 ? styles.resultOk : styles.pasteCheck}>
-              {result.filled > 0
-                ? `${result.filled}건에 배송 정보를 입력했습니다.`
-                : '배송 정보가 입력된 건이 없습니다.'}
-            </p>
-            {skippedByReason.map(({ reason, orderNos }) => (
-              <p key={reason} className={styles.pasteCheck}>
-                {orderNos.length}건 — {reason}
-                {orderNos.length > 0 && (
-                  <span className={styles.priorAddress}>
-                    주문번호 {orderNos.slice(0, 10).join(', ')}
-                    {orderNos.length > 10 ? ` 외 ${orderNos.length - 10}건` : ''}
-                  </span>
+            {/* 결과 한 덩어리. 몇 건 들어갔는지가 맨 위, 그 밑에 딸린 말을 붙인다. */}
+            <div className={`${styles.shipResult} ${result.filled > 0 ? styles.shipResultOk : ''}`}>
+              {result.filled > 0 ? <MdCheckCircle /> : <MdInfoOutline />}
+              <div className={styles.shipResultText}>
+                <strong>
+                  {result.filled > 0
+                    ? `${result.filled}건에 배송 정보를 입력했습니다.`
+                    : '배송 정보가 입력된 건이 없습니다.'}
+                </strong>
+                {result.filled > 0 && result.remaining.length === 0 && (
+                  <span>해당 발주건에 송장이 모두 입력되었습니다.</span>
                 )}
-              </p>
-            ))}
-            {result.failed > 0 && (
-              <p className={styles.pasteProblem}>{result.failed}건은 저장하지 못했습니다.</p>
+              </div>
+            </div>
+
+            {(skippedByReason.length > 0 || result.failed > 0) && (
+              <ul className={styles.shipSkip}>
+                {skippedByReason.map(({ reason, orderNos }) => (
+                  <li key={reason}>
+                    <b>{orderNos.length}건</b> {reason}
+                    {orderNos.length > 0 && (
+                      <span className={styles.shipSkipNos}>
+                        {orderNos.slice(0, 10).join(', ')}
+                        {orderNos.length > 10 ? ` 외 ${orderNos.length - 10}건` : ''}
+                      </span>
+                    )}
+                  </li>
+                ))}
+                {result.failed > 0 && (
+                  <li className={styles.shipSkipFail}>
+                    <b>{result.failed}건</b> 저장하지 못했습니다.
+                  </li>
+                )}
+              </ul>
             )}
 
             {/*
               발주는 나갔는데 송장이 안 들어온 건. 채운 것만 세면 "열네 건 보냈는데
               열두 건만 왔다"를 아무도 모른다 — 발주처에 다시 물어야 할 줄이다.
             */}
-            {result.remaining.length > 0 ? (
-              <div className={styles.threadBox}>
+            {result.remaining.length > 0 && (
+              <div className={styles.shipLeft}>
                 <h4>아직 송장이 안 들어온 건 {result.remaining.length}건</h4>
-                <ul className={styles.priorList}>
+                <ul>
                   {result.remaining.map((r) => (
                     <li key={r.id}>
-                      발주 #{r.order_id} · {r.customer_name} · {r.gift_name} × {r.quantity}
-                      <span className={styles.priorAddress}>
-                        {r.group_name} · 주문번호 {r.order_no}
+                      <span className={styles.shipLeftName}>{r.customer_name}</span>
+                      <span className={styles.shipLeftGift}>
+                        {r.gift_name} × {r.quantity}
+                      </span>
+                      <span className={styles.shipLeftMeta}>
+                        발주 #{r.order_id} · {r.group_name} · {r.order_no}
                       </span>
                     </li>
                   ))}
                 </ul>
               </div>
-            ) : (
-              result.filled > 0 && (
-                <p className={styles.resultOk}>이번에 손댄 발주 장은 모두 송장이 들어왔습니다.</p>
-              )
             )}
 
             <div className={styles.formActions}>
@@ -143,7 +158,6 @@ const GiftShipPasteModal = memo(function GiftShipPasteModalComponent({
             {text.trim().length > 0 && (
               <div className={styles.pasteSummary}>
                 <b>{parsed.rows.length}건</b>의 배송 정보를 읽었습니다
-                {parsed.skipped > 0 && ` · 입력할 것이 없어 버린 줄 ${parsed.skipped}개`}
               </div>
             )}
 

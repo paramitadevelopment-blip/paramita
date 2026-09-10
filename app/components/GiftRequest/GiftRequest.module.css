@@ -1784,6 +1784,149 @@
   text-align: left;
 }
 
+/* ── 배송 정보 붙여넣기 결과 ─────────────────────────────── */
+
+/*
+ * 결과 한 덩어리. 전에는 분홍 상자가 둘 겹치고 글씨가 18·16·15·14로 제각각이라
+ * 어느 줄이 결론인지 안 보였다. 결론 한 줄만 상자에 담고 나머지는 아래에 눕힌다.
+ */
+.shipResult {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  background: #fafafa;
+  color: #555;
+}
+
+.shipResult svg {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  color: #999;
+}
+
+.shipResultOk {
+  border-color: #f3c3d4;
+  background: #fdf2f6;
+  color: #db1a62;
+}
+
+.shipResultOk svg {
+  color: #db1a62;
+}
+
+.shipResultText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shipResultText strong {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* 딸린 말. 결론보다 한 단 작고 옅게 — 같은 크기면 둘 다 결론처럼 읽힌다. */
+.shipResultText span {
+  font-size: 16px;
+  opacity: 0.85;
+}
+
+/* 건너뛴 줄·실패한 줄. 상자 없이 눕혀 결론과 층을 나눈다. */
+.shipSkip {
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.shipSkip li {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 16px;
+  color: #ad6800;
+}
+
+.shipSkip li:last-child {
+  border-bottom: none;
+}
+
+.shipSkip b {
+  margin-right: 6px;
+  font-weight: 700;
+}
+
+.shipSkipFail {
+  color: #c8434f;
+}
+
+/* 건너뛴 주문번호들. 읽을 일이 드물어 한 단 작게 아래에 둔다. */
+.shipSkipNos {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+  color: #888;
+  word-break: break-all;
+}
+
+/* 발주는 나갔는데 송장이 안 들어온 건. 발주처에 다시 물어야 할 줄이다. */
+.shipLeft {
+  margin-bottom: 24px;
+  padding: 18px 20px;
+  border: 1px solid #ffe58f;
+  border-radius: 10px;
+  background: #fffbe6;
+}
+
+.shipLeft h4 {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #8c6200;
+}
+
+.shipLeft ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shipLeft li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 8px 0;
+  border-top: 1px solid #ffe58f;
+}
+
+.shipLeft li:first-child {
+  border-top: none;
+}
+
+.shipLeftName {
+  font-size: 17px;
+  font-weight: 600;
+  color: #333;
+}
+
+.shipLeftGift {
+  font-size: 16px;
+  color: #555;
+}
+
+/* 발주 번호·소속·주문번호. 되짚을 때만 보는 값이라 뒤로 민다. */
+.shipLeftMeta {
+  margin-left: auto;
+  font-size: 15px;
+  color: #999;
+  white-space: nowrap;
+}
+
 /* 창 아래 버튼 줄. 민원 등록 창과 같은 자리·같은 모양. */
 .formActions {
   display: flex;
