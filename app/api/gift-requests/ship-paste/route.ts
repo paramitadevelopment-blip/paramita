@@ -3,7 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 import { getUserFromRequest } from '@/lib/jwt';
 import { verifyCsrfToken } from '@/lib/csrf';
 import { canManageGiftRequests } from '@/lib/roles';
-import { GIFT_COLUMNS } from '@/lib/gifts';
+import {
+  GIFT_COLUMNS,
+  validateShipInput,
+} from '@/lib/gifts';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -105,8 +108,27 @@ export async function POST(request: NextRequest) {
       const orderDate = String(raw.orderDate ?? '').trim();
       const deliveryMemo = String(raw.deliveryMemo ?? '').trim();
 
+      /*
+       * 두 칸이 다 비면 우리가 채울 줄이 아니다 — 발주처가 아직 안 적었거나
+       * 다른 업체 건이다. 오류가 아니므로 조용히 건너뛴다.
+       */
       if (!courier && !trackingNo) {
         results.push({ at, ok: false, skipped: true, reason: '채울 배송 정보가 없습니다.' });
+        continue;
+      }
+
+      /*
+       * 한 칸만 찬 줄은 넘기지 않는다.
+       *
+       * 한 건씩 넣는 창은 택배사·운송장번호를 둘 다 받는데(validateShipInput)
+       * 여기만 하나로 통과시켜, 운송장번호가 빈 채 '배송 정보 입력됨'이 되는
+       * 일이 있었다. 한 번 그리 되면 발송 뒤라 고칠 수도 없다. 열이 밀려 들어온
+       * 것일 때가 많으므로 조용히 넘기지 말고 어느 칸이 비었는지 알린다.
+       * 검사는 한 건 창과 같은 함수를 쓴다 — 두 길이 다시 갈라지지 않게.
+       */
+      const invalid = validateShipInput({ courier, trackingNo, orderDate, deliveryMemo });
+      if (invalid) {
+        results.push({ at, ok: false, skipped: true, reason: invalid });
         continue;
       }
 
@@ -114,10 +136,15 @@ export async function POST(request: NextRequest) {
       if (candidates.length === 0) {
         /*
          * 우리 신청이 아니거나, 이미 배송 정보가 들어갔거나, 이 표의 다른 줄이
-         * 먼저 가져갔다. 셋 다 오류가 아니다 — 발주처 표에는 남의 회사 건과
+         * 먼저 가져갔다. 셋 다 오류가 아니다 — 발주처 표에는 다른 업체 건과
          * 지난주에 이미 끝난 건이 함께 온다.
          */
-        results.push({ at, ok: false, skipped: true, reason: '채울 신청이 없는 주문번호입니다(남의 줄이거나 이미 입력됨).' });
+        results.push({
+          at,
+          ok: false,
+          skipped: true,
+          reason: '입력할 신청이 없습니다(이미 입력됨 또는 다른 업체 건).',
+        });
         continue;
       }
 
