@@ -16,6 +16,11 @@ export interface RangeSourceFile {
   uploadedAt: string;
   /** 그 파일을 받은 소속. 못 읽으면 null */
   department: string | null;
+  /**
+   * 그 파일의 보험사. 파일 하나는 한 보험사다(배포가 날짜×보험사×소속으로 쪼갠다).
+   * 옛 파일은 비어 있을 수 있어 null 을 받는다.
+   */
+  insurer?: 'hk' | 'dy' | null;
   /** 배포할 때 저장해 둔 행들(file_content). 열 이름 → 값 */
   rows: Array<Record<string, unknown>>;
 }
@@ -92,17 +97,58 @@ export interface DepartmentCount {
   count: number;
   /** 그 소속의 하루 평균. 기간 달력 날짜로 나눈다 */
   dailyAverage: number;
+  /** 그 안에서 보험사별로 몇 건인지 */
+  byInsurer: InsurerCount;
 }
 
+/**
+ * 보험사별 건수.
+ *
+ * 소속마다 "동양이 많나 흥국이 많나"를 같이 본다 — 지사에 몇 건 갔는지
+ * 다음으로 묻는 것이 이것이다. 파일 단위로 센다: 배포는 날짜×보험사×소속으로
+ * 쪼개므로 파일 하나는 한 보험사이고, 행을 하나씩 들여다볼 것이 없다.
+ * 보험사를 못 읽은 옛 파일은 etc 로 따로 센다 — 조용히 빼면 합이 안 맞는다.
+ */
+export interface InsurerCount {
+  dy: number;
+  hk: number;
+  etc: number;
+}
+
+function addInsurer(into: InsurerCount, file: RangeSourceFile): void {
+  const key = file.insurer === 'dy' || file.insurer === 'hk' ? file.insurer : 'etc';
+  into[key] += file.rows.length;
+}
+
+const emptyInsurer = (): InsurerCount => ({ dy: 0, hk: 0, etc: 0 });
+
 export function countByDepartment(files: RangeSourceFile[], days: number): DepartmentCount[] {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { count: number; byInsurer: InsurerCount }>();
   for (const file of files) {
     const dept = file.department ?? '소속 없음';
-    counts.set(dept, (counts.get(dept) ?? 0) + file.rows.length);
+    let at = counts.get(dept);
+    if (!at) {
+      at = { count: 0, byInsurer: emptyInsurer() };
+      counts.set(dept, at);
+    }
+    at.count += file.rows.length;
+    addInsurer(at.byInsurer, file);
   }
   return [...counts.entries()]
-    .map(([department, count]) => ({ department, count, dailyAverage: dailyAverage(count, days) }))
+    .map(([department, { count, byInsurer }]) => ({
+      department,
+      count,
+      dailyAverage: dailyAverage(count, days),
+      byInsurer,
+    }))
     .sort((a, b) => b.count - a.count || a.department.localeCompare(b.department, 'ko'));
+}
+
+/** 기간 전체의 보험사별 건수. 소속을 가리지 않고 센다. */
+export function countByInsurer(files: RangeSourceFile[]): InsurerCount {
+  const total = emptyInsurer();
+  for (const file of files) addInsurer(total, file);
+  return total;
 }
 
 /**

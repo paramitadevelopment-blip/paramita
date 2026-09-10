@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   countByDepartment,
+  countByInsurer,
   dailyAverage,
   mergeRangeRows,
   koreanDay,
@@ -77,15 +78,49 @@ describe('소속별 건수와 일평균', () => {
 
   it('소속별로 합쳐 많은 순으로 낸다', () => {
     expect(countByDepartment(files, 3)).toEqual([
-      { department: '파라인슈', count: 5, dailyAverage: 1.7 },
-      { department: '굿모닝제너럴', count: 2, dailyAverage: 0.7 },
-      { department: '소속 없음', count: 1, dailyAverage: 0.3 },
+      { department: '파라인슈', count: 5, dailyAverage: 1.7, byInsurer: { dy: 0, hk: 0, etc: 5 } },
+      { department: '굿모닝제너럴', count: 2, dailyAverage: 0.7, byInsurer: { dy: 0, hk: 0, etc: 2 } },
+      { department: '소속 없음', count: 1, dailyAverage: 0.3, byInsurer: { dy: 0, hk: 0, etc: 1 } },
     ]);
   });
 
   it('소속별 합은 전체 행 수와 같다 — 어디서도 새지 않는다', () => {
     const sum = countByDepartment(files, 3).reduce((n, d) => n + d.count, 0);
     expect(sum).toBe(mergeRangeRows(files).rows.length);
+  });
+
+  it('소속마다 보험사별로 나눠 센다', () => {
+    const mixed = [
+      { name: 'a', uploadedAt: '2026-09-01T00:00:00Z', department: '파라인슈', insurer: 'hk' as const, rows: [{}, {}, {}] },
+      { name: 'b', uploadedAt: '2026-09-01T00:00:00Z', department: '파라인슈', insurer: 'dy' as const, rows: [{}, {}] },
+      { name: 'c', uploadedAt: '2026-09-02T00:00:00Z', department: '경기', insurer: 'hk' as const, rows: [{}] },
+    ];
+    expect(countByDepartment(mixed, 2)).toEqual([
+      { department: '파라인슈', count: 5, dailyAverage: 2.5, byInsurer: { dy: 2, hk: 3, etc: 0 } },
+      { department: '경기', count: 1, dailyAverage: 0.5, byInsurer: { dy: 0, hk: 1, etc: 0 } },
+    ]);
+  });
+
+  it('보험사별 합은 그 소속의 건수와 같다 — 어디서도 새지 않는다', () => {
+    const mixed = [
+      { name: 'a', uploadedAt: '2026-09-01T00:00:00Z', department: '파라인슈', insurer: 'hk' as const, rows: [{}, {}] },
+      { name: 'b', uploadedAt: '2026-09-01T00:00:00Z', department: '파라인슈', insurer: null, rows: [{}] },
+    ];
+    for (const d of countByDepartment(mixed, 1)) {
+      expect(d.byInsurer.dy + d.byInsurer.hk + d.byInsurer.etc).toBe(d.count);
+    }
+  });
+
+  it('기간 전체의 보험사별 건수', () => {
+    const mixed = [
+      { name: 'a', uploadedAt: '2026-09-01T00:00:00Z', department: '파라인슈', insurer: 'hk' as const, rows: [{}, {}, {}] },
+      { name: 'b', uploadedAt: '2026-09-01T00:00:00Z', department: '경기', insurer: 'dy' as const, rows: [{}, {}] },
+      { name: 'c', uploadedAt: '2026-09-02T00:00:00Z', department: '경기', insurer: 'hk' as const, rows: [{}] },
+    ];
+    expect(countByInsurer(mixed)).toEqual({ dy: 2, hk: 4, etc: 0 });
+    // 보험사를 못 읽은 옛 파일은 조용히 빠지지 않고 etc 로 남는다
+    expect(countByInsurer([{ name: 'x', uploadedAt: '2026-09-01T00:00:00Z', department: null, rows: [{}, {}] }]))
+      .toEqual({ dy: 0, hk: 0, etc: 2 });
   });
 
   it('일평균은 달력 날짜로 나누고 소수 첫째 자리까지', () => {

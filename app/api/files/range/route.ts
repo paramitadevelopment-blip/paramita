@@ -6,6 +6,7 @@ import { ASSIGNED_BY_COLUMN } from '@/lib/insurance';
 import {
   countByDepartment,
   dailyAverage,
+  countByInsurer,
   daysBetween,
   isDayString,
   koreanDayBounds,
@@ -43,6 +44,7 @@ const nothing = (days: number) => ({
   days,
   dailyAverage: 0,
   byDepartment: [],
+  byInsurer: { dy: 0, hk: 0, etc: 0 },
   files: [],
 });
 
@@ -92,7 +94,7 @@ export async function GET(request: NextRequest) {
     const { start, end } = koreanDayBounds(from, to);
     let query = supabase
       .from('files')
-      .select('id, name, uploaded_at, file_content, departments(name)')
+      .select('id, name, uploaded_at, file_content, insurer_type, departments(name)')
       .eq('is_original', false)
       .gte('uploaded_at', start)
       .lte('uploaded_at', end)
@@ -109,6 +111,7 @@ export async function GET(request: NextRequest) {
       name: file.name,
       uploadedAt: file.uploaded_at,
       department: file.departments?.name ?? null,
+      insurer: file.insurer_type === 'hk' || file.insurer_type === 'dy' ? file.insurer_type : null,
       rows: Array.isArray(file.file_content) ? file.file_content : [],
     }));
 
@@ -126,6 +129,8 @@ export async function GET(request: NextRequest) {
       dailyAverage: dailyAverage(merged.rows.length, days),
       // 소속별 건수. 지사는 자기 것 하나만 온다 — 위에서 이미 자기 소속으로 좁혔다.
       byDepartment: countByDepartment(sources, days),
+      // 기간 전체의 보험사별 건수. 소속 단추의 '전체' 자리에 붙는다.
+      byInsurer: countByInsurer(sources),
       files: sources.map((s) => ({ name: s.name, uploadedAt: s.uploadedAt, department: s.department, count: s.rows.length })),
     });
   } catch (error) {
