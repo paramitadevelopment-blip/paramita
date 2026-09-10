@@ -1,10 +1,11 @@
 'use client';
 
 import React, { memo, useEffect, useMemo, useState } from 'react';
-import { MdDateRange, MdSearch, MdToday } from 'react-icons/md';
+import { MdChevronLeft, MdChevronRight, MdDateRange, MdSearch, MdToday } from 'react-icons/md';
 import { useDateRangeRows } from '@/app/hooks/useDateRangeRows';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { RANGE_DEPT_COLUMN } from '@/lib/rangeRows';
+import type { InsurerCount } from '@/app/hooks/useDateRangeRows';
 import ExcelPreviewModal from './ExcelPreviewModal';
 import styles from '../page.module.css';
 
@@ -39,6 +40,14 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
   const { showAlert } = useAlert();
   const [from, setFrom] = useState(firstOfMonth);
   const [to, setTo] = useState(today);
+  /*
+   * 하루만 보기. 켜면 달력이 하나가 되고 그날 하루만 조회한다.
+   *
+   * 기간으로 훑다가 "그럼 어제는?"으로 좁히는 일이 잦은데, 그때마다 두 칸에
+   * 같은 날짜를 두 번 넣어야 했다. 한 칸으로 줄여 그 수고를 없앤다.
+   */
+  const [oneDay, setOneDay] = useState(false);
+  const [day, setDay] = useState(today);
   // 조회를 누른 기간. 입력칸과 따로 둬야 날짜를 고치는 동안 창이 안 바뀐다.
   const [asked, setAsked] = useState<{ from: string; to: string } | null>(null);
   // 창 안에서 고른 소속. null이면 전부.
@@ -47,7 +56,7 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
 
   const ask = (span: { from: string; to: string }) => {
     if (!span.from || !span.to) {
-      showAlert({ type: 'warning', title: '기간 조회', message: '시작일과 종료일을 모두 골라 주세요.' });
+      showAlert({ type: 'warning', title: '기간 조회', message: '시작일과 종료일을 모두 선택해 주세요.' });
       return;
     }
     if (span.from > span.to) {
@@ -64,6 +73,35 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
     setFrom(span.from);
     setTo(span.to);
     ask(span);
+  };
+
+  /** 오늘 하루. 하루만 보기일 때 [이번달] 자리에 대신 선다. */
+  const askToday = () => {
+    setDay(today());
+    ask({ from: today(), to: today() });
+  };
+
+  /*
+   * 창 안에서 날짜를 바꾼다. 누르는 즉시 다시 불러온다 — 창을 닫았다 여는
+   * 수고를 없애는 것이 이 자리의 이유다. 입력칸도 함께 맞춰 둔다.
+   */
+  const jump = (span: { from: string; to: string }) => {
+    if (span.from === span.to) setDay(span.from);
+    else {
+      setFrom(span.from);
+      setTo(span.to);
+    }
+    setDept(null);
+    setAsked(span);
+  };
+
+  /** 하루씩 앞뒤로. 달을 넘어가도 알아서 넘어간다. */
+  const shiftDay = (days: number) => {
+    const base = asked ? asked.from : day;
+    const d = new Date(base + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    jump({ from: next, to: next });
   };
 
   // 실패는 창 대신 알림으로. 그리는 도중에 상태를 바꾸면 안 되므로 효과로 뺀다.
@@ -86,6 +124,83 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
   }, [range.data, dept]);
 
   /*
+   * 창 안의 날짜 줄. 하루를 보는 중이면 앞뒤 단추가 함께 선다.
+   *
+   * 창을 닫고 바에서 다시 고르는 것이 이 기능을 쓰는 내내 반복되던 일이라,
+   * 보고 있는 자리에서 바로 옮길 수 있게 한다.
+   */
+  const oneDayAsked = asked !== null && asked.from === asked.to;
+  const dateBar = !asked ? null : (
+    <div className={styles.rangeJump}>
+      {oneDayAsked ? (
+        <>
+          <button
+            type="button"
+            className={styles.rangeJumpBtn}
+            onClick={() => shiftDay(-1)}
+            disabled={range.isFetching}
+            aria-label="앞날"
+            title="하루 앞"
+          >
+            <MdChevronLeft />
+          </button>
+          <input
+            type="date"
+            className={styles.rangeInput}
+            value={asked.from}
+            onChange={(e) => e.target.value && jump({ from: e.target.value, to: e.target.value })}
+            aria-label="날짜"
+          />
+          <button
+            type="button"
+            className={styles.rangeJumpBtn}
+            onClick={() => shiftDay(1)}
+            disabled={range.isFetching}
+            aria-label="뒷날"
+            title="하루 뒤"
+          >
+            <MdChevronRight />
+          </button>
+        </>
+      ) : (
+        <>
+          <input
+            type="date"
+            className={styles.rangeInput}
+            value={asked.from}
+            max={asked.to}
+            onChange={(e) => e.target.value && jump({ from: e.target.value, to: asked.to })}
+            aria-label="시작일"
+          />
+          <span className={styles.rangeTilde}>~</span>
+          <input
+            type="date"
+            className={styles.rangeInput}
+            value={asked.to}
+            min={asked.from}
+            onChange={(e) => e.target.value && jump({ from: asked.from, to: e.target.value })}
+            aria-label="종료일"
+          />
+        </>
+      )}
+      {range.isFetching && <span className={styles.rangeJumpNote}>불러오는 중…</span>}
+    </div>
+  );
+
+  /*
+   * 보험사별 건수 한 줄. 0건인 보험사는 안 적는다 — 흥국만 온 날에
+   * '동양 0'이 서 있으면 읽는 눈이 한 번 더 걸린다.
+   */
+  const insurerLine = (n: InsurerCount) => {
+    const parts: string[] = [];
+    if (n.dy > 0) parts.push(`동양 ${n.dy}`);
+    if (n.hk > 0) parts.push(`흥국 ${n.hk}`);
+    if (n.etc > 0) parts.push(`구분없음 ${n.etc}`);
+    if (parts.length === 0) return null;
+    return <span className={styles.rangeChipInsurer}>{parts.join(' · ')}</span>;
+  };
+
+  /*
    * 소속 단추. 맨 앞은 전체다.
    *
    * 소속이 하나뿐이면(지사 계정) 고를 게 없다. [전체 9건] [한울부원 9건]처럼
@@ -101,6 +216,7 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
         <span className={styles.rangeChipAvg}>
           일평균 {single.dailyAverage} ({range.data.days}일)
         </span>
+        {insurerLine(single.byInsurer)}
       </span>
     </div>
   ) : (
@@ -113,6 +229,7 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
         전체
         <span className={styles.rangeChipCount}>{range.data.total}건</span>
         <span className={styles.rangeChipAvg}>일평균 {range.data.dailyAverage}</span>
+        {insurerLine(range.data.byInsurer)}
       </button>
       {range.data.byDepartment.map((d) => (
         <button
@@ -120,11 +237,12 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
           type="button"
           className={`${styles.rangeChip} ${dept === d.department ? styles.rangeChipActive : ''}`}
           onClick={() => setDept((prev) => (prev === d.department ? null : d.department))}
-          title={`${d.department}: ${range.data!.days}일 동안 ${d.count}건, 하루 평균 ${d.dailyAverage}건`}
+          title={`${d.department}: ${range.data!.days}일 동안 ${d.count}건, 하루 평균 ${d.dailyAverage}건 (동양 ${d.byInsurer.dy} · 흥국 ${d.byInsurer.hk})`}
         >
           {d.department}
           <span className={styles.rangeChipCount}>{d.count}건</span>
           <span className={styles.rangeChipAvg}>일평균 {d.dailyAverage}</span>
+          {insurerLine(d.byInsurer)}
         </button>
       ))}
     </div>
@@ -135,27 +253,48 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
       <div className={styles.rangeBar}>
         <MdDateRange className={styles.rangeIcon} />
         <span className={styles.rangeLabel}>배포일 기준</span>
-        <input
-          type="date"
-          className={styles.rangeInput}
-          value={from}
-          max={to || undefined}
-          onChange={(e) => setFrom(e.target.value)}
-          aria-label="시작일"
-        />
-        <span className={styles.rangeTilde}>~</span>
-        <input
-          type="date"
-          className={styles.rangeInput}
-          value={to}
-          min={from || undefined}
-          onChange={(e) => setTo(e.target.value)}
-          aria-label="종료일"
-        />
+        {/* 달력 앞에 둔다 — 무엇을 고를지부터 정하고 날짜를 고르는 차례다. */}
+        <label className={styles.rangeCheck}>
+          <input
+            type="checkbox"
+            checked={oneDay}
+            onChange={(e) => setOneDay(e.target.checked)}
+          />
+          하루만 보기
+        </label>
+        {oneDay ? (
+          <input
+            type="date"
+            className={styles.rangeInput}
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            aria-label="날짜"
+          />
+        ) : (
+          <>
+            <input
+              type="date"
+              className={styles.rangeInput}
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setFrom(e.target.value)}
+              aria-label="시작일"
+            />
+            <span className={styles.rangeTilde}>~</span>
+            <input
+              type="date"
+              className={styles.rangeInput}
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setTo(e.target.value)}
+              aria-label="종료일"
+            />
+          </>
+        )}
         <button
           type="button"
           className={styles.rangeBtn}
-          onClick={() => ask({ from, to })}
+          onClick={() => ask(oneDay ? { from: day, to: day } : { from, to })}
           disabled={range.isFetching}
         >
           <MdSearch />
@@ -164,11 +303,11 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
         <button
           type="button"
           className={styles.rangeGhostBtn}
-          onClick={askThisMonth}
+          onClick={oneDay ? askToday : askThisMonth}
           disabled={range.isFetching}
         >
           <MdToday />
-          이번달 조회
+          {oneDay ? '오늘 조회' : '이번달 조회'}
         </button>
       </div>
 
@@ -181,9 +320,10 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
           onContextMenu={block}
         >
           <ExcelPreviewModal
-            title={`${asked.from} ~ ${asked.to} 배포 건${dept ? ` · ${dept}` : ''}${range.data.truncated ? ` (앞 ${range.data.rows.length}건만 표시 · 전체 ${range.data.total}건)` : ''}`}
+            // 하루를 조회하면 같은 날짜를 두 번 적지 않는다.
+            title={`${asked.from === asked.to ? asked.from : `${asked.from} ~ ${asked.to}`} 배포 건${dept ? ` · ${dept}` : ''}${range.data.truncated ? ` (앞 ${range.data.rows.length}건만 표시 · 전체 ${range.data.total}건)` : ''}`}
             data={{ headers: range.data.headers, rows: shown }}
-            toolbar={chips}
+            toolbar={<>{dateBar}{chips}</>}
             onClose={() => setAsked(null)}
           />
         </div>

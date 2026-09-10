@@ -1014,6 +1014,67 @@
   font-size: 18px;
 }
 
+/*
+ * 창 안의 날짜 줄. 보고 있는 자리에서 바로 날짜를 옮긴다.
+ * 하루를 보는 중이면 앞뒤 단추가 함께 선다.
+ */
+.rangeJump {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px 0;
+}
+
+.rangeJumpBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  color: #333;
+  font-size: 22px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rangeJumpBtn:hover:not(:disabled) {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.rangeJumpBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rangeJumpNote {
+  color: #888;
+  font-size: 16px;
+}
+
+/* 하루만 보기. 켜면 달력이 하나로 줄어든다. */
+.rangeCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  font-size: 16px;
+  color: #333;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rangeCheck input {
+  width: 18px;
+  height: 18px;
+  accent-color: #db1a62;
+  cursor: pointer;
+}
+
 .rangeBtn {
   display: inline-flex;
   align-items: center;
@@ -1093,15 +1154,19 @@
 .rangeChip {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 46px;
-  padding: 0 18px;
+  gap: 8px;
+  height: 44px;
+  padding: 0 14px;
   border: 1px solid #e0e0e0;
   border-radius: 100px;
   background: white;
   color: #444;
-  /* 화면 기본 글씨(18px)와 같게. 창 안에서 이 줄만 작으면 덜 중요한 것처럼 보인다. */
-  font-size: 18px;
+  /*
+   * 화면 기본은 18px 이지만 여기만 17px 로 줄인다. 소속마다 건수·일평균·
+   * 보험사까지 붙어 다섯 칩이 한 줄에 안 들어갔다 — 줄이 접히면 어느 칩이
+   * 어느 소속인지 훑기가 더 나빠진다.
+   */
+  font-size: 17px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -1120,25 +1185,39 @@
 }
 
 .rangeChipCount {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
 }
 
 .rangeChipAvg {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 500;
   opacity: 0.85;
+}
+
+/*
+ * 그 소속 안에서 보험사별로 몇 건인지. 일평균 옆에 붙는다.
+ *
+ * 색을 박지 않고 단추에서 물려받는다 — 고른 단추는 분홍 바탕에 흰 글씨라,
+ * 여기서 회색을 박아 두면 그 칩에서만 글씨가 안 읽힌다. 옅게 보이는 것은
+ * 일평균과 같은 방식(opacity)으로 낸다.
+ */
+.rangeChipInsurer {
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.85;
+  white-space: nowrap;
 }
 
 /* 소속이 하나뿐일 때의 한 줄. 단추 모양이 아니라 눌러 보려 하지 않는다. */
 .rangeStat {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  height: 46px;
+  gap: 8px;
+  height: 44px;
   padding: 0 4px;
   color: #444;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
 }
 
