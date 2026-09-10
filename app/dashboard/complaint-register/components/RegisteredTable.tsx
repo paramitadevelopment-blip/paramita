@@ -60,7 +60,6 @@ interface RegisteredTableProps {
    * 배정이 안 된 건은 관리자가 정한다. 관리자에게는 이 화면에서도 보여야 한다:
    * 여기가 "들어온 민원 전부"가 모이는 자리라, 어디로 갔는지 한눈에 봐야 한다.
    */
-  showGroup: boolean;
   statusLabel: Record<ComplaintStatus, string>;
   /** 관리자는 상태와 무관하게 지울 수 있다. 버튼을 낼지 여기서 갈린다. */
   isAdmin: boolean;
@@ -76,7 +75,6 @@ interface RegisteredTableProps {
 
 const RegisteredTable = memo(function RegisteredTableComponent({
   rows,
-  showGroup,
   statusLabel,
   isAdmin,
   sortBy,
@@ -100,7 +98,7 @@ const RegisteredTable = memo(function RegisteredTableComponent({
             <SortableHeader label="전화번호" column="phone" {...sortProps} />
             <SortableHeader label="주문번호" column="order_no" {...sortProps} />
             <SortableHeader label="고객 접수일" column="received_at" {...sortProps} />
-            {showGroup && <SortableHeader label="담당 지사" column="assigned_group" {...sortProps} />}
+            <SortableHeader label="담당 지사" column="assigned_group" {...sortProps} />
             {/* 통화내역은 자유롭게 적는 글이라 글자순으로 세워도 의미가 없다. */}
             <th>통화내역</th>
             <SortableHeader label="상태" column="status" {...sortProps} />
@@ -116,15 +114,9 @@ const RegisteredTable = memo(function RegisteredTableComponent({
               <td>{row.order_no || '-'}</td>
               <td>{dateText(row.received_at)}</td>
               {/* 배정 못 한 건은 빈칸이 아니라 '미정'이다. 관리자가 손봐야 할 자리다. */}
-              {showGroup && (
-                <td>
-                  {row.assigned_group ? (
-                    row.assigned_group
-                  ) : (
-                    <span className={styles.muted}>미정</span>
-                  )}
-                </td>
-              )}
+              <td>
+                {row.assigned_group || <span className={styles.muted}>미정</span>}
+              </td>
 
               {/* 길이를 예측할 수 없다. 한 줄로 잘라 두고 전체는 상세에서 본다. */}
               <td className={styles.noteCell} title={row.call_memo || ''}>

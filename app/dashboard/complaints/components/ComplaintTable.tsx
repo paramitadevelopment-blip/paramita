@@ -83,13 +83,12 @@ const ComplaintTable = memo(function ComplaintTableComponent({
         <thead>
           <tr>
             <SortableHeader label="민원 등록일" column="created_at" {...sortProps} />
-            <th>경과</th>
             <SortableHeader label="수령인" column="customer_name" {...sortProps} />
             <SortableHeader label="전화번호" column="phone" {...sortProps} />
             <SortableHeader label="주문번호" column="order_no" {...sortProps} />
             {/* 통화내역은 자유롭게 적는 글이라 글자순으로 세워도 의미가 없다. */}
             <th>통화내역</th>
-            {isAdmin && <SortableHeader label="담당 지사" column="assigned_group" {...sortProps} />}
+            <SortableHeader label="담당 지사" column="assigned_group" {...sortProps} />
             <SortableHeader label="상태" column="status" {...sortProps} />
             <th>작업</th>
           </tr>
@@ -111,7 +110,8 @@ const ComplaintTable = memo(function ComplaintTableComponent({
                 key={row.id}
                 className={`${row.read_at ? styles.rowRead : ''} ${alarming ? styles.rowRepeat : ''}`}
               >
-                <td>
+                {/* 3일 넘게 안 된 건은 붉게. 목록에서 이 색만 좇으면 밀린 건이 보인다. */}
+                <td className={overdue ? styles.overdueCell : ''} title={overdue ? `${days}일 경과` : undefined}>
                   {dateText(row.created_at)}
                   {/* 몇 번째로 들어온 건인지. 1차만 있는 건에는 붙이지 않는다. */}
                   {repeated && (
@@ -121,10 +121,6 @@ const ComplaintTable = memo(function ComplaintTableComponent({
                   )}
                 </td>
 
-                {/* 3일 넘게 안 된 건은 붉게. 목록에서 이 색만 좇으면 밀린 건이 보인다. */}
-                <td className={overdue ? styles.overdueCell : ''}>
-                  {days === 0 ? '오늘' : `${days}일`}
-                </td>
 
                 <td>{row.customer_name}</td>
                 <td>{row.phone || '-'}</td>
@@ -135,7 +131,7 @@ const ComplaintTable = memo(function ComplaintTableComponent({
                   {row.call_memo || '-'}
                 </td>
 
-                {isAdmin && <td>{row.assigned_group || <span className={styles.muted}>미정</span>}</td>}
+                <td>{row.assigned_group || <span className={styles.muted}>미정</span>}</td>
 
                 {/*
                   상태와 '확인함'을 한 칸에 위아래로 둔다.

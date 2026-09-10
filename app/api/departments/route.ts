@@ -8,7 +8,12 @@ import {
   readDepartmentContact,
   validateDepartmentContact,
 } from '@/lib/departments';
-import { canManageDepartments, canManageGiftRequests, isAdminRole } from '@/lib/roles';
+import {
+  canManageDepartments,
+  canManageGiftRequests,
+  canRegisterComplaints,
+  isAdminRole,
+} from '@/lib/roles';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -31,7 +36,7 @@ export async function GET(request: NextRequest) {
      * 세우므로 지사로 좁히는 단추가 있는데, 소속 목록을 못 읽으면 그 단추가
      * 통째로 안 그려진다 — 화면에는 필터가 있는데 사람에게는 없는 상태가 된다.
      */
-    if (!isAdminRole(user.role) && !canManageGiftRequests(user)) {
+    if (!isAdminRole(user.role) && !canManageGiftRequests(user) && !canRegisterComplaints(user)) {
       return NextResponse.json({ error: 'Only admin can view departments' }, { status: 403 });
     }
 

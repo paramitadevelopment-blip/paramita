@@ -11,6 +11,8 @@ import {
 } from '@/app/hooks/useComplaints';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { useAuthStore } from '@/app/store/authStore';
+import { useDepartments } from '@/app/hooks/useDepartments';
+import { toAssignableDepartmentGroups } from '@/lib/departments';
 import { isAdminRole } from '@/lib/roles';
 import {
   COMPLAINT_STATUS_LABEL,
@@ -42,12 +44,14 @@ import styles from '../page.module.css';
  * '미처리'는 세우지 않는다 — 넣은 사람 입장에서는 "넘어가서 진행 중"이고
  * 그다음은 지사 사정이다. 여기서는 내가 무언가 해야 하는 것만 세운다.
  */
-const REGISTER_TABS: ComplaintStatus[] = ['unassigned', 'returned', 'done', 'withdrawn'];
+const REGISTER_TABS: ComplaintStatus[] = ['unassigned', 'branch', 'returned', 'done', 'withdrawn'];
 
 const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent() {
   const { showAlert } = useAlert();
   // 관리자만 담당 지사를 본다. 넣은 사람에게는 그다음이 남의 지사 사정이다.
   const isAdmin = isAdminRole(useAuthStore((state) => state.user?.role));
+  const { data: departments } = useDepartments();
+  const groups = toAssignableDepartmentGroups(departments);
   const list = useComplaints();
   // 사이드바 배지와 같은 값을 쓴다. 따로 세면 둘이 어긋난 숫자를 말하게 된다.
   const { data: badge } = useUnreadComplaintCount();
@@ -294,6 +298,28 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
         })}
       </div>
 
+      {groups.length > 0 && (
+        <div className={styles.departmentsFilter}>
+          <button
+            type="button"
+            className={`${styles.departmentBtn} ${list.group === '' ? styles.active : ''}`}
+            onClick={() => list.setGroup('')}
+          >
+            전체
+          </button>
+          {groups.map((group) => (
+            <button
+              key={group}
+              type="button"
+              className={`${styles.departmentBtn} ${list.group === group ? styles.active : ''}`}
+              onClick={() => list.setGroup(group)}
+            >
+              {group}
+            </button>
+          ))}
+        </div>
+      )}
+
       {lastResult && (
         <div className={lastResult.ok ? styles.resultOk : styles.resultWarn}>
           {lastResult.message}
@@ -308,7 +334,6 @@ const ComplaintRegisterSection = memo(function ComplaintRegisterSectionComponent
         <>
           <RegisteredTable
             rows={list.complaints}
-            showGroup={isAdmin}
             statusLabel={COMPLAINT_STATUS_LABEL}
             sortBy={list.sort.by}
             sortOrder={list.sort.order}
