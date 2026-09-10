@@ -1,7 +1,8 @@
 'use client';
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import Image from 'next/image';
+import { pageWindow } from '@/lib/pageWindow';
 import styles from './Pagination.module.css';
 
 interface PaginationProps {
@@ -35,7 +36,12 @@ const Pagination = memo(function Pagination({
     onPageChange(totalPages);
   }, [totalPages, onPageChange]);
 
-  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  /*
+   * 번호는 지금 쪽 둘레만 그리고 사이는 '…'으로 접는다(lib/pageWindow.ts).
+   * 전부 그리면 백 쪽일 때 번호가 백 개 늘어서서 줄이 화면을 넘고, 다음 쪽으로
+   * 넘어가려는 화살표까지 밀려난다.
+   */
+  const pages = useMemo(() => pageWindow(currentPage, totalPages), [currentPage, totalPages]);
 
   return (
     <div className={styles.pagination} style={style}>
@@ -72,16 +78,23 @@ const Pagination = memo(function Pagination({
       </button>
 
       <div className={styles.pageNumbers}>
-        {pages.map((page) => (
-          <button
-            key={page}
-            onClick={() => onPageChange(page)}
-            disabled={isLoading}
-            className={`${styles.pageBtn} ${currentPage === page ? styles.active : ''}`}
-          >
-            {page}
-          </button>
-        ))}
+        {pages.map((page, at) =>
+          page === 'gap' ? (
+            <span key={`gap-${at}`} className={styles.gap} aria-hidden="true">
+              …
+            </span>
+          ) : (
+            <button
+              key={page}
+              onClick={() => onPageChange(page)}
+              disabled={isLoading}
+              className={`${styles.pageBtn} ${currentPage === page ? styles.active : ''}`}
+              aria-current={currentPage === page ? 'page' : undefined}
+            >
+              {page}
+            </button>
+          )
+        )}
       </div>
 
       <button

@@ -76,3 +76,15 @@
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+/* 접힌 자리. 번호 단추와 같은 폭이라 줄이 흔들리지 않는다. */
+.gap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: #999;
+  font-size: 20px;
+  user-select: none;
+}
