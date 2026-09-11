@@ -15,6 +15,7 @@ import FileSummaryButtons from './FileSummaryButtons';
 import DeployActions from './DeployActions';
 import DeptResultGrids from './DeptResultGrids';
 import PendingAssignTable from './PendingAssignTable';
+import TodayTotals from './TodayTotals';
 import styles from '../page.module.css';
 
 interface Department {
@@ -44,6 +45,7 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
   files,
   memoRule,
   onClose,
+  queryClient,
 }: ClassificationResultModalProps) {
   const { showAlert } = useAlert();
 
@@ -97,6 +99,8 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
     memoRule,
     rulesUpdatedAt,
     onSuccess: () => {
+      // 오늘 합계·기간 조회가 방금 배포한 건을 바로 세도록 비운다.
+      queryClient.invalidateQueries({ queryKey: ['fileRange'] });
       onClose();
       showAlert({ type: 'success', title: '배포 완료', message: '파일이 배포되었습니다.' });
     },
@@ -158,6 +162,8 @@ const ClassificationResultModal = memo(function ClassificationResultModalCompone
                   onPreview={setPreview}
                 />
               </div>
+
+              <TodayTotals departments={departments} files={classifiedFiles} rowPicks={rowPicks} />
 
               <PendingAssignTable
                 current={current}

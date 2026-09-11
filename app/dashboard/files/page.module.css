@@ -1457,3 +1457,186 @@
   color: #666;
   margin-left: 6px;
 }
+
+/* ── 오늘 합계 ───────────────────────────────────────────────
+   규칙 배정·선택 반영 아래, 직접 배정 표 위. 오늘 이미 배포한 건에
+   이번 배포를 더해 지사×보험사로 보인다. 괄호는 이번 배포 몫. */
+.todayTotals {
+  /* 직접 배정 목록을 내리는 동안 창 맨 위에 붙어 따라온다. 스크롤은 .modalContent 가 한다. */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.25);
+  overflow-x: auto;
+}
+
+.todayHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 14px;
+  background: #fafafa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.todayTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+}
+
+.todayMeta {
+  font-size: 16px;
+  color: #888;
+}
+
+.todayTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.todayTable th,
+.todayTable td {
+  padding: 5px 14px;
+  font-size: 18px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.todayTable th {
+  font-size: 16px;
+  font-weight: 600;
+  color: #888;
+}
+
+.todayTable th:first-child,
+.todayTable td:first-child {
+  text-align: left;
+}
+
+.todayTable tbody td:first-child {
+  font-weight: 600;
+  color: #333;
+}
+
+.todayTable .todaySum {
+  font-weight: 700;
+}
+
+.todayTable tfoot td {
+  font-weight: 700;
+  color: #333;
+  background: #fafafa;
+  border-bottom: none;
+}
+
+.todayPlus {
+  margin-left: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #db1a62;
+}
+
+/* 합계 표 머리의 날짜 조절. 파일다운로드 기간 조회와 같은 모양을 작게. */
+.todayControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.todayCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  color: #333;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.todayCheck input {
+  width: 18px;
+  height: 18px;
+  accent-color: #db1a62;
+  cursor: pointer;
+}
+
+.todayDate {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 16px;
+  color: #333;
+}
+
+.todayDate:focus {
+  outline: none;
+  border-color: #db1a62;
+}
+
+.todayTilde {
+  color: #999;
+}
+
+.todayGhostBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.todayGhostBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
+
+.todayTable .todayAvg {
+  color: #888;
+  font-weight: 500;
+}
+
+/* 하루만 보기일 때 달력 양옆의 하루 이동 단추 */
+.todayDayNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.todayNavBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.todayNavBtn:hover {
+  border-color: #db1a62;
+  color: #db1a62;
+}
