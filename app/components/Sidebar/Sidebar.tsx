@@ -106,7 +106,7 @@ export default function Sidebar() {
                 className={`${styles.navLink} ${pathname === '/dashboard/files' ? styles.active : ''}`}
               >
                 <MdCloudUpload className={styles.icon} />
-                <span>파일 업로드</span>
+                <span>DB배정</span>
               </Link>
             </li>
           )}

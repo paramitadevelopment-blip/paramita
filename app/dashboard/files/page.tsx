@@ -215,7 +215,7 @@ function FilesPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1>파일 업로드</h1>
+        <h1>DB배정</h1>
         <button
           type="button"
           className={styles.regionSettingBtn}
