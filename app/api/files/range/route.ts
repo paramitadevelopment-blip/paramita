@@ -13,6 +13,7 @@ import {
   mergeRangeRows,
   type RangeSourceFile,
 } from '@/lib/rangeRows';
+import { AGE_SPLIT_DEPARTMENTS, countAgeSplit } from '@/lib/rangeAges';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -120,7 +121,12 @@ export async function GET(request: NextRequest) {
       days,
       dailyAverage: dailyAverage(merged.rows.length, days),
       // 소속별 건수. 지사는 자기 것 하나만 온다 — 위에서 이미 자기 소속으로 좁혔다.
-      byDepartment: countByDepartment(sources, days),
+      // 파라인슈는 나이 구간(70세 미만/이상)도 붙인다. 배정이 나이로 갈리는 소속이다.
+      byDepartment: countByDepartment(sources, days).map((d) =>
+        AGE_SPLIT_DEPARTMENTS.includes(d.department)
+          ? { ...d, byAge: countAgeSplit(sources.filter((s) => (s.department ?? '소속 없음') === d.department)) }
+          : d
+      ),
       // 기간 전체의 보험사별 건수. 소속 단추의 '전체' 자리에 붙는다.
       byInsurer: countByInsurer(sources),
       files: sources.map((s) => ({ name: s.name, uploadedAt: s.uploadedAt, department: s.department, count: s.rows.length })),

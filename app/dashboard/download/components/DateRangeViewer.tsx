@@ -5,6 +5,7 @@ import { MdChevronLeft, MdChevronRight, MdDateRange, MdSearch, MdToday } from 'r
 import { useDateRangeRows } from '@/app/hooks/useDateRangeRows';
 import { useAlert } from '@/app/components/Alert/Alert';
 import { RANGE_DEPT_COLUMN } from '@/lib/rangeRows';
+import { AGE_LABEL } from '@/lib/rangeAges';
 import type { InsurerCount } from '@/app/hooks/useDateRangeRows';
 import ExcelPreviewModal from './ExcelPreviewModal';
 import styles from '../page.module.css';
@@ -30,6 +31,7 @@ const today = () => {
   return shifted.toISOString().slice(0, 10);
 };
 const firstOfMonth = () => `${today().slice(0, 7)}-01`;
+const INSURER_LABEL = { dy: '동양', hk: '흥국', etc: '구분없음' } as const;
 
 /** 복사·잘라내기·끌기·우클릭을 막는다. 표를 감싼 자리에 한 번만 건다. */
 const block = (e: React.SyntheticEvent) => {
@@ -212,6 +214,45 @@ const DateRangeViewer = memo(function DateRangeViewerComponent({ onApply }: Date
   };
 
   /*
+   * 파라인슈 나이 구간. 보험사마다 70세 이하 / 71세 이상을 칸으로 나눠 보인다.
+   * 기준은 배포한 날의 보험나이다. 칩 안에 넣으면 한 줄에 안 들어가 따로 둔다.
+   * 숫자를 읽으려고 여는 줄이라 이름은 작게, 건수는 크게 둔다.
+   */
+  const ageDepts = range.data?.byDepartment.filter((d) => d.byAge) ?? [];
+  const ageCell = (label: string, n: number) => (
+    <span className={styles.rangeAgeCell}>
+      <span className={styles.rangeAgeLabel}>{label}</span>
+      <span className={styles.rangeAgeNum}>{n}</span>
+    </span>
+  );
+  const ageLine =
+    ageDepts.length === 0 ? null : (
+      <div className={styles.rangeAges}>
+        {ageDepts.map((d) => (
+          <div key={d.department} className={styles.rangeAgeGroup}>
+            <span className={styles.rangeAgeDept}>
+              {d.department} 나이별
+              <span className={styles.rangeAgeNote}>해당 파일 배포일 기준 보험나이</span>
+            </span>
+            {(['dy', 'hk', 'etc'] as const)
+              .filter((k) => d.byInsurer[k] > 0)
+              .map((k) => {
+                const a = d.byAge![k];
+                return (
+                  <span key={k} className={styles.rangeAgeCard}>
+                    {ageCell(INSURER_LABEL[k], d.byInsurer[k])}
+                    {ageCell(AGE_LABEL.under, a.under)}
+                    {ageCell(AGE_LABEL.over, a.over)}
+                    {a.unknown > 0 && ageCell('나이 미상', a.unknown)}
+                  </span>
+                );
+              })}
+          </div>
+        ))}
+      </div>
+    );
+
+  /*
    * 소속 단추. 맨 앞은 전체다.
    *
    * 소속이 하나뿐이면(지사 계정) 고를 게 없다. [전체 9건] [한울부원 9건]처럼
@@ -346,7 +387,7 @@ const DateRangeViewer = memo(function DateRangeViewerComponent({ onApply }: Date
             // 하루를 조회하면 같은 날짜를 두 번 적지 않는다.
             title={`${asked.from === asked.to ? asked.from : `${asked.from} ~ ${asked.to}`} 배포 건${dept ? ` · ${dept}` : ''}${range.data.truncated ? ` (앞 ${range.data.rows.length}건만 표시 · 전체 ${range.data.total}건)` : ''}`}
             data={{ headers: range.data.headers, rows: shown }}
-            toolbar={<>{dateBar}{chips}</>}
+            toolbar={<>{dateBar}{chips}{ageLine}</>}
             onClose={() => setAsked(null)}
           />
         </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import type { InsurerAgeSplit } from '@/lib/rangeAges';
 
 /** 보험사별 건수. 보험사를 못 읽은 옛 파일은 etc 로 센다. */
 export interface InsurerCount {
@@ -27,6 +28,8 @@ export interface DateRangeRows {
     count: number;
     dailyAverage: number;
     byInsurer: InsurerCount;
+    /** 보험사 × 나이 구간(70세 미만/이상). 파라인슈만 온다 */
+    byAge?: InsurerAgeSplit;
   }>;
   /** 기간 전체의 보험사별 건수 */
   byInsurer: InsurerCount;
