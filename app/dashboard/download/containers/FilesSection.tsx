@@ -82,6 +82,12 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedSubDepartment, setSelectedSubDepartment] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'available' | 'downloaded' | 'pending_request' | 'rejected' | ''>('');
+  // 기간 조회 바에서 조회한 기간. 목록도 같은 배포일 범위로 거른다.
+  const [period, setPeriod] = useState<{ from: string; to: string } | null>(null);
+  const applyPeriod = useCallback((span: { from: string; to: string } | null) => {
+    setPeriod(span);
+    setPage(1);
+  }, []);
   const [historyFile, setHistoryFile] = useState<{ id: string; name: string } | null>(null);
   const [redownloadModalOpen, setRedownloadModalOpen] = useState(false);
   const [redownloadReason, setRedownloadReason] = useState('');
@@ -115,7 +121,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
   }, [distributedFiles]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['files', page, search, limit, sortBy, sortOrder, selectedDepartment, selectedSubDepartment, selectedStatus, showOriginal],
+    queryKey: ['files', page, search, limit, sortBy, sortOrder, selectedDepartment, selectedSubDepartment, selectedStatus, showOriginal, period],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -127,6 +133,8 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         department: selectedSubDepartment,
         departmentGroup: selectedSubDepartment ? '' : selectedDepartment,
         status: selectedStatus,
+        from: period?.from ?? '',
+        to: period?.to ?? '',
       });
 
       // 원본/배포 구분은 서버에서 걸러야 한다. 여기서 안 보내면 서버가 전체를 세고
@@ -720,7 +728,7 @@ const FilesSection = memo(function FilesSectionComponent({ showDepartmentFilter 
         둔다 — 소속·상태를 고른 뒤 "그럼 이 기간엔"으로 이어지는 자리다.
         원본파일 관리에는 안 둔다. 원본은 배포 전 파일이라 소속별로 나뉜 행이 아니다.
       */}
-      {!showOriginal && <DateRangeViewer />}
+      {!showOriginal && <DateRangeViewer onApply={applyPeriod} />}
 
       {filesWithFormattedDate.length === 0 ? (
         <EmptyState message={search ? '검색 결과가 없습니다.' : '파일이 없습니다.'} />

@@ -30,8 +30,6 @@ const supabase = createClient(supabaseUrl, supabaseKey);
  * 배정방식 열은 관리자에게만 낸다(다운로드 파일과 같은 규칙).
  */
 
-/** 한 번에 볼 수 있는 기간. 너무 길면 행이 수만 줄이라 화면이 버티지 못한다. */
-const MAX_DAYS = 92;
 /** 한 번에 내주는 행 상한. 넘으면 앞에서 자르고 잘렸다고 알린다. */
 const MAX_ROWS = 5000;
 
@@ -65,12 +63,6 @@ export async function GET(request: NextRequest) {
     const days = daysBetween(from, to);
     if (days <= 0) {
       return NextResponse.json({ error: '종료일이 시작일보다 앞입니다.' }, { status: 400 });
-    }
-    if (days > MAX_DAYS) {
-      return NextResponse.json(
-        { error: `한 번에 ${MAX_DAYS}일까지만 볼 수 있습니다. 기간을 나눠 조회해 주세요.` },
-        { status: 400 }
-      );
     }
 
     const isAdmin = isAdminRole(user.role);

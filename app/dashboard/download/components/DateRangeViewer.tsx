@@ -36,7 +36,12 @@ const block = (e: React.SyntheticEvent) => {
   e.preventDefault();
 };
 
-const DateRangeViewer = memo(function DateRangeViewerComponent() {
+interface DateRangeViewerProps {
+  /** 조회한 기간. 아래 파일 목록도 같은 기간으로 거른다. null 이면 전체 기간 */
+  onApply?: (span: { from: string; to: string } | null) => void;
+}
+
+const DateRangeViewer = memo(function DateRangeViewerComponent({ onApply }: DateRangeViewerProps) {
   const { showAlert } = useAlert();
   const [from, setFrom] = useState(firstOfMonth);
   const [to, setTo] = useState(today);
@@ -52,6 +57,8 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
   const [asked, setAsked] = useState<{ from: string; to: string } | null>(null);
   // 창 안에서 고른 소속. null이면 전부.
   const [dept, setDept] = useState<string | null>(null);
+  // 파일 목록에 기간이 걸려 있는가. 걸려 있을 때만 [전체 기간]을 보인다.
+  const [applied, setApplied] = useState(false);
   const range = useDateRangeRows(asked?.from ?? '', asked?.to ?? '', asked !== null);
 
   const ask = (span: { from: string; to: string }) => {
@@ -65,6 +72,8 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
     }
     setDept(null);
     setAsked(span);
+    setApplied(true);
+    onApply?.(span);
   };
 
   /** 이달 1일 ~ 오늘. 입력칸도 그 값으로 맞춰 둔다 — 뭘 조회했는지 보여야 한다. */
@@ -93,6 +102,8 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
     }
     setDept(null);
     setAsked(span);
+    setApplied(true);
+    onApply?.(span);
   };
 
   /** 하루씩 앞뒤로. 달을 넘어가도 알아서 넘어간다. */
@@ -309,6 +320,18 @@ const DateRangeViewer = memo(function DateRangeViewerComponent() {
           <MdToday />
           {oneDay ? '오늘 조회' : '이번달 조회'}
         </button>
+        {applied && (
+          <button
+            type="button"
+            className={styles.rangeGhostBtn}
+            onClick={() => {
+              setApplied(false);
+              onApply?.(null);
+            }}
+          >
+            전체 기간
+          </button>
+        )}
       </div>
 
       {asked && range.data && shown && (

@@ -4,6 +4,7 @@ import { getUserFromRequest } from '@/lib/jwt';
 import { createClient } from '@supabase/supabase-js';
 import { fetchAllRows } from '@/lib/fetchAllRows';
 import { parsePagination } from '@/lib/pagination';
+import { isDayString, koreanDayBounds } from '@/lib/rangeRows';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -30,6 +31,10 @@ export async function GET(request: NextRequest) {
     const departmentGroup = searchParams.get('departmentGroup') || '';
     const showOriginal = searchParams.get('showOriginal') === 'true';
     const statusFilter = searchParams.get('status') || '';
+    // 기간 조회 바에서 고른 기간. 둘 다 온전한 날짜일 때만 건다 — 기간 조회 창과 같은 한국 날짜 경계다.
+    const from = searchParams.get('from') || '';
+    const to = searchParams.get('to') || '';
+    const period = isDayString(from) && isDayString(to) ? koreanDayBounds(from, to) : null;
 
     // sortBy를 그대로 .order()에 넘기면 클라이언트가 정렬 대상을 마음대로 고른다.
     // 목록에 실제로 있는 컬럼만 허용한다.
@@ -134,6 +139,10 @@ export async function GET(request: NextRequest) {
 
       if (departmentIds.length > 0) {
         fileQuery = fileQuery.in('department_id', departmentIds);
+      }
+
+      if (period) {
+        fileQuery = fileQuery.gte('uploaded_at', period.start).lte('uploaded_at', period.end);
       }
 
       // 같은 배포에서 나온 파일들은 uploaded_at이 마이크로초까지 같다. 동점일 때
